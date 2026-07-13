@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ImportType {
+  INITIAL_BALANCE
+  RECEIPT
+}
+
+enum ImportStatus {
+  UPLOADED
+  VALIDATED
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ImportRowStatus {
+  VALID
+  WARNING
+  ERROR
+  SKIPPED
+  IMPORTED
+}
+
+enum StockTransactionType {
+  INITIAL_BALANCE
+  RECEIPT
+  MANUAL_RECEIPT
+  ADJUSTMENT_INCREASE
+  ADJUSTMENT_DECREASE
+}
+
+enum InventoryItemReviewStatus {
+  VERIFIED
+  NEEDS_REVIEW
+}
+
+model Management {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  shortName          String?
+  code               String              @unique
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  services           Service[]
+  responsiblePersons ResponsiblePerson[]
+
+  @@index([isActive])
+}
+
+model Service {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  code               String
+  managementId       String              @db.Uuid
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  management         Management          @relation(fields: [managementId], references: [id], onDelete: Restrict)
+  units              Unit[]
+  responsiblePersons ResponsiblePerson[]
+
+  @@unique([managementId, code])
+  @@index([managementId])
+  @@index([isActive])
+}
+
+model Unit {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  code               String
+  serviceId          String              @db.Uuid
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  service            Service             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  responsiblePersons ResponsiblePerson[]
+
+  @@unique([serviceId, code])
+  @@index([serviceId])
+  @@index([isActive])
+}
+
+model ResponsiblePerson {
+  id                     String             @id @default(uuid()) @db.Uuid
+  lastName               String
+  firstName              String
+  middleName             String?
+  personnelNumber        String             @unique
+  position               String?
+  phone                  String?
+  email                  String?
+  externalAccountingName String?            @unique
+  externalAccountingCode String?
+  managementId           String             @db.Uuid
+  serviceId              String             @db.Uuid
+  unitId                 String?            @db.Uuid
+  appointmentOrderNumber String?
+  appointmentDate        DateTime?
+  isActive               Boolean            @default(true)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  management             Management         @relation(fields: [managementId], references: [id], onDelete: Restrict)
+  service                Service            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  unit                   Unit?              @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  stockBalances          StockBalance[]
+  stockTransactions      StockTransaction[]
+  importRows             ImportRow[]
+
+  @@index([managementId])
+  @@index([serviceId])
+  @@index([unitId])
+  @@index([isActive])
+  @@index([lastName])
+  @@index([firstName])
+  @@index([middleName])
+  @@index([personnelNumber])
+  @@index([externalAccountingCode])
+}
+
+model InventoryItem {
+  id                String                    @id @default(uuid()) @db.Uuid
+  externalCode      String                    @unique
+  name              String
+  unitOfMeasure     String?
+  category          String?
+  description       String?
+  reviewStatus      InventoryItemReviewStatus @default(NEEDS_REVIEW)
+  isActive          Boolean                   @default(true)
+  createdManually   Boolean                   @default(false)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  stockBalances     StockBalance[]
+  stockTransactions StockTransaction[]
+  importRows        ImportRow[]
+
+  @@index([name])
+  @@index([reviewStatus])
+  @@index([isActive])
+}
+
+model StockBalance {
+  id                  String            @id @default(uuid()) @db.Uuid
+  responsiblePersonId String            @db.Uuid
+  inventoryItemId     String            @db.Uuid
+  quantity            Decimal           @default(0) @db.Decimal(18, 4)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  responsiblePerson   ResponsiblePerson @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
+  inventoryItem       InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@unique([responsiblePersonId, inventoryItemId])
+  @@index([responsiblePersonId])
+  @@index([inventoryItemId])
+}
+
+model StockTransaction {
+  id                  String               @id @default(uuid()) @db.Uuid
+  type                StockTransactionType
+  responsiblePersonId String               @db.Uuid
+  inventoryItemId     String               @db.Uuid
+  quantity            Decimal              @db.Decimal(18, 4)
+  balanceBefore       Decimal              @db.Decimal(18, 4)
+  balanceAfter        Decimal              @db.Decimal(18, 4)
+  occurredAt          DateTime
+  comment             String?
+  sourceDocument      String?
+  importBatchId       String?              @db.Uuid
+  importRowId         String?              @unique @db.Uuid
+  createdAt           DateTime             @default(now())
+  responsiblePerson   ResponsiblePerson    @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
+  inventoryItem       InventoryItem        @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  importBatch         ImportBatch?         @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  importRow           ImportRow?           @relation(fields: [importRowId], references: [id], onDelete: Restrict)
+
+  @@index([responsiblePersonId])
+  @@index([inventoryItemId])
+  @@index([type])
+  @@index([occurredAt])
+  @@index([importBatchId])
+}
+
+model ImportBatch {
+  id               String             @id @default(uuid()) @db.Uuid
+  type             ImportType
+  status           ImportStatus       @default(UPLOADED)
+  originalFilename String
+  fileHash         String             @unique
+  fileSize         Int
+  encoding         String
+  delimiter        String
+  totalRows        Int                @default(0)
+  validRows        Int                @default(0)
+  warningRows      Int                @default(0)
+  errorRows        Int                @default(0)
+  skippedRows      Int                @default(0)
+  importedRows     Int                @default(0)
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  createdAt        DateTime           @default(now())
+  validatedAt      DateTime?
+  completedAt      DateTime?
+  rows             ImportRow[]
+  transactions     StockTransaction[]
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ImportRow {
+  id                  String            @id @default(uuid()) @db.Uuid
+  importBatchId       String            @db.Uuid
+  rowNumber           Int
+  status              ImportRowStatus
+  counterpartyRaw     String
+  nomenclatureCodeRaw String
+  itemNameRaw         String
+  unitOfMeasureRaw    String?
+  debitQuantityRaw    String?
+  endingQuantityRaw   String?
+  parsedQuantity      Decimal?          @db.Decimal(18, 4)
+  responsiblePersonId String?           @db.Uuid
+  inventoryItemId     String?           @db.Uuid
+  message             String?
+  systemBalance       Decimal?          @db.Decimal(18, 4)
+  fileEndingBalance   Decimal?          @db.Decimal(18, 4)
+  balanceDifference   Decimal?          @db.Decimal(18, 4)
+  createdAt           DateTime          @default(now())
+  importBatch         ImportBatch       @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  responsiblePerson   ResponsiblePerson? @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
+  inventoryItem       InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockTransaction    StockTransaction?
+
+  @@unique([importBatchId, rowNumber])
+  @@index([importBatchId])
+  @@index([status])
+  @@index([responsiblePersonId])
+  @@index([inventoryItemId])
+}
