@@ -39,7 +39,7 @@ log "Запуск PostgreSQL..."
 wait_for_service postgres 120
 
 log "Застосування production migrations Prisma..."
-"${COMPOSE[@]}" run --rm api npx prisma migrate deploy
+"${COMPOSE[@]}" run --rm api npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 
 log "Запуск усіх production-сервісів..."
 "${COMPOSE[@]}" up -d --build

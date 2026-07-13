@@ -40,6 +40,11 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
+RUN test -f apps/api/prisma/schema.prisma \
+  && test -d apps/api/prisma/migrations \
+  && test -f apps/api/package.json \
+  && test -x node_modules/.bin/prisma
+
 USER node
 
 EXPOSE 3001

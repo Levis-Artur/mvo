@@ -5,6 +5,9 @@
   "workspaces": [
     "apps/*"
   ],
+  "dependencies": {
+    "prisma": "^6.12.0"
+  },
   "scripts": {
     "dev": "concurrently -n API,WEB \"npm run dev:api\" \"npm run dev:web\"",
     "dev:web": "npm run dev --workspace apps/web",
@@ -27,7 +30,6 @@
     "eslint": "^9.31.0",
     "eslint-config-next": "^15.4.1",
     "prettier": "^3.6.2",
-    "prisma": "^6.12.0",
     "rimraf": "^6.0.1",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.37.0"
