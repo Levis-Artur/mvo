@@ -4,7 +4,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
 import { ListResponsiblePersonsQueryDto } from './dto/list-responsible-persons-query.dto';
@@ -20,10 +21,10 @@ const responsiblePersonInclude = {
 export class ResponsiblePersonsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: ListResponsiblePersonsQueryDto) {
+  async findAll(query: ListResponsiblePersonsQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = this.buildWhere(query);
+    const where = this.buildWhere(query, user);
 
     const [items, total] = await Promise.all([
       this.prisma.responsiblePerson.findMany({
@@ -47,9 +48,14 @@ export class ResponsiblePersonsService {
     };
   }
 
-  async findOne(id: string) {
-    const responsiblePerson = await this.prisma.responsiblePerson.findUnique({
-      where: { id },
+  async findOne(id: string, user?: CurrentUser) {
+    const responsiblePerson = await this.prisma.responsiblePerson.findFirst({
+      where: {
+        id,
+        ...(user?.role === UserRole.MVO
+          ? { id: user.responsiblePersonId ?? '__no_mvo_person__' }
+          : {}),
+      },
       include: responsiblePersonInclude,
     });
 
@@ -98,6 +104,7 @@ export class ResponsiblePersonsService {
 
   private buildWhere(
     query: ListResponsiblePersonsQueryDto,
+    user?: CurrentUser,
   ): Prisma.ResponsiblePersonWhereInput {
     const search = query.search?.trim();
 
@@ -105,6 +112,10 @@ export class ResponsiblePersonsService {
       managementId: query.managementId,
       serviceId: query.serviceId,
       unitId: query.unitId,
+      id:
+        user?.role === UserRole.MVO
+          ? (user.responsiblePersonId ?? '__no_mvo_person__')
+          : undefined,
       isActive: query.isActive,
       OR: search
         ? [

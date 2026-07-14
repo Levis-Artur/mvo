@@ -4,6 +4,7 @@ import type {
   CreateResponsiblePersonDto,
   CreateServiceDto,
   CreateUnitDto,
+  AuthUser,
   DashboardStats,
   ImportBatch,
   ImportRow,
@@ -25,6 +26,8 @@ import type {
   UpdateResponsiblePersonDto,
   UpdateServiceDto,
   UpdateUnitDto,
+  UserRole,
+  UserSummary,
 } from './types';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api';
@@ -66,6 +69,7 @@ async function request<T>(
 ): Promise<T> {
   const response = await fetch(buildUrl(path, query), {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -95,6 +99,7 @@ async function request<T>(
 async function uploadRequest<T>(path: string, body: FormData): Promise<T> {
   const response = await fetch(buildUrl(path), {
     method: 'POST',
+    credentials: 'include',
     body,
   });
 
@@ -124,6 +129,52 @@ function mutation<TBody>(method: 'POST' | 'PATCH', body: TBody): RequestInit {
 }
 
 export const apiClient = {
+  login: (body: { username: string; password: string }) =>
+    request<{ user: AuthUser }>('/auth/login', mutation('POST', body)),
+  logout: () => request<{ status: 'ok' }>('/auth/logout', { method: 'POST' }),
+  me: () => request<{ user: AuthUser }>('/auth/me'),
+  changePassword: (body: { oldPassword: string; newPassword: string }) =>
+    request<{ user: AuthUser }>('/auth/change-password', mutation('POST', body)),
+  logoutAll: () =>
+    request<{ status: 'ok' }>('/auth/logout-all', { method: 'POST' }),
+  users: () => request<UserSummary[]>('/users'),
+  user: (id: string) => request<UserSummary>(`/users/${id}`),
+  createUser: (body: {
+    username: string;
+    role?: UserRole;
+    responsiblePersonId?: string;
+  }) =>
+    request<{ user: UserSummary; temporaryPassword: string }>(
+      '/users',
+      mutation('POST', body),
+    ),
+  updateUser: (
+    id: string,
+    body: {
+      username?: string;
+      role?: UserRole;
+      responsiblePersonId?: string | null;
+      mustChangePassword?: boolean;
+    },
+  ) => request<UserSummary>(`/users/${id}`, mutation('PATCH', body)),
+  resetUserPassword: (id: string) =>
+    request<{ user: UserSummary; temporaryPassword: string }>(
+      `/users/${id}/reset-password`,
+      { method: 'POST' },
+    ),
+  blockUser: (id: string) =>
+    request<UserSummary>(`/users/${id}/block`, { method: 'POST' }),
+  unblockUser: (id: string) =>
+    request<UserSummary>(`/users/${id}/unblock`, { method: 'POST' }),
+  revokeUserSessions: (id: string) =>
+    request<{ status: 'ok' }>(`/users/${id}/revoke-sessions`, {
+      method: 'POST',
+    }),
+  deactivateUser: (id: string) =>
+    request<UserSummary>(`/users/${id}/deactivate`, { method: 'POST' }),
+  activateUser: (id: string) =>
+    request<UserSummary>(`/users/${id}/activate`, { method: 'POST' }),
+
   dashboardStats: () => request<DashboardStats>('/dashboard/stats'),
 
   managements: () => request<Management[]>('/managements'),

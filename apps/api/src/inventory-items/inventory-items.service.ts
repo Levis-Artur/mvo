@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InventoryItemReviewStatus, Prisma } from '@prisma/client';
+import { InventoryItemReviewStatus, Prisma, UserRole } from '@prisma/client';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { ListInventoryItemsQueryDto } from './dto/list-inventory-items-query.dto';
@@ -13,19 +14,55 @@ import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 export class InventoryItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: ListInventoryItemsQueryDto) {
+  async findAll(query: ListInventoryItemsQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const search = query.search?.trim();
+    const mvoItemScope: Prisma.InventoryItemWhereInput | undefined =
+      user?.role === UserRole.MVO
+        ? {
+            OR: [
+              {
+                stockBalances: {
+                  some: {
+                    responsiblePersonId:
+                      user.responsiblePersonId ?? '__no_mvo_person__',
+                  },
+                },
+              },
+              {
+                stockTransactions: {
+                  some: {
+                    responsiblePersonId:
+                      user.responsiblePersonId ?? '__no_mvo_person__',
+                  },
+                },
+              },
+              {
+                importRows: {
+                  some: {
+                    responsiblePersonId:
+                      user.responsiblePersonId ?? '__no_mvo_person__',
+                  },
+                },
+              },
+            ],
+          }
+        : undefined;
+    const searchWhere: Prisma.InventoryItemWhereInput | undefined = search
+      ? {
+          OR: [
+            { externalCode: { contains: search, mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+          ],
+        }
+      : undefined;
     const where: Prisma.InventoryItemWhereInput = {
       reviewStatus: query.reviewStatus,
       isActive: query.isActive,
-      OR: search
-        ? [
-            { externalCode: { contains: search, mode: 'insensitive' } },
-            { name: { contains: search, mode: 'insensitive' } },
-          ]
-        : undefined,
+      AND: [mvoItemScope, searchWhere].filter(
+        (item): item is Prisma.InventoryItemWhereInput => Boolean(item),
+      ),
     };
     const [items, total] = await Promise.all([
       this.prisma.inventoryItem.findMany({
@@ -65,8 +102,42 @@ export class InventoryItemsService {
     };
   }
 
-  async findOne(id: string) {
-    const item = await this.prisma.inventoryItem.findUnique({ where: { id } });
+  async findOne(id: string, user?: CurrentUser) {
+    const item = await this.prisma.inventoryItem.findFirst({
+      where: {
+        id,
+        ...(user?.role === UserRole.MVO
+          ? {
+              OR: [
+                {
+                  stockBalances: {
+                    some: {
+                      responsiblePersonId:
+                        user.responsiblePersonId ?? '__no_mvo_person__',
+                    },
+                  },
+                },
+                {
+                  stockTransactions: {
+                    some: {
+                      responsiblePersonId:
+                        user.responsiblePersonId ?? '__no_mvo_person__',
+                    },
+                  },
+                },
+                {
+                  importRows: {
+                    some: {
+                      responsiblePersonId:
+                        user.responsiblePersonId ?? '__no_mvo_person__',
+                    },
+                  },
+                },
+              ],
+            }
+          : {}),
+      },
+    });
 
     if (!item) {
       throw new NotFoundException('Номенклатурну позицію не знайдено');

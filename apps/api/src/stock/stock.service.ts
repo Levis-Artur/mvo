@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, StockTransactionType } from '@prisma/client';
+import { Prisma, StockTransactionType, UserRole } from '@prisma/client';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
@@ -58,10 +59,10 @@ const transactionInclude = {
 export class StockService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listBalances(query: ListStockBalancesQueryDto) {
+  async listBalances(query: ListStockBalancesQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = this.buildBalanceWhere(query);
+    const where = this.buildBalanceWhere(query, user);
     const [items, total] = await Promise.all([
       this.prisma.stockBalance.findMany({
         where,
@@ -84,9 +85,15 @@ export class StockService {
     };
   }
 
-  async findBalance(id: string) {
-    const balance = await this.prisma.stockBalance.findUnique({
-      where: { id },
+  async findBalance(id: string, user?: CurrentUser) {
+    const balance = await this.prisma.stockBalance.findFirst({
+      where: {
+        id,
+        responsiblePersonId:
+          user?.role === UserRole.MVO
+            ? (user.responsiblePersonId ?? '__no_mvo_person__')
+            : undefined,
+      },
       include: balanceInclude,
     });
 
@@ -97,11 +104,14 @@ export class StockService {
     return this.serializeBalance(balance);
   }
 
-  async listTransactions(query: ListStockTransactionsQueryDto) {
+  async listTransactions(query: ListStockTransactionsQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const where: Prisma.StockTransactionWhereInput = {
-      responsiblePersonId: query.responsiblePersonId,
+      responsiblePersonId:
+        user?.role === UserRole.MVO
+          ? (user.responsiblePersonId ?? '__no_mvo_person__')
+          : query.responsiblePersonId,
       inventoryItemId: query.inventoryItemId,
       type: query.type,
       importBatchId: query.importBatchId,
@@ -133,9 +143,15 @@ export class StockService {
     };
   }
 
-  async findTransaction(id: string) {
-    const transaction = await this.prisma.stockTransaction.findUnique({
-      where: { id },
+  async findTransaction(id: string, user?: CurrentUser) {
+    const transaction = await this.prisma.stockTransaction.findFirst({
+      where: {
+        id,
+        responsiblePersonId:
+          user?.role === UserRole.MVO
+            ? (user.responsiblePersonId ?? '__no_mvo_person__')
+            : undefined,
+      },
       include: transactionInclude,
     });
 
@@ -274,11 +290,15 @@ export class StockService {
 
   private buildBalanceWhere(
     query: ListStockBalancesQueryDto,
+    user?: CurrentUser,
   ): Prisma.StockBalanceWhereInput {
     const search = query.search?.trim();
 
     return {
-      responsiblePersonId: query.responsiblePersonId,
+      responsiblePersonId:
+        user?.role === UserRole.MVO
+          ? (user.responsiblePersonId ?? '__no_mvo_person__')
+          : query.responsiblePersonId,
       inventoryItemId: query.inventoryItemId,
       quantity: query.onlyPositive ? { gt: 0 } : undefined,
       responsiblePerson: {

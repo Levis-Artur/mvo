@@ -42,6 +42,30 @@ enum InventoryItemReviewStatus {
   NEEDS_REVIEW
 }
 
+enum UserRole {
+  OWNER
+  AUDITOR
+  DPP_ADMIN
+  MVO
+}
+
+enum SecurityEventType {
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  LOGOUT
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+  USER_CREATED
+  USER_UPDATED
+  USER_BLOCKED
+  USER_UNBLOCKED
+  USER_ACTIVATED
+  USER_DEACTIVATED
+  ROLE_CHANGED
+  SESSIONS_REVOKED
+  ACCESS_DENIED
+}
+
 model Management {
   id                 String              @id @default(uuid()) @db.Uuid
   name               String
@@ -114,6 +138,7 @@ model ResponsiblePerson {
   stockBalances          StockBalance[]
   stockTransactions      StockTransaction[]
   importRows             ImportRow[]
+  user                   User?
 
   @@index([managementId])
   @@index([serviceId])
@@ -124,6 +149,72 @@ model ResponsiblePerson {
   @@index([middleName])
   @@index([personnelNumber])
   @@index([externalAccountingCode])
+}
+
+model User {
+  id                   String             @id @default(uuid()) @db.Uuid
+  username             String             @unique
+  passwordHash         String
+  role                 UserRole
+  isActive             Boolean            @default(true)
+  mustChangePassword   Boolean            @default(true)
+  failedLoginAttempts  Int                @default(0)
+  lockedUntil          DateTime?
+  lastLoginAt          DateTime?
+  passwordChangedAt    DateTime?
+  responsiblePersonId  String?            @unique @db.Uuid
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  createdById          String?            @db.Uuid
+  responsiblePerson    ResponsiblePerson? @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
+  createdBy            User?              @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers         User[]             @relation("UserCreatedBy")
+  sessions             UserSession[]
+  actorSecurityEvents  SecurityEvent[]    @relation("SecurityEventActor")
+  targetSecurityEvents SecurityEvent[]    @relation("SecurityEventTarget")
+
+  @@index([role])
+  @@index([isActive])
+  @@index([createdById])
+  @@index([responsiblePersonId])
+}
+
+model UserSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model SecurityEvent {
+  id           String            @id @default(uuid()) @db.Uuid
+  type         SecurityEventType
+  actorUserId  String?           @db.Uuid
+  targetUserId String?           @db.Uuid
+  ipAddress    String?
+  userAgent    String?
+  requestId    String?
+  metadata     Json?
+  success      Boolean
+  createdAt    DateTime          @default(now())
+  actorUser    User?             @relation("SecurityEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser   User?             @relation("SecurityEventTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+
+  @@index([type])
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([createdAt])
+  @@index([success])
 }
 
 model InventoryItem {
@@ -217,8 +308,8 @@ model ImportBatch {
 }
 
 model ImportRow {
-  id                  String            @id @default(uuid()) @db.Uuid
-  importBatchId       String            @db.Uuid
+  id                  String             @id @default(uuid()) @db.Uuid
+  importBatchId       String             @db.Uuid
   rowNumber           Int
   status              ImportRowStatus
   counterpartyRaw     String
@@ -227,17 +318,17 @@ model ImportRow {
   unitOfMeasureRaw    String?
   debitQuantityRaw    String?
   endingQuantityRaw   String?
-  parsedQuantity      Decimal?          @db.Decimal(18, 4)
-  responsiblePersonId String?           @db.Uuid
-  inventoryItemId     String?           @db.Uuid
+  parsedQuantity      Decimal?           @db.Decimal(18, 4)
+  responsiblePersonId String?            @db.Uuid
+  inventoryItemId     String?            @db.Uuid
   message             String?
-  systemBalance       Decimal?          @db.Decimal(18, 4)
-  fileEndingBalance   Decimal?          @db.Decimal(18, 4)
-  balanceDifference   Decimal?          @db.Decimal(18, 4)
-  createdAt           DateTime          @default(now())
-  importBatch         ImportBatch       @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
+  systemBalance       Decimal?           @db.Decimal(18, 4)
+  fileEndingBalance   Decimal?           @db.Decimal(18, 4)
+  balanceDifference   Decimal?           @db.Decimal(18, 4)
+  createdAt           DateTime           @default(now())
+  importBatch         ImportBatch        @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
   responsiblePerson   ResponsiblePerson? @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
-  inventoryItem       InventoryItem?    @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  inventoryItem       InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   stockTransaction    StockTransaction?
 
   @@unique([importBatchId, rowNumber])

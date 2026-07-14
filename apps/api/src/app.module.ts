@@ -1,6 +1,16 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { DashboardController } from './dashboard.controller';
+import { AuthModule } from './auth/auth.module';
+import { RequireAuthMiddleware } from './auth/require-auth.middleware';
+import { RolesGuard } from './auth/roles.guard';
+import { WriteAccessGuard } from './auth/write-access.guard';
 import { ImportsModule } from './imports/imports.module';
 import { InventoryItemsModule } from './inventory-items/inventory-items.module';
 import { ManagementsModule } from './managements/managements.module';
@@ -9,10 +19,12 @@ import { ResponsiblePersonsModule } from './responsible-persons/responsible-pers
 import { ServicesModule } from './services/services.module';
 import { StockModule } from './stock/stock.module';
 import { UnitsModule } from './units/units.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AuthModule,
     ManagementsModule,
     ServicesModule,
     UnitsModule,
@@ -20,7 +32,22 @@ import { UnitsModule } from './units/units.module';
     InventoryItemsModule,
     StockModule,
     ImportsModule,
+    UsersModule,
   ],
   controllers: [AppController, DashboardController],
+  providers: [
+    { provide: APP_GUARD, useClass: WriteAccessGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequireAuthMiddleware)
+      .exclude(
+        { path: 'health', method: RequestMethod.GET },
+        { path: 'auth/login', method: RequestMethod.POST },
+      )
+      .forRoutes('*');
+  }
+}

@@ -9,6 +9,21 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, ApiError } from '@/lib/api-client';
+import {
+  can,
+  getAssignableUserRoles,
+  getNavigationItems,
+  getToolbarActions,
+  getUserManagementResource,
+  getViewHref,
+  requiresResponsiblePerson,
+  resolveUserFormRole,
+  roleLabels,
+  type AppView,
+  type NavigationItem,
+  type ToolbarActionConfig,
+  type ToolbarActionId,
+} from '@/lib/authz';
 import type {
   CreateManagementDto,
   CreateResponsiblePersonDto,
@@ -26,47 +41,15 @@ import type {
   StockBalance,
   StockTransaction,
   Unit,
+  UserRole,
+  UserSummary,
 } from '@/lib/types';
+import { useAuth } from './auth-context';
 
-type View =
-  | 'home'
-  | 'persons'
-  | 'structure'
-  | 'stock'
-  | 'nomenclature'
-  | 'imports'
-  | 'transactions';
-type NavItem = {
-  id: View;
-  label: string;
-  group: string;
-  marker: string;
-  href: string;
-};
-type TopNavItem = {
-  label: string;
-  href?: string;
-  view?: View;
-  exact?: boolean;
-  disabled?: boolean;
-};
-type ToolbarActionId =
-  | 'create'
-  | 'create-management'
-  | 'create-receipt'
-  | 'new-import'
-  | 'refresh'
-  | 'focus-filter';
+export type View = AppView;
 type ToolbarEventDetail = {
   view: View;
   action: ToolbarActionId;
-};
-type ToolbarAction = {
-  label: string;
-  id?: ToolbarActionId;
-  primary?: boolean;
-  disabled?: boolean;
-  title?: string;
 };
 type OrgForm =
   | { type: 'management'; data?: Management }
@@ -75,66 +58,6 @@ type OrgForm =
 
 const TOOLBAR_EVENT = 'mvo:toolbar-action';
 const UNIMPLEMENTED_TITLE = 'Функція ще не реалізована';
-
-const NAV_ITEMS: NavItem[] = [
-  { id: 'home', label: 'Головна', group: 'Головна', marker: '⌂', href: '/' },
-  {
-    id: 'persons',
-    label: 'МВО',
-    group: 'Довідники',
-    marker: '□',
-    href: '/persons',
-  },
-  {
-    id: 'structure',
-    label: 'Організаційна структура',
-    group: 'Довідники',
-    marker: '◇',
-    href: '/structure',
-  },
-  {
-    id: 'nomenclature',
-    label: 'Номенклатура',
-    group: 'Довідники',
-    marker: '▤',
-    href: '/nomenclature',
-  },
-  {
-    id: 'stock',
-    label: 'Залишки',
-    group: 'Облік майна',
-    marker: '≡',
-    href: '/stock',
-  },
-  {
-    id: 'imports',
-    label: 'Імпорт',
-    group: 'Документи',
-    marker: '+',
-    href: '/imports',
-  },
-  {
-    id: 'transactions',
-    label: 'Журнал операцій',
-    group: 'Звіти',
-    marker: '↺',
-    href: '/transactions',
-  },
-];
-
-const TOP_NAV_ITEMS: TopNavItem[] = [
-  ...NAV_ITEMS.map((item) => ({
-    label: item.label,
-    href: item.href,
-    view: item.id,
-    exact: item.id === 'home',
-  })),
-  { label: 'Адміністрування', disabled: true },
-];
-
-function getViewHref(view: View) {
-  return NAV_ITEMS.find((item) => item.id === view)?.href ?? '/';
-}
 
 function emitToolbarAction(view: View, action: ToolbarActionId) {
   window.dispatchEvent(
@@ -184,12 +107,14 @@ export function MvoApp({
   initialImportId?: string;
 }) {
   const router = useRouter();
+  const { logout, user } = useAuth();
   const [view, setView] = useState<View>(initialView);
+  const navigationItems = getNavigationItems(user);
   const [apiState, setApiState] = useState<
     'checking' | 'available' | 'unavailable'
   >('checking');
   const topNavRef = useRef<HTMLElement | null>(null);
-  const currentPage = NAV_ITEMS.find((item) => item.id === view);
+  const currentPage = navigationItems.find((item) => item.view === view);
 
   useEffect(() => {
     const activeItem =
@@ -220,7 +145,7 @@ export function MvoApp({
 
   function selectView(nextView: View) {
     setView(nextView);
-    router.push(getViewHref(nextView));
+    router.push(getViewHref(user, nextView));
   }
 
   return (
@@ -233,8 +158,10 @@ export function MvoApp({
             </div>
             <p className="truncate text-sm font-semibold">Облік майна МВО</p>
           </div>
-          <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
-            <span className="hidden sm:inline">Користувач: Адміністратор</span>
+          <div className="flex min-w-0 items-center gap-2 text-xs text-[var(--text-secondary)] sm:gap-3">
+            <span className="hidden max-w-[260px] truncate sm:inline">
+              {user ? `${user.username} · ${roleLabels[user.role]}` : ''}
+            </span>
             <span
               className={
                 apiState === 'available'
@@ -253,11 +180,19 @@ export function MvoApp({
             </span>
             <button
               className="btn btn-ghost !min-h-7 !w-auto !px-2 disabled:cursor-not-allowed disabled:opacity-55"
-              disabled
-              title={UNIMPLEMENTED_TITLE}
               type="button"
+              onClick={() => router.push('/profile')}
             >
-              Довідка
+              Профіль
+            </button>
+            <button
+              className="btn btn-outline !min-h-7 !w-auto !px-2"
+              type="button"
+              onClick={() => {
+                void logout();
+              }}
+            >
+              Вийти
             </button>
           </div>
         </div>
@@ -265,7 +200,7 @@ export function MvoApp({
           ref={topNavRef}
           className="compact-scrollbar flex h-9 items-end gap-1 overflow-x-auto whitespace-nowrap border-t border-[var(--border-light)] bg-[var(--toolbar-background)] px-2 text-sm"
         >
-          {TOP_NAV_ITEMS.map((item) => (
+          {navigationItems.map((item) => (
             <TopNavButton
               key={item.label}
               item={item}
@@ -288,9 +223,30 @@ export function MvoApp({
             <ImportsView initialImportId={initialImportId} />
           ) : null}
           {view === 'transactions' ? <TransactionsView /> : null}
+          {view === 'users' ? <UsersView /> : null}
+          {view === 'my-card' ? <MyCardView /> : null}
+          {view === 'my-stock' ? <MyStockView /> : null}
+          {view === 'my-transactions' ? <MyTransactionsView /> : null}
+          {view === 'transfers' ? <MyTransfersView /> : null}
+          {view === 'reports' ? (
+            <PlaceholderView
+              title="Звіти"
+              description="Розділ звітів буде підключено після появи відповідних endpoint."
+            />
+          ) : null}
+          {view === 'administration' ? (
+            <PlaceholderView
+              title="Адміністрування"
+              description="Адміністративні налаштування ще не реалізовані."
+            />
+          ) : null}
         </main>
       </div>
-      <StatusBar apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} />
+      <StatusBar
+        apiState={apiState}
+        currentPage={currentPage?.label ?? 'Головна'}
+        userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''}
+      />
     </div>
   );
 }
@@ -300,7 +256,7 @@ function TopNavButton({
   active,
   onSelect,
 }: {
-  item: TopNavItem;
+  item: NavigationItem;
   active: boolean;
   onSelect: (view: View) => void;
 }) {
@@ -315,9 +271,13 @@ function TopNavButton({
       }`}
       data-active={active ? 'true' : undefined}
       disabled={item.disabled}
-      title={item.disabled ? UNIMPLEMENTED_TITLE : undefined}
+      title={item.disabled ? (item.title ?? UNIMPLEMENTED_TITLE) : undefined}
       type="button"
-      onClick={() => item.view && onSelect(item.view)}
+      onClick={() => {
+        if (!item.disabled) {
+          onSelect(item.view);
+        }
+      }}
     >
       {item.label}
     </button>
@@ -325,7 +285,8 @@ function TopNavButton({
 }
 
 function PageToolbar({ currentView }: { currentView: View }) {
-  const actions = getToolbarActions(currentView);
+  const { user } = useAuth();
+  const actions = getToolbarActions(user, currentView);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -380,7 +341,7 @@ function ToolbarButton({
   currentView,
   onDone,
 }: {
-  action: ToolbarAction;
+  action: ToolbarActionConfig;
   currentView: View;
   onDone?: () => void;
 }) {
@@ -402,52 +363,14 @@ function ToolbarButton({
   );
 }
 
-function getToolbarActions(view: View): ToolbarAction[] {
-  const unavailable = { disabled: true, title: UNIMPLEMENTED_TITLE };
-
-  const byView: Record<View, ToolbarAction[]> = {
-    home: [{ label: 'Оновити дані', id: 'refresh', primary: true }],
-    persons: [
-      { label: 'Створити', id: 'create', primary: true },
-      { label: 'Редагувати', ...unavailable },
-      { label: 'Оновити', id: 'refresh' },
-    ],
-    structure: [
-      { label: 'Створити управління', id: 'create-management', primary: true },
-      { label: 'Створити підрозділ', ...unavailable },
-      { label: 'Оновити', id: 'refresh' },
-    ],
-    nomenclature: [
-      { label: 'Створити', id: 'create', primary: true },
-      { label: 'Редагувати', ...unavailable },
-      { label: 'Оновити', id: 'refresh' },
-    ],
-    stock: [
-      { label: 'Фільтр', id: 'focus-filter', primary: true },
-      { label: 'Оновити', id: 'refresh' },
-      { label: 'Експорт', ...unavailable },
-      { label: 'Друк', ...unavailable },
-    ],
-    imports: [
-      { label: 'Новий імпорт', id: 'new-import', primary: true },
-      { label: 'Оновити', id: 'refresh' },
-    ],
-    transactions: [
-      { label: 'Фільтр', ...unavailable },
-      { label: 'Оновити', id: 'refresh', primary: true },
-      { label: 'Експорт', ...unavailable },
-    ],
-  };
-
-  return byView[view];
-}
-
 function StatusBar({
   apiState,
   currentPage,
+  userLabel,
 }: {
   apiState: 'checking' | 'available' | 'unavailable';
   currentPage: string;
+  userLabel: string;
 }) {
   return (
     <footer className="flex h-7 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--toolbar-background)] px-3 text-xs text-[var(--text-secondary)]">
@@ -465,13 +388,16 @@ function StatusBar({
               : 'недоступний'}
         </span>
         <span className="hidden sm:inline">Версія: 0.1.0</span>
-        <span className="hidden md:inline">Користувач: Адміністратор</span>
+        <span className="hidden max-w-[280px] truncate md:inline">
+          Користувач: {userLabel}
+        </span>
       </div>
     </footer>
   );
 }
 
 function DashboardView({ onNavigate }: { onNavigate: (view: View) => void }) {
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -573,30 +499,36 @@ function DashboardView({ onNavigate }: { onNavigate: (view: View) => void }) {
             description="Основні робочі розділи системи."
           />
           <div className="mt-3 grid gap-1.5">
-            <button
-              className="btn btn-outline justify-start"
-              type="button"
-              onClick={() => {
-                window.sessionStorage.setItem('mvo:open-import-upload', '1');
-                onNavigate('imports');
-              }}
-            >
-              Новий імпорт
-            </button>
-            <button
-              className="btn btn-outline justify-start"
-              type="button"
-              onClick={() => onNavigate('persons')}
-            >
-              Реєстр МВО
-            </button>
-            <button
-              className="btn btn-outline justify-start"
-              type="button"
-              onClick={() => onNavigate('stock')}
-            >
-              Переглянути залишки
-            </button>
+            {can(user, 'write', 'imports') ? (
+              <button
+                className="btn btn-outline justify-start"
+                type="button"
+                onClick={() => {
+                  window.sessionStorage.setItem('mvo:open-import-upload', '1');
+                  onNavigate('imports');
+                }}
+              >
+                Новий імпорт
+              </button>
+            ) : null}
+            {can(user, 'read', 'responsiblePersons') ? (
+              <button
+                className="btn btn-outline justify-start"
+                type="button"
+                onClick={() => onNavigate('persons')}
+              >
+                Реєстр МВО
+              </button>
+            ) : null}
+            {can(user, 'read', 'stock') ? (
+              <button
+                className="btn btn-outline justify-start"
+                type="button"
+                onClick={() => onNavigate('stock')}
+              >
+                Переглянути залишки
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -605,6 +537,10 @@ function DashboardView({ onNavigate }: { onNavigate: (view: View) => void }) {
 }
 
 function PersonsView() {
+  const { user } = useAuth();
+  const canWritePersons = can(user, 'write', 'responsiblePersons');
+  const canCreateMvoUser =
+    can(user, 'write', 'users') || can(user, 'write', 'mvoUsers');
   const [managements, setManagements] = useState<Management[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
@@ -621,6 +557,9 @@ function PersonsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingPerson, setEditingPerson] = useState<ResponsiblePerson | null>(
+    null,
+  );
+  const [accountPerson, setAccountPerson] = useState<ResponsiblePerson | null>(
     null,
   );
   const [isFormOpen, setFormOpen] = useState(false);
@@ -664,7 +603,7 @@ function PersonsView() {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'persons') return;
 
-      if (detail.action === 'create') {
+      if (detail.action === 'create' && canWritePersons) {
         setEditingPerson(null);
         setFormOpen(true);
       }
@@ -677,7 +616,7 @@ function PersonsView() {
 
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [loadFilters, loadPersons]);
+  }, [canWritePersons, loadFilters, loadPersons]);
 
   return (
     <section className="grid gap-3">
@@ -685,6 +624,7 @@ function PersonsView() {
         title="МВО"
         description="Реєстр матеріально відповідальних осіб."
         action={
+          canWritePersons ? (
           <button
             className="btn btn-primary"
             type="button"
@@ -695,6 +635,7 @@ function PersonsView() {
           >
             Додати МВО
           </button>
+          ) : undefined
         }
       />
 
@@ -773,10 +714,13 @@ function PersonsView() {
       {!loading ? (
         <PersonsTable
           persons={persons}
+          canEdit={canWritePersons}
+          canCreateAccount={canCreateMvoUser}
           onEdit={(person) => {
             setEditingPerson(person);
             setFormOpen(true);
           }}
+          onCreateAccount={setAccountPerson}
         />
       ) : null}
       <PaginationControls
@@ -797,16 +741,28 @@ function PersonsView() {
           }}
         />
       ) : null}
+      {accountPerson ? (
+        <CreateMvoAccountModal
+          person={accountPerson}
+          onClose={() => setAccountPerson(null)}
+        />
+      ) : null}
     </section>
   );
 }
 
 function PersonsTable({
   persons,
+  canEdit,
+  canCreateAccount,
   onEdit,
+  onCreateAccount,
 }: {
   persons: ResponsiblePerson[];
+  canEdit: boolean;
+  canCreateAccount: boolean;
   onEdit: (person: ResponsiblePerson) => void;
+  onCreateAccount: (person: ResponsiblePerson) => void;
 }) {
   if (persons.length === 0) {
     return <EmptyState message="МВО не знайдено." />;
@@ -845,13 +801,26 @@ function PersonsTable({
                   <StatusBadge active={person.isActive} />
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                    type="button"
-                    onClick={() => onEdit(person)}
-                  >
-                    Редагувати
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {canEdit ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onEdit(person)}
+                      >
+                        Редагувати
+                      </button>
+                    ) : null}
+                    {canCreateAccount ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onCreateAccount(person)}
+                      >
+                        Створити обліковий запис
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -878,17 +847,124 @@ function PersonsTable({
               <InfoRow label="Служба" value={person.service.name} />
               <InfoRow label="Підрозділ" value={person.unit?.name ?? '-'} />
             </dl>
-            <button
-              className="mt-3 btn btn-ghost !min-h-0 !w-fit !p-0"
-              type="button"
-              onClick={() => onEdit(person)}
-            >
-              Редагувати
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {canEdit ? (
+                <button
+                  className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                  type="button"
+                  onClick={() => onEdit(person)}
+                >
+                  Редагувати
+                </button>
+              ) : null}
+              {canCreateAccount ? (
+                <button
+                  className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                  type="button"
+                  onClick={() => onCreateAccount(person)}
+                >
+                  Створити обліковий запис
+                </button>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function CreateMvoAccountModal({
+  person,
+  onClose,
+}: {
+  person: ResponsiblePerson;
+  onClose: () => void;
+}) {
+  const [username, setUsername] = useState(person.personnelNumber);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    setSaving(true);
+
+    try {
+      const response = await apiClient.createUser({
+        username,
+        role: 'MVO',
+        responsiblePersonId: person.id,
+      });
+      setTemporaryPassword(response.temporaryPassword);
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title="Створити обліковий запис МВО" onClose={onClose}>
+      <div className="grid gap-3">
+        <Alert
+          tone="warning"
+          title="Тимчасовий пароль показується один раз"
+          message="Після закриття цього вікна його не можна буде відновити. За потреби виконайте reset password."
+        />
+        <div className="erp-panel p-3 text-sm">
+          <p className="font-semibold">{fullName(person)}</p>
+          <p className="mt-1 text-[var(--text-secondary)]">
+            Табельний номер: {person.personnelNumber}
+          </p>
+        </div>
+
+        {temporaryPassword ? (
+          <div className="grid gap-3">
+            <Field label="Тимчасовий пароль">
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  readOnly
+                  className="input font-mono"
+                  value={temporaryPassword}
+                />
+                <button
+                  className="btn btn-outline !w-auto"
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(temporaryPassword);
+                    setCopied(true);
+                  }}
+                >
+                  {copied ? 'Скопійовано' : 'Копіювати'}
+                </button>
+              </div>
+            </Field>
+            <div className="flex justify-end">
+              <button className="btn btn-primary !w-auto" type="button" onClick={onClose}>
+                Закрити
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form className="grid gap-3" onSubmit={submit}>
+            {error ? <ErrorMessage message={error} /> : null}
+            <Field label="Логін">
+              <input
+                required
+                className="input"
+                minLength={3}
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </Field>
+            <FormActions saving={saving} onClose={onClose} />
+          </form>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -1268,7 +1344,583 @@ function PersonOperationsTab({ personId }: { personId: string }) {
   );
 }
 
+function UsersView() {
+  const { user } = useAuth();
+  const userResource = getUserManagementResource(user);
+  const canWriteUsers = can(user, 'write', userResource);
+  const canResetPasswords = can(user, 'resetPassword', userResource);
+  const canRevokeSessions = can(user, 'revokeSessions', userResource);
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
+  const [isFormOpen, setFormOpen] = useState(false);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setUsers(await apiClient.users());
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'users') return;
+
+      if (detail.action === 'create' && canWriteUsers) {
+        setEditingUser(null);
+        setFormOpen(true);
+      }
+
+      if (detail.action === 'refresh') {
+        void loadUsers();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [canWriteUsers, loadUsers]);
+
+  async function runUserAction(
+    action: () => Promise<unknown>,
+    options: { reload?: boolean } = { reload: true },
+  ) {
+    setError('');
+    try {
+      await action();
+      if (options.reload) {
+        await loadUsers();
+      }
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    }
+  }
+
+  async function resetPassword(targetUser: UserSummary) {
+    await runUserAction(async () => {
+      const response = await apiClient.resetUserPassword(targetUser.id);
+      setTemporaryPassword(response.temporaryPassword);
+    });
+  }
+
+  return (
+    <section className="grid gap-3">
+      <PageHeader
+        title={userResource === 'users' ? 'Користувачі' : 'Користувачі МВО'}
+        description="Керування доступом до системи."
+        action={
+          canWriteUsers ? (
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                setEditingUser(null);
+                setFormOpen(true);
+              }}
+            >
+              Створити користувача
+            </button>
+          ) : undefined
+        }
+      />
+
+      {error ? <ErrorMessage message={error} /> : null}
+      {loading ? <LoadingMessage /> : null}
+      {!loading ? (
+        <UsersTable
+          canResetPassword={canResetPasswords}
+          canRevokeSessions={canRevokeSessions}
+          canWrite={canWriteUsers}
+          users={users}
+          onActivate={(targetUser) =>
+            void runUserAction(() => apiClient.activateUser(targetUser.id))
+          }
+          onBlock={(targetUser) =>
+            void runUserAction(() => apiClient.blockUser(targetUser.id))
+          }
+          onDeactivate={(targetUser) =>
+            void runUserAction(() => apiClient.deactivateUser(targetUser.id))
+          }
+          onEdit={(targetUser) => {
+            setEditingUser(targetUser);
+            setFormOpen(true);
+          }}
+          onResetPassword={(targetUser) => {
+            void resetPassword(targetUser);
+          }}
+          onRevokeSessions={(targetUser) =>
+            void runUserAction(() => apiClient.revokeUserSessions(targetUser.id))
+          }
+          onUnblock={(targetUser) =>
+            void runUserAction(() => apiClient.unblockUser(targetUser.id))
+          }
+        />
+      ) : null}
+
+      {isFormOpen ? (
+        <UserFormModal
+          mode={userResource}
+          user={editingUser}
+          onClose={() => setFormOpen(false)}
+          onSaved={(password) => {
+            setFormOpen(false);
+            if (password) {
+              setTemporaryPassword(password);
+            }
+            void loadUsers();
+          }}
+        />
+      ) : null}
+
+      {temporaryPassword ? (
+        <TemporaryPasswordModal
+          temporaryPassword={temporaryPassword}
+          onClose={() => setTemporaryPassword('')}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function UsersTable({
+  users,
+  canWrite,
+  canResetPassword,
+  canRevokeSessions,
+  onEdit,
+  onResetPassword,
+  onBlock,
+  onUnblock,
+  onRevokeSessions,
+  onDeactivate,
+  onActivate,
+}: {
+  users: UserSummary[];
+  canWrite: boolean;
+  canResetPassword: boolean;
+  canRevokeSessions: boolean;
+  onEdit: (user: UserSummary) => void;
+  onResetPassword: (user: UserSummary) => void;
+  onBlock: (user: UserSummary) => void;
+  onUnblock: (user: UserSummary) => void;
+  onRevokeSessions: (user: UserSummary) => void;
+  onDeactivate: (user: UserSummary) => void;
+  onActivate: (user: UserSummary) => void;
+}) {
+  if (users.length === 0) {
+    return <EmptyState message="Користувачів не знайдено." />;
+  }
+
+  return (
+    <div className="erp-panel overflow-hidden">
+      <div className="compact-scrollbar overflow-x-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {[
+                'Логін',
+                'Роль',
+                'Статус',
+                'ResponsiblePerson',
+                'Останній вхід',
+                'Дії',
+              ].map((header) => (
+                <th key={header}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((item) => (
+              <tr key={item.id}>
+                <td className="font-medium">{item.username}</td>
+                <td>{roleLabels[item.role]}</td>
+                <td>
+                  <div className="flex flex-wrap gap-1">
+                    <StatusBadge active={item.isActive} />
+                    {isUserLocked(item) ? (
+                      <StatusPill status="BLOCKED" />
+                    ) : null}
+                  </div>
+                </td>
+                <td>
+                  {item.responsiblePerson
+                    ? responsiblePersonShortName(item.responsiblePerson)
+                    : '-'}
+                </td>
+                <td>{formatDateTime(item.lastLoginAt)}</td>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {canWrite ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onEdit(item)}
+                      >
+                        Редагувати
+                      </button>
+                    ) : null}
+                    {canResetPassword ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onResetPassword(item)}
+                      >
+                        Reset password
+                      </button>
+                    ) : null}
+                    {canWrite && isUserLocked(item) ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onUnblock(item)}
+                      >
+                        Unblock
+                      </button>
+                    ) : null}
+                    {canWrite && !isUserLocked(item) ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onBlock(item)}
+                      >
+                        Block
+                      </button>
+                    ) : null}
+                    {canRevokeSessions ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onRevokeSessions(item)}
+                      >
+                        Revoke sessions
+                      </button>
+                    ) : null}
+                    {canWrite && item.isActive ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onDeactivate(item)}
+                      >
+                        Deactivate
+                      </button>
+                    ) : null}
+                    {canWrite && !item.isActive ? (
+                      <button
+                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onActivate(item)}
+                      >
+                        Activate
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function UserFormModal({
+  mode,
+  user,
+  onClose,
+  onSaved,
+}: {
+  mode: 'users' | 'mvoUsers';
+  user: UserSummary | null;
+  onClose: () => void;
+  onSaved: (temporaryPassword?: string) => void;
+}) {
+  const ownerMode = mode === 'users';
+  const [username, setUsername] = useState(user?.username ?? '');
+  const [role, setRole] = useState<UserRole>(user?.role ?? 'MVO');
+  const [responsiblePersonId, setResponsiblePersonId] = useState(
+    user?.responsiblePersonId ?? '',
+  );
+  const [mustChangePassword, setMustChangePassword] = useState(
+    user?.mustChangePassword ?? true,
+  );
+  const roleOptions = getAssignableUserRoles(mode, user?.role);
+  const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiClient
+      .responsiblePersons({ page: 1, limit: 200, isActive: true })
+      .then((response) => setPersons(response.items))
+      .catch((reason: unknown) => setError(getErrorMessage(reason)));
+  }, []);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+
+    const selectedRole = resolveUserFormRole(mode, role);
+
+    try {
+      if (user) {
+        await apiClient.updateUser(user.id, {
+          username,
+          role: selectedRole,
+          responsiblePersonId: responsiblePersonId || null,
+          mustChangePassword,
+        });
+        onSaved();
+      } else {
+        const response = await apiClient.createUser({
+          username,
+          role: selectedRole,
+          responsiblePersonId: responsiblePersonId || undefined,
+        });
+        onSaved(response.temporaryPassword);
+      }
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={user ? 'Редагувати користувача' : 'Створити користувача'} onClose={onClose}>
+      <form className="grid gap-3" onSubmit={submit}>
+        {error ? <ErrorMessage message={error} /> : null}
+        <Field label="Логін">
+          <input
+            required
+            className="input"
+            minLength={3}
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+          />
+        </Field>
+        <Field label="Роль">
+          {ownerMode ? (
+            <Select
+              value={role}
+              onChange={(value) => setRole(value as UserRole)}
+            >
+              {roleOptions.map((roleOption) => (
+                <option key={roleOption} value={roleOption}>
+                  {roleLabels[roleOption]}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <input readOnly className="input" value={roleLabels.MVO} />
+          )}
+        </Field>
+        <Field label="МВО">
+          <Select
+            required={requiresResponsiblePerson(role)}
+            value={responsiblePersonId}
+            onChange={setResponsiblePersonId}
+          >
+            <option value="">Без прив’язки</option>
+            {persons.map((person) => (
+              <option key={person.id} value={person.id}>
+                {fullName(person)} · {person.personnelNumber}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            checked={mustChangePassword}
+            type="checkbox"
+            onChange={(event) => setMustChangePassword(event.target.checked)}
+          />
+          Вимагати зміну пароля
+        </label>
+        <FormActions saving={saving} onClose={onClose} />
+      </form>
+    </Modal>
+  );
+}
+
+function TemporaryPasswordModal({
+  temporaryPassword,
+  onClose,
+}: {
+  temporaryPassword: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Modal title="Тимчасовий пароль" onClose={onClose}>
+      <div className="grid gap-3">
+        <Alert
+          tone="warning"
+          title="Збережіть пароль зараз"
+          message="Пароль показується тільки один раз і не зберігається у браузері."
+        />
+        <Field label="Пароль">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input readOnly className="input font-mono" value={temporaryPassword} />
+            <button
+              className="btn btn-outline !w-auto"
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(temporaryPassword);
+                setCopied(true);
+              }}
+            >
+              {copied ? 'Скопійовано' : 'Копіювати'}
+            </button>
+          </div>
+        </Field>
+        <div className="flex justify-end">
+          <button className="btn btn-primary !w-auto" type="button" onClick={onClose}>
+            Закрити
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function MyCardView() {
+  const { user } = useAuth();
+  const [person, setPerson] = useState<ResponsiblePerson | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!user?.responsiblePersonId) {
+      setLoading(false);
+      setError('До користувача не прив’язано картку МВО.');
+      return;
+    }
+
+    setLoading(true);
+    apiClient
+      .responsiblePerson(user.responsiblePersonId)
+      .then(setPerson)
+      .catch((reason: unknown) => setError(getErrorMessage(reason)))
+      .finally(() => setLoading(false));
+  }, [user?.responsiblePersonId]);
+
+  return (
+    <section className="grid gap-3">
+      <PageHeader
+        title="Моя картка"
+        description="Персональна картка матеріально відповідальної особи."
+      />
+      {loading ? <LoadingMessage /> : null}
+      {error ? <ErrorMessage message={error} /> : null}
+      {person ? (
+        <div className="erp-panel p-4">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <InfoRow label="ПІП" value={fullName(person)} />
+            <InfoRow label="Табельний номер" value={person.personnelNumber} />
+            <InfoRow label="Посада" value={person.position ?? '-'} />
+            <InfoRow label="Управління" value={person.management.name} />
+            <InfoRow label="Служба" value={person.service.name} />
+            <InfoRow label="Підрозділ" value={person.unit?.name ?? '-'} />
+            <InfoRow label="Телефон" value={person.phone ?? '-'} />
+            <InfoRow label="Email" value={person.email ?? '-'} />
+            <InfoRow
+              label="Статус"
+              value={person.isActive ? 'Активний' : 'Неактивний'}
+            />
+          </dl>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function MyStockView() {
+  const { user } = useAuth();
+
+  if (!user?.responsiblePersonId) {
+    return (
+      <PlaceholderView
+        title="Моє майно"
+        description="До користувача не прив’язано картку МВО."
+      />
+    );
+  }
+
+  return (
+    <section className="grid gap-3">
+      <PageHeader
+        title="Моє майно"
+        description="Власні залишки майна за прив’язаною карткою МВО."
+      />
+      <PersonStockTab personId={user.responsiblePersonId} />
+    </section>
+  );
+}
+
+function MyTransactionsView() {
+  const { user } = useAuth();
+
+  if (!user?.responsiblePersonId) {
+    return (
+      <PlaceholderView
+        title="Мої операції"
+        description="До користувача не прив’язано картку МВО."
+      />
+    );
+  }
+
+  return (
+    <section className="grid gap-3">
+      <PageHeader
+        title="Мої операції"
+        description="Операції, у яких поточна МВО є стороною."
+      />
+      <PersonOperationsTab personId={user.responsiblePersonId} />
+    </section>
+  );
+}
+
+function MyTransfersView() {
+  return (
+    <PlaceholderView
+      title="Передачі"
+      description="Окремий endpoint для власних передач ще не реалізований у backend."
+    />
+  );
+}
+
+function PlaceholderView({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <section className="grid gap-3">
+      <PageHeader title={title} description={description} />
+      <EmptyState message={description} />
+    </section>
+  );
+}
+
 function StructureView() {
+  const { user } = useAuth();
+  const canWriteStructure = can(user, 'write', 'organization');
   const [managements, setManagements] = useState<Management[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1295,7 +1947,7 @@ function StructureView() {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'structure') return;
 
-      if (detail.action === 'create-management') {
+      if (detail.action === 'create-management' && canWriteStructure) {
         setOrgForm({ type: 'management' });
       }
 
@@ -1306,7 +1958,7 @@ function StructureView() {
 
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [load]);
+  }, [canWriteStructure, load]);
 
   return (
     <section className="grid gap-3">
@@ -1314,6 +1966,7 @@ function StructureView() {
         title="Організаційна структура"
         description="Управління, служби та підрозділи."
         action={
+          canWriteStructure ? (
           <button
             className="btn btn-primary"
             type="button"
@@ -1321,6 +1974,7 @@ function StructureView() {
           >
             Створити управління
           </button>
+          ) : undefined
         }
       />
       {error ? <ErrorMessage message={error} /> : null}
@@ -1340,36 +1994,42 @@ function StructureView() {
                   className="flex h-8 items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
                   type="button"
                   onClick={() =>
-                    setOrgForm({ type: 'management', data: management })
+                    canWriteStructure
+                      ? setOrgForm({ type: 'management', data: management })
+                      : undefined
                   }
                 >
                   <span className="truncate">▾ {management.name}</span>
                   <StatusBadge active={management.isActive} />
                 </button>
                 <div className="ml-4 border-l border-[var(--border)] pl-2">
-                  <button
-                    className="btn btn-ghost !min-h-7 !w-fit !px-0"
-                    type="button"
-                    onClick={() =>
-                      setOrgForm({
-                        type: 'service',
-                        managementId: management.id,
-                      })
-                    }
-                  >
-                    + служба
-                  </button>
+                  {canWriteStructure ? (
+                    <button
+                      className="btn btn-ghost !min-h-7 !w-fit !px-0"
+                      type="button"
+                      onClick={() =>
+                        setOrgForm({
+                          type: 'service',
+                          managementId: management.id,
+                        })
+                      }
+                    >
+                      + служба
+                    </button>
+                  ) : null}
                   {management.services?.map((service) => (
                     <div key={service.id}>
                       <button
                         className="flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
                         type="button"
                         onClick={() =>
-                          setOrgForm({
-                            type: 'service',
-                            managementId: management.id,
-                            data: service,
-                          })
+                          canWriteStructure
+                            ? setOrgForm({
+                                type: 'service',
+                                managementId: management.id,
+                                data: service,
+                              })
+                            : undefined
                         }
                       >
                         <span className="truncate">▾ {service.name}</span>
@@ -1378,29 +2038,33 @@ function StructureView() {
                         </span>
                       </button>
                       <div className="ml-4 border-l border-[var(--border-light)] pl-2">
-                        <button
-                          className="btn btn-ghost !min-h-7 !w-fit !px-0"
-                          type="button"
-                          onClick={() =>
-                            setOrgForm({
-                              type: 'unit',
-                              serviceId: service.id,
-                            })
-                          }
-                        >
-                          + підрозділ
-                        </button>
+                        {canWriteStructure ? (
+                          <button
+                            className="btn btn-ghost !min-h-7 !w-fit !px-0"
+                            type="button"
+                            onClick={() =>
+                              setOrgForm({
+                                type: 'unit',
+                                serviceId: service.id,
+                              })
+                            }
+                          >
+                            + підрозділ
+                          </button>
+                        ) : null}
                         {service.units?.map((unit) => (
                           <button
                             key={unit.id}
                             className="flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
                             type="button"
                             onClick={() =>
-                              setOrgForm({
-                                type: 'unit',
-                                serviceId: service.id,
-                                data: unit,
-                              })
+                              canWriteStructure
+                                ? setOrgForm({
+                                    type: 'unit',
+                                    serviceId: service.id,
+                                    data: unit,
+                                  })
+                                : undefined
                             }
                           >
                             <span className="truncate">{unit.name}</span>
@@ -1582,6 +2246,8 @@ function OrgFormModal({
 }
 
 function NomenclatureView() {
+  const { user } = useAuth();
+  const canWriteNomenclature = can(user, 'write', 'nomenclature');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -1631,7 +2297,7 @@ function NomenclatureView() {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'nomenclature') return;
 
-      if (detail.action === 'create') {
+      if (detail.action === 'create' && canWriteNomenclature) {
         setFormOpen(true);
       }
 
@@ -1642,7 +2308,7 @@ function NomenclatureView() {
 
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [load]);
+  }, [canWriteNomenclature, load]);
 
   return (
     <section className="grid gap-3">
@@ -1650,6 +2316,7 @@ function NomenclatureView() {
         title="Номенклатура"
         description="Централізований довідник позицій майна."
         action={
+          canWriteNomenclature ? (
           <button
             className="btn btn-primary"
             type="button"
@@ -1657,6 +2324,7 @@ function NomenclatureView() {
           >
             Додати позицію
           </button>
+          ) : undefined
         }
       />
       <div className="erp-toolbar p-2">
@@ -1876,6 +2544,8 @@ function InventoryItemForm({
 }
 
 function StockView() {
+  const { user } = useAuth();
+  const canWriteStock = can(user, 'write', 'stock');
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -1943,6 +2613,7 @@ function StockView() {
         title="Залишки"
         description="Поточні залишки майна за МВО."
         action={
+          canWriteStock ? (
           <button
             className="btn btn-primary"
             type="button"
@@ -1950,6 +2621,7 @@ function StockView() {
           >
             Додати надходження вручну
           </button>
+          ) : undefined
         }
       />
       <div className="erp-toolbar p-2">
@@ -2162,6 +2834,8 @@ function ManualReceiptForm({
 }
 
 function ImportsView({ initialImportId }: { initialImportId?: string }) {
+  const { user } = useAuth();
+  const canWriteImports = can(user, 'write', 'imports');
   const router = useRouter();
   const [imports, setImports] = useState<ImportBatch[]>([]);
   const [selected, setSelected] = useState<ImportBatch | null>(null);
@@ -2337,6 +3011,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
         title="Імпорт"
         description="Завантаження початкових залишків і нових надходжень."
         action={
+          canWriteImports ? (
           <button
             className="btn btn-primary"
             type="button"
@@ -2344,6 +3019,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
           >
             Новий імпорт
           </button>
+          ) : undefined
         }
       />
       {error ? <ErrorMessage message={error} /> : null}
@@ -2443,7 +3119,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               }.`}
             />
           ) : null}
-          {missingCounterparties.length > 0 ? (
+          {canWriteImports && missingCounterparties.length > 0 ? (
             <div className="grid gap-3 rounded-lg border border-amber-700/20 bg-amber-50/70 p-4">
               <div>
                 <p className="text-sm font-semibold text-[var(--warning)]">
@@ -2584,34 +3260,36 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               void refreshRowsWithFilters(next);
             }}
           />
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={() => void validateSelected()}
-            >
-              Перевірити повторно
-            </button>
-            <button
-              className="btn btn-primary"
-              disabled={!canCommit}
-              type="button"
-              onClick={() => setConfirmOpen(true)}
-            >
-              Провести імпорт
-            </button>
-            <button
-              className="btn btn-outline"
-              disabled={selected.status === 'COMPLETED'}
-              type="button"
-              onClick={() => void cancelSelected()}
-            >
-              Скасувати імпорт
-            </button>
-          </div>
+          {canWriteImports ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn btn-outline"
+                type="button"
+                onClick={() => void validateSelected()}
+              >
+                Перевірити повторно
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={!canCommit}
+                type="button"
+                onClick={() => setConfirmOpen(true)}
+              >
+                Провести імпорт
+              </button>
+              <button
+                className="btn btn-outline"
+                disabled={selected.status === 'COMPLETED'}
+                type="button"
+                onClick={() => void cancelSelected()}
+              >
+                Скасувати імпорт
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
-      {uploadOpen ? (
+      {uploadOpen && canWriteImports ? (
         <ImportUploadModal
           onClose={() => setUploadOpen(false)}
           onSaved={(batch) => {
@@ -3178,6 +3856,32 @@ function fullName(person: ResponsiblePerson) {
   return [person.lastName, person.firstName, person.middleName]
     .filter(Boolean)
     .join(' ');
+}
+
+function responsiblePersonShortName(
+  person: Pick<
+    ResponsiblePerson,
+    'lastName' | 'firstName' | 'middleName' | 'personnelNumber'
+  >,
+) {
+  return `${[person.lastName, person.firstName, person.middleName]
+    .filter(Boolean)
+    .join(' ')} · ${person.personnelNumber}`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return 'Немає даних';
+  }
+
+  return new Intl.DateTimeFormat('uk-UA', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
+function isUserLocked(user: UserSummary) {
+  return user.lockedUntil ? new Date(user.lockedUntil) > new Date() : false;
 }
 
 function normalizePersonForm(

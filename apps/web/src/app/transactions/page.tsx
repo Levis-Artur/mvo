@@ -1,5 +1,5 @@
-import { MvoApp } from '../ui/mvo-app';
+import { ProtectedMvoApp } from '../ui/protected-mvo-app';
 
 export default function TransactionsPage() {
-  return <MvoApp initialView="transactions" />;
+  return <ProtectedMvoApp initialView="transactions" />;
 }

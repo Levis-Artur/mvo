@@ -1,5 +1,30 @@
 export type EntityStatus = boolean;
 
+export type UserRole = 'OWNER' | 'AUDITOR' | 'DPP_ADMIN' | 'MVO';
+
+export type AuthUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  responsiblePersonId: string | null;
+  lastLoginAt?: string | null;
+};
+
+export type UserSummary = AuthUser & {
+  failedLoginAttempts: number;
+  lockedUntil: string | null;
+  passwordChangedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdById: string | null;
+  responsiblePerson: Pick<
+    ResponsiblePerson,
+    'id' | 'lastName' | 'firstName' | 'middleName' | 'personnelNumber' | 'isActive'
+  > | null;
+};
+
 export type Management = {
   id: string;
   name: string;
