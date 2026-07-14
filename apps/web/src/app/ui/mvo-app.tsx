@@ -1,6 +1,12 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, ApiError } from '@/lib/api-client';
 import type {
@@ -30,10 +36,129 @@ type View =
   | 'nomenclature'
   | 'imports'
   | 'transactions';
+type NavItem = {
+  id: View;
+  label: string;
+  group: string;
+  marker: string;
+  href: string;
+};
+type TopNavItem = {
+  label: string;
+  href?: string;
+  view?: View;
+  exact?: boolean;
+  disabled?: boolean;
+};
+type ToolbarActionId =
+  | 'create'
+  | 'create-management'
+  | 'create-receipt'
+  | 'new-import'
+  | 'refresh'
+  | 'focus-filter';
+type ToolbarEventDetail = {
+  view: View;
+  action: ToolbarActionId;
+};
+type ToolbarAction = {
+  label: string;
+  id?: ToolbarActionId;
+  primary?: boolean;
+  disabled?: boolean;
+  title?: string;
+};
 type OrgForm =
   | { type: 'management'; data?: Management }
   | { type: 'service'; managementId: string; data?: Service }
   | { type: 'unit'; serviceId: string; data?: Unit };
+
+const TOOLBAR_EVENT = 'mvo:toolbar-action';
+const UNIMPLEMENTED_TITLE = 'Функція ще не реалізована';
+
+const NAV_ITEMS: NavItem[] = [
+  { id: 'home', label: 'Головна', group: 'Головна', marker: '⌂', href: '/' },
+  {
+    id: 'persons',
+    label: 'МВО',
+    group: 'Довідники',
+    marker: '□',
+    href: '/persons',
+  },
+  {
+    id: 'structure',
+    label: 'Організаційна структура',
+    group: 'Довідники',
+    marker: '◇',
+    href: '/structure',
+  },
+  {
+    id: 'nomenclature',
+    label: 'Номенклатура',
+    group: 'Довідники',
+    marker: '▤',
+    href: '/nomenclature',
+  },
+  {
+    id: 'stock',
+    label: 'Залишки',
+    group: 'Облік майна',
+    marker: '≡',
+    href: '/stock',
+  },
+  {
+    id: 'imports',
+    label: 'Імпорт',
+    group: 'Документи',
+    marker: '+',
+    href: '/imports',
+  },
+  {
+    id: 'transactions',
+    label: 'Журнал операцій',
+    group: 'Звіти',
+    marker: '↺',
+    href: '/transactions',
+  },
+];
+
+const TOP_NAV_ITEMS: TopNavItem[] = [
+  ...NAV_ITEMS.map((item) => ({
+    label: item.label,
+    href: item.href,
+    view: item.id,
+    exact: item.id === 'home',
+  })),
+  { label: 'Адміністрування', disabled: true },
+];
+
+function getViewHref(view: View) {
+  return NAV_ITEMS.find((item) => item.id === view)?.href ?? '/';
+}
+
+function emitToolbarAction(view: View, action: ToolbarActionId) {
+  window.dispatchEvent(
+    new CustomEvent<ToolbarEventDetail>(TOOLBAR_EVENT, {
+      detail: { view, action },
+    }),
+  );
+}
+
+function getToolbarDetail(event: Event) {
+  if (!(event instanceof CustomEvent)) {
+    return null;
+  }
+
+  return event.detail as ToolbarEventDetail;
+}
+
+function focusFirstField() {
+  const field = document.querySelector<HTMLInputElement | HTMLSelectElement>(
+    'main input, main select',
+  );
+
+  field?.focus();
+}
 
 const emptyPersonForm: CreateResponsiblePersonDto = {
   lastName: '',
@@ -58,62 +183,103 @@ export function MvoApp({
   initialView?: View;
   initialImportId?: string;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<View>(initialView);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [apiState, setApiState] = useState<
+    'checking' | 'available' | 'unavailable'
+  >('checking');
+  const topNavRef = useRef<HTMLElement | null>(null);
+  const currentPage = NAV_ITEMS.find((item) => item.id === view);
 
-  const menu = [
-    { id: 'home' as const, label: 'Головна' },
-    { id: 'persons' as const, label: 'МВО' },
-    { id: 'structure' as const, label: 'Організаційна структура' },
-    { id: 'stock' as const, label: 'Залишки' },
-    { id: 'nomenclature' as const, label: 'Номенклатура' },
-    { id: 'imports' as const, label: 'Імпорт' },
-    { id: 'transactions' as const, label: 'Журнал операцій' },
-  ];
+  useEffect(() => {
+    const activeItem =
+      topNavRef.current?.querySelector<HTMLElement>('[data-active="true"]');
+
+    activeItem?.scrollIntoView({
+      block: 'nearest',
+      inline: 'center',
+    });
+  }, [view]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/health`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then((response) => setApiState(response.ok ? 'available' : 'unavailable'))
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setApiState('unavailable');
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  function selectView(nextView: View) {
+    setView(nextView);
+    router.push(getViewHref(nextView));
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white">
-        <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div>
-            <p className="text-xs font-semibold uppercase text-blue-900">
-              Службова система
-            </p>
-            <h1 className="text-lg font-bold text-slate-950">
-              Облік майна МВО
-            </h1>
+    <div className="flex min-h-screen flex-col bg-[var(--app-background)] text-[var(--text-primary)]">
+      <header className="border-b border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex h-10 items-center justify-between gap-3 px-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="grid h-6 w-8 place-items-center rounded border border-[var(--border)] bg-[var(--toolbar-background)] text-[11px] font-semibold text-[var(--primary)]">
+              MVO
+            </div>
+            <p className="truncate text-sm font-semibold">Облік майна МВО</p>
           </div>
-          <button
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 md:hidden"
-            type="button"
-            onClick={() => setMobileMenuOpen((value) => !value)}
-          >
-            Меню
-          </button>
+          <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)]">
+            <span className="hidden sm:inline">Користувач: Адміністратор</span>
+            <span
+              className={
+                apiState === 'available'
+                  ? 'text-[var(--success)]'
+                  : apiState === 'checking'
+                    ? 'text-[var(--warning)]'
+                    : 'text-[var(--danger)]'
+              }
+            >
+              API:{' '}
+              {apiState === 'available'
+                ? 'доступний'
+                : apiState === 'checking'
+                  ? 'перевірка'
+                  : 'недоступний'}
+            </span>
+            <button
+              className="btn btn-ghost !min-h-7 !w-auto !px-2 disabled:cursor-not-allowed disabled:opacity-55"
+              disabled
+              title={UNIMPLEMENTED_TITLE}
+              type="button"
+            >
+              Довідка
+            </button>
+          </div>
         </div>
-        {mobileMenuOpen ? (
-          <nav className="border-t border-slate-200 bg-white p-3 md:hidden">
-            <MenuItems
-              activeView={view}
-              items={menu}
-              onSelect={(nextView) => {
-                setView(nextView);
-                setMobileMenuOpen(false);
-              }}
+        <nav
+          ref={topNavRef}
+          className="compact-scrollbar flex h-9 items-end gap-1 overflow-x-auto whitespace-nowrap border-t border-[var(--border-light)] bg-[var(--toolbar-background)] px-2 text-sm"
+        >
+          {TOP_NAV_ITEMS.map((item) => (
+            <TopNavButton
+              key={item.label}
+              item={item}
+              active={item.view === view}
+              onSelect={selectView}
             />
-          </nav>
-        ) : null}
+          ))}
+        </nav>
+        <PageToolbar currentView={view} />
       </header>
 
-      <div className="mx-auto flex w-full max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <aside className="hidden w-64 shrink-0 md:block">
-          <nav className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-            <MenuItems activeView={view} items={menu} onSelect={setView} />
-          </nav>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          {view === 'home' ? <DashboardView /> : null}
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--workspace-background)]">
+        <main className="compact-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          {view === 'home' ? <DashboardView onNavigate={selectView} /> : null}
           {view === 'persons' ? <PersonsView /> : null}
           {view === 'structure' ? <StructureView /> : null}
           {view === 'stock' ? <StockView /> : null}
@@ -124,49 +290,222 @@ export function MvoApp({
           {view === 'transactions' ? <TransactionsView /> : null}
         </main>
       </div>
+      <StatusBar apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} />
     </div>
   );
 }
 
-function MenuItems({
-  activeView,
-  items,
+function TopNavButton({
+  item,
+  active,
   onSelect,
 }: {
-  activeView: View;
-  items: { id: View; label: string }[];
+  item: TopNavItem;
+  active: boolean;
   onSelect: (view: View) => void;
 }) {
   return (
-    <div className="grid gap-1">
-      {items.map((item) => (
+    <button
+      className={`h-9 shrink-0 border px-3 text-[13px] transition ${
+        active
+          ? 'border-[var(--border)] border-b-[var(--workspace-background)] bg-[var(--workspace-background)] font-semibold text-[var(--text-primary)]'
+          : item.disabled
+            ? 'cursor-not-allowed border-transparent bg-transparent text-[var(--text-muted)]'
+            : 'border-transparent bg-transparent text-[var(--text-secondary)] hover:border-[var(--border-light)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
+      }`}
+      data-active={active ? 'true' : undefined}
+      disabled={item.disabled}
+      title={item.disabled ? UNIMPLEMENTED_TITLE : undefined}
+      type="button"
+      onClick={() => item.view && onSelect(item.view)}
+    >
+      {item.label}
+    </button>
+  );
+}
+
+function PageToolbar({ currentView }: { currentView: View }) {
+  const actions = getToolbarActions(currentView);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return (
+    <div className="relative border-t border-[var(--border-light)] bg-[var(--toolbar-background)] px-2 py-1">
+      <div className="hidden min-h-9 items-center gap-1 overflow-x-auto sm:flex">
+        {actions.map((action) => (
+          <ToolbarButton
+            key={action.label}
+            action={action}
+            currentView={currentView}
+          />
+        ))}
+      </div>
+      <div className="sm:hidden">
         <button
-          key={item.id}
-          className={`rounded-md px-3 py-2 text-left text-sm font-medium ${
-            activeView === item.id
-              ? 'bg-blue-900 text-white'
-              : 'text-slate-700 hover:bg-slate-100'
-          }`}
+          className="btn btn-outline !min-h-7 !w-auto"
           type="button"
-          onClick={() => onSelect(item.id)}
+          onClick={() => setOpen((value) => !value)}
         >
-          {item.label}
+          Дії
         </button>
-      ))}
+        {open ? (
+          <div className="absolute left-2 right-2 top-[calc(100%-0.25rem)] z-40 grid gap-1 rounded-md border border-[var(--border)] bg-white p-1 shadow-lg">
+            {actions.map((action) => (
+              <ToolbarButton
+                key={action.label}
+                action={action}
+                currentView={currentView}
+                onDone={() => setOpen(false)}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function DashboardView() {
+function ToolbarButton({
+  action,
+  currentView,
+  onDone,
+}: {
+  action: ToolbarAction;
+  currentView: View;
+  onDone?: () => void;
+}) {
+  return (
+    <button
+      className={`${action.primary ? 'btn btn-primary' : 'btn btn-outline'} !min-h-7 !w-auto disabled:cursor-not-allowed disabled:opacity-55`}
+      disabled={action.disabled}
+      title={action.disabled ? (action.title ?? UNIMPLEMENTED_TITLE) : action.title}
+      type="button"
+      onClick={() => {
+        if (action.id) {
+          emitToolbarAction(currentView, action.id);
+          onDone?.();
+        }
+      }}
+    >
+      {action.label}
+    </button>
+  );
+}
+
+function getToolbarActions(view: View): ToolbarAction[] {
+  const unavailable = { disabled: true, title: UNIMPLEMENTED_TITLE };
+
+  const byView: Record<View, ToolbarAction[]> = {
+    home: [{ label: 'Оновити дані', id: 'refresh', primary: true }],
+    persons: [
+      { label: 'Створити', id: 'create', primary: true },
+      { label: 'Редагувати', ...unavailable },
+      { label: 'Оновити', id: 'refresh' },
+    ],
+    structure: [
+      { label: 'Створити управління', id: 'create-management', primary: true },
+      { label: 'Створити підрозділ', ...unavailable },
+      { label: 'Оновити', id: 'refresh' },
+    ],
+    nomenclature: [
+      { label: 'Створити', id: 'create', primary: true },
+      { label: 'Редагувати', ...unavailable },
+      { label: 'Оновити', id: 'refresh' },
+    ],
+    stock: [
+      { label: 'Фільтр', id: 'focus-filter', primary: true },
+      { label: 'Оновити', id: 'refresh' },
+      { label: 'Експорт', ...unavailable },
+      { label: 'Друк', ...unavailable },
+    ],
+    imports: [
+      { label: 'Новий імпорт', id: 'new-import', primary: true },
+      { label: 'Оновити', id: 'refresh' },
+    ],
+    transactions: [
+      { label: 'Фільтр', ...unavailable },
+      { label: 'Оновити', id: 'refresh', primary: true },
+      { label: 'Експорт', ...unavailable },
+    ],
+  };
+
+  return byView[view];
+}
+
+function StatusBar({
+  apiState,
+  currentPage,
+}: {
+  apiState: 'checking' | 'available' | 'unavailable';
+  currentPage: string;
+}) {
+  return (
+    <footer className="flex h-7 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--toolbar-background)] px-3 text-xs text-[var(--text-secondary)]">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="text-[var(--success)]">Система готова</span>
+        <span className="hidden sm:inline">Розділ: {currentPage}</span>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span>
+          API:{' '}
+          {apiState === 'available'
+            ? 'доступний'
+            : apiState === 'checking'
+              ? 'перевірка'
+              : 'недоступний'}
+        </span>
+        <span className="hidden sm:inline">Версія: 0.1.0</span>
+        <span className="hidden md:inline">Користувач: Адміністратор</span>
+      </div>
+    </footer>
+  );
+}
+
+function DashboardView({ onNavigate }: { onNavigate: (view: View) => void }) {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setStats(await apiClient.dashboardStats());
+    } catch {
+      setStats(null);
+      setError(
+        'Не вдалося отримати показники dashboard. Перевірте доступність backend API.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    apiClient
-      .dashboardStats()
-      .then(setStats)
-      .catch((reason: unknown) => setError(getErrorMessage(reason)));
-  }, []);
+    void loadStats();
+  }, [loadStats]);
+
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view === 'home' && detail.action === 'refresh') {
+        void loadStats();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [loadStats]);
 
   const cards = [
     ['Активні МВО', stats?.activeResponsiblePersons],
@@ -182,24 +521,84 @@ function DashboardView() {
   ];
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Головна"
         description="Поточний стан організаційної структури та реєстру МВО."
       />
       {error ? <ErrorMessage message={error} /> : null}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="erp-panel grid gap-px overflow-hidden bg-[var(--border-light)] sm:grid-cols-2 xl:grid-cols-5">
         {cards.map(([label, value]) => (
           <div
             key={label}
-            className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+            className="bg-white px-3 py-2"
           >
-            <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className="mt-3 text-3xl font-bold text-blue-900">
-              {value ?? '...'}
+            <p className="truncate text-xs font-medium text-[var(--text-secondary)]">
+              {label}
+            </p>
+            <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-[var(--primary)]">
+              {loading ? (
+                <span className="block h-6 w-16 animate-pulse rounded bg-[var(--border-light)]" />
+              ) : (
+                value ?? 0
+              )}
             </p>
           </div>
         ))}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="erp-panel p-3">
+          <SectionTitle
+            title="Потребують уваги"
+            description="Короткий список контрольних показників для щоденної перевірки."
+          />
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <Stat
+              label="Номенклатура на перевірці"
+              value={stats?.inventoryItemsNeedsReview ?? 0}
+            />
+            <Stat
+              label="Імпорти з помилками"
+              value={stats?.importsWithErrors ?? 0}
+            />
+            <Stat
+              label="Розбіжності"
+              value={stats?.recentReceiptDiscrepancies ?? 0}
+            />
+          </div>
+        </div>
+        <div className="erp-panel p-3">
+          <SectionTitle
+            title="Швидкі дії"
+            description="Основні робочі розділи системи."
+          />
+          <div className="mt-3 grid gap-1.5">
+            <button
+              className="btn btn-outline justify-start"
+              type="button"
+              onClick={() => {
+                window.sessionStorage.setItem('mvo:open-import-upload', '1');
+                onNavigate('imports');
+              }}
+            >
+              Новий імпорт
+            </button>
+            <button
+              className="btn btn-outline justify-start"
+              type="button"
+              onClick={() => onNavigate('persons')}
+            >
+              Реєстр МВО
+            </button>
+            <button
+              className="btn btn-outline justify-start"
+              type="button"
+              onClick={() => onNavigate('stock')}
+            >
+              Переглянути залишки
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -260,14 +659,34 @@ function PersonsView() {
     void loadPersons();
   }, [loadPersons]);
 
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'persons') return;
+
+      if (detail.action === 'create') {
+        setEditingPerson(null);
+        setFormOpen(true);
+      }
+
+      if (detail.action === 'refresh') {
+        void loadFilters();
+        void loadPersons();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [loadFilters, loadPersons]);
+
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="МВО"
         description="Реєстр матеріально відповідальних осіб."
         action={
           <button
-            className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary"
             type="button"
             onClick={() => {
               setEditingPerson(null);
@@ -279,8 +698,8 @@ function PersonsView() {
         }
       />
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-4">
+      <div className="erp-toolbar p-2">
+        <div className="grid gap-2 md:grid-cols-4">
           <input
             className="input"
             placeholder="Пошук"
@@ -394,10 +813,10 @@ function PersonsTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="app-card overflow-hidden">
       <div className="hidden overflow-x-auto md:block">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+        <table className="data-table">
+          <thead>
             <tr>
               {[
                 'ПІП',
@@ -408,13 +827,13 @@ function PersonsTable({
                 'Статус',
                 'Дії',
               ].map((header) => (
-                <th key={header} className="px-4 py-3 font-semibold">
+                <th key={header} className="px-4 py-3">
                   {header}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {persons.map((person) => (
               <tr key={person.id}>
                 <td className="px-4 py-3 font-medium">{fullName(person)}</td>
@@ -427,7 +846,7 @@ function PersonsTable({
                 </td>
                 <td className="px-4 py-3">
                   <button
-                    className="text-sm font-semibold text-blue-900"
+                    className="btn btn-ghost !min-h-0 !w-fit !p-0"
                     type="button"
                     onClick={() => onEdit(person)}
                   >
@@ -460,7 +879,7 @@ function PersonsTable({
               <InfoRow label="Підрозділ" value={person.unit?.name ?? '-'} />
             </dl>
             <button
-              className="mt-3 text-sm font-semibold text-blue-900"
+              className="mt-3 btn btn-ghost !min-h-0 !w-fit !p-0"
               type="button"
               onClick={() => onEdit(person)}
             >
@@ -577,7 +996,7 @@ function PersonForm({
               key={id}
               className={`rounded-md px-3 py-2 text-sm font-semibold ${
                 personTab === id
-                  ? 'bg-blue-900 text-white'
+                  ? 'bg-[var(--primary)] text-white'
                   : 'border border-slate-300 text-slate-700'
               }`}
               type="button"
@@ -591,7 +1010,7 @@ function PersonForm({
         </div>
       ) : null}
       {personTab === 'general' ? (
-        <form className="grid gap-4" onSubmit={submit}>
+        <form className="grid gap-3" onSubmit={submit}>
           {error ? <ErrorMessage message={error} /> : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Прізвище">
@@ -871,14 +1290,32 @@ function StructureView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'structure') return;
+
+      if (detail.action === 'create-management') {
+        setOrgForm({ type: 'management' });
+      }
+
+      if (detail.action === 'refresh') {
+        void load();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [load]);
+
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Організаційна структура"
         description="Управління, служби та підрозділи."
         action={
           <button
-            className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary"
             type="button"
             onClick={() => setOrgForm({ type: 'management' })}
           >
@@ -891,79 +1328,120 @@ function StructureView() {
       {!loading && managements.length === 0 ? (
         <EmptyState message="Організаційну структуру ще не створено." />
       ) : null}
-      <div className="grid gap-4">
-        {managements.map((management) => (
-          <div
-            key={management.id}
-            className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <EntityHeader
-              title={management.name}
-              subtitle={`Код: ${management.code}`}
-              active={management.isActive}
-              onEdit={() =>
-                setOrgForm({ type: 'management', data: management })
-              }
-            />
-            <div className="mt-4 grid gap-3 border-l-2 border-slate-200 pl-4">
-              <button
-                className="w-fit text-sm font-semibold text-blue-900"
-                type="button"
-                onClick={() =>
-                  setOrgForm({ type: 'service', managementId: management.id })
-                }
-              >
-                Додати службу
-              </button>
-              {management.services?.map((service) => (
-                <div key={service.id} className="rounded-md bg-slate-50 p-3">
-                  <EntityHeader
-                    title={service.name}
-                    subtitle={`Код: ${service.code}`}
-                    active={service.isActive}
-                    onEdit={() =>
+      <div className="grid min-h-[420px] gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="erp-panel overflow-hidden">
+          <div className="border-b border-[var(--border)] bg-[var(--toolbar-background)] px-2 py-1.5 text-xs font-semibold">
+            Дерево структури
+          </div>
+          <div className="compact-scrollbar max-h-[560px] overflow-auto p-2 text-[13px]">
+            {managements.map((management) => (
+              <div key={management.id} className="grid gap-1">
+                <button
+                  className="flex h-8 items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
+                  type="button"
+                  onClick={() =>
+                    setOrgForm({ type: 'management', data: management })
+                  }
+                >
+                  <span className="truncate">▾ {management.name}</span>
+                  <StatusBadge active={management.isActive} />
+                </button>
+                <div className="ml-4 border-l border-[var(--border)] pl-2">
+                  <button
+                    className="btn btn-ghost !min-h-7 !w-fit !px-0"
+                    type="button"
+                    onClick={() =>
                       setOrgForm({
                         type: 'service',
                         managementId: management.id,
-                        data: service,
                       })
                     }
-                  />
-                  <div className="mt-3 grid gap-2 border-l-2 border-slate-200 pl-4">
-                    <button
-                      className="w-fit text-sm font-semibold text-blue-900"
-                      type="button"
-                      onClick={() =>
-                        setOrgForm({ type: 'unit', serviceId: service.id })
-                      }
-                    >
-                      Додати підрозділ
-                    </button>
-                    {service.units?.map((unit) => (
-                      <div
-                        key={unit.id}
-                        className="rounded-md border border-slate-200 bg-white p-3"
+                  >
+                    + служба
+                  </button>
+                  {management.services?.map((service) => (
+                    <div key={service.id}>
+                      <button
+                        className="flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
+                        type="button"
+                        onClick={() =>
+                          setOrgForm({
+                            type: 'service',
+                            managementId: management.id,
+                            data: service,
+                          })
+                        }
                       >
-                        <EntityHeader
-                          title={unit.name}
-                          subtitle={`Код: ${unit.code}`}
-                          active={unit.isActive}
-                          onEdit={() =>
+                        <span className="truncate">▾ {service.name}</span>
+                        <span className="font-mono text-xs text-[var(--text-secondary)]">
+                          {service.code}
+                        </span>
+                      </button>
+                      <div className="ml-4 border-l border-[var(--border-light)] pl-2">
+                        <button
+                          className="btn btn-ghost !min-h-7 !w-fit !px-0"
+                          type="button"
+                          onClick={() =>
                             setOrgForm({
                               type: 'unit',
                               serviceId: service.id,
-                              data: unit,
                             })
                           }
-                        />
+                        >
+                          + підрозділ
+                        </button>
+                        {service.units?.map((unit) => (
+                          <button
+                            key={unit.id}
+                            className="flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
+                            type="button"
+                            onClick={() =>
+                              setOrgForm({
+                                type: 'unit',
+                                serviceId: service.id,
+                                data: unit,
+                              })
+                            }
+                          >
+                            <span className="truncate">{unit.name}</span>
+                            <span className="font-mono text-xs text-[var(--text-secondary)]">
+                              {unit.code}
+                            </span>
+                          </button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+        <SimpleTable
+          headers={['Тип', 'Назва', 'Код', 'Статус']}
+          rows={managements.flatMap((management) => [
+            [
+              'Управління',
+              management.name,
+              management.code,
+              <StatusBadge key={`${management.id}-status`} active={management.isActive} />,
+            ],
+            ...(management.services ?? []).flatMap((service) => [
+              [
+                'Служба',
+                service.name,
+                service.code,
+                <StatusBadge key={`${service.id}-status`} active={service.isActive} />,
+              ],
+              ...(service.units ?? []).map((unit) => [
+                'Підрозділ',
+                unit.name,
+                unit.code,
+                <StatusBadge key={`${unit.id}-status`} active={unit.isActive} />,
+              ]),
+            ]),
+          ])}
+        />
       </div>
       {orgForm ? (
         <OrgFormModal
@@ -1062,7 +1540,7 @@ function OrgFormModal({
 
   return (
     <Modal title={title} onClose={onClose}>
-      <form className="grid gap-4" onSubmit={submit}>
+      <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
         <Field label="Назва">
           <input
@@ -1148,14 +1626,32 @@ function NomenclatureView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'nomenclature') return;
+
+      if (detail.action === 'create') {
+        setFormOpen(true);
+      }
+
+      if (detail.action === 'refresh') {
+        void load();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [load]);
+
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Номенклатура"
         description="Централізований довідник позицій майна."
         action={
           <button
-            className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary"
             type="button"
             onClick={() => setFormOpen(true)}
           >
@@ -1163,8 +1659,8 @@ function NomenclatureView() {
           </button>
         }
       />
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-3">
+      <div className="erp-toolbar p-2">
+        <div className="grid gap-2 md:grid-cols-3">
           <input
             className="input"
             placeholder="Пошук за кодом або назвою"
@@ -1283,7 +1779,7 @@ function InventoryItemForm({
 
   return (
     <Modal title="Додати номенклатуру" onClose={onClose}>
-      <form className="grid gap-4" onSubmit={submit}>
+      <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Зовнішній код">
@@ -1423,14 +1919,32 @@ function StockView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'stock') return;
+
+      if (detail.action === 'focus-filter') {
+        focusFirstField();
+      }
+
+      if (detail.action === 'refresh') {
+        void load();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [load]);
+
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Залишки"
         description="Поточні залишки майна за МВО."
         action={
           <button
-            className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary"
             type="button"
             onClick={() => setManualOpen(true)}
           >
@@ -1438,8 +1952,8 @@ function StockView() {
           </button>
         }
       />
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-3">
+      <div className="erp-toolbar p-2">
+        <div className="grid gap-2 md:grid-cols-3">
           <input
             className="input"
             placeholder="Пошук"
@@ -1554,7 +2068,7 @@ function ManualReceiptForm({
 
   return (
     <Modal title="Додати надходження вручну" onClose={onClose}>
-      <form className="grid gap-4" onSubmit={submit}>
+      <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
         <Field label="МВО">
           <Select
@@ -1720,11 +2234,37 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
     await loadImport(importBatch.id);
   }
 
-  async function reloadSelected() {
+  const reloadSelected = useCallback(async () => {
     if (!selected) return;
     await loadImport(selected.id);
     await load();
-  }
+  }, [load, loadImport, selected]);
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem('mvo:open-import-upload') === '1') {
+      window.sessionStorage.removeItem('mvo:open-import-upload');
+      setUploadOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'imports') return;
+
+      if (detail.action === 'new-import') {
+        setUploadOpen(true);
+      }
+
+      if (detail.action === 'refresh') {
+        void load();
+        void reloadSelected();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [load, reloadSelected]);
 
   async function saveMappings() {
     if (!selected) return;
@@ -1792,13 +2332,13 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Імпорт"
         description="Завантаження початкових залишків і нових надходжень."
         action={
           <button
-            className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+            className="btn btn-primary"
             type="button"
             onClick={() => setUploadOpen(true)}
           >
@@ -1818,9 +2358,15 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
           'Проведено',
         ]}
         rows={imports.map((item) => [
-          item.originalFilename,
+          <span
+            key={item.id}
+            className="block max-w-72 truncate"
+            title={item.originalFilename}
+          >
+            {item.originalFilename}
+          </span>,
           importTypeLabel(item.type),
-          item.status,
+          <StatusPill key={`${item.id}-status`} status={item.status} />,
           String(item.totalRows),
           String(item.errorRows),
           String(item.warningRows),
@@ -1829,17 +2375,25 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
         onRowClick={(index) => void openImport(imports[index])}
       />
       {selected ? (
-        <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="app-card grid gap-4 p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-lg font-bold">{selected.originalFilename}</h3>
-              <p className="text-sm text-slate-600">
-                {importTypeLabel(selected.type)} · {selected.status} ·{' '}
-                {selected.encoding} · {selected.delimiter}
+            <div className="min-w-0">
+              <h3
+                className="truncate text-lg font-semibold"
+                title={selected.originalFilename}
+              >
+                {selected.originalFilename}
+              </h3>
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+                <span>{importTypeLabel(selected.type)}</span>
+                <StatusPill status={selected.status} />
+                <span>
+                  {selected.encoding} · {selected.delimiter}
+                </span>
               </p>
             </div>
             <button
-              className="text-sm font-semibold text-blue-900"
+              className="btn btn-ghost !min-h-0 !w-fit !p-0"
               type="button"
               onClick={() => router.push('/imports')}
             >
@@ -1873,15 +2427,36 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               value={selected.preview?.importedRows ?? selected.importedRows}
             />
           </div>
+          {(selected.preview?.errorRows ?? selected.errorRows) > 0 ||
+          (selected.preview?.warningRows ?? selected.warningRows) > 0 ? (
+            <Alert
+              tone={
+                (selected.preview?.errorRows ?? selected.errorRows) > 0
+                  ? 'danger'
+                  : 'warning'
+              }
+              title="Потрібна увага перед проведенням"
+              message={`Помилки: ${
+                selected.preview?.errorRows ?? selected.errorRows
+              }. Попередження: ${
+                selected.preview?.warningRows ?? selected.warningRows
+              }.`}
+            />
+          ) : null}
           {missingCounterparties.length > 0 ? (
-            <div className="grid gap-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm font-semibold text-amber-900">
-                Зіставлення контрагентів із МВО
-              </p>
+            <div className="grid gap-3 rounded-lg border border-amber-700/20 bg-amber-50/70 p-4">
+              <div>
+                <p className="text-sm font-semibold text-[var(--warning)]">
+                  Зіставлення контрагентів із МВО
+                </p>
+                <p className="mt-1 text-sm text-amber-900/80">
+                  Оберіть МВО для контрагентів, які не були знайдені автоматично.
+                </p>
+              </div>
               {missingCounterparties.map((counterparty) => (
                 <div
                   key={counterparty}
-                  className="grid gap-2 rounded-md bg-white p-3 md:grid-cols-[1fr_1fr_auto]"
+                  className="grid gap-2 rounded-lg border border-amber-700/10 bg-white p-3 md:grid-cols-[1fr_1fr_auto]"
                 >
                   <p className="break-words text-sm font-medium">
                     {counterparty}
@@ -1925,7 +2500,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
                 </div>
               ))}
               <button
-                className="w-fit rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+                className="btn btn-primary !w-fit"
                 type="button"
                 onClick={() => void saveMappings()}
               >
@@ -1933,7 +2508,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               </button>
             </div>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-3">
             <input
               className="input"
               placeholder="Пошук у рядках"
@@ -1960,7 +2535,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               <option value="IMPORTED">Проведені</option>
             </Select>
             <button
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold"
+              className="btn btn-outline"
               type="button"
               onClick={() => void refreshRowsWithFilters()}
             >
@@ -2011,14 +2586,14 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
           />
           <div className="flex flex-wrap gap-2">
             <button
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold"
+              className="btn btn-outline"
               type="button"
               onClick={() => void validateSelected()}
             >
               Перевірити повторно
             </button>
             <button
-              className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="btn btn-primary"
               disabled={!canCommit}
               type="button"
               onClick={() => setConfirmOpen(true)}
@@ -2026,7 +2601,7 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
               Провести імпорт
             </button>
             <button
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold"
+              className="btn btn-outline"
               disabled={selected.status === 'COMPLETED'}
               type="button"
               onClick={() => void cancelSelected()}
@@ -2077,14 +2652,14 @@ function ImportsView({ initialImportId }: { initialImportId?: string }) {
             </div>
             <div className="flex justify-end gap-2">
               <button
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold"
+                className="btn btn-outline"
                 type="button"
                 onClick={() => setConfirmOpen(false)}
               >
                 Скасувати
               </button>
               <button
-                className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white"
+                className="btn btn-primary"
                 type="button"
                 onClick={() => void commitSelected()}
               >
@@ -2126,7 +2701,7 @@ function ImportUploadModal({
 
   return (
     <Modal title="Новий імпорт" onClose={onClose}>
-      <form className="grid gap-4" onSubmit={submit}>
+      <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
         <Field label="Режим">
           <Select
@@ -2137,7 +2712,7 @@ function ImportUploadModal({
             <option value="RECEIPT">Нові надходження</option>
           </Select>
         </Field>
-        <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+        <p className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--text-secondary)]">
           {importType === 'INITIAL_BALANCE'
             ? 'Буде використано колонку «Кількість кін.»'
             : 'Буде використано колонку «Кількість Дт». Колонка «Кількість кін.» використовується лише для звірки.'}
@@ -2182,8 +2757,22 @@ function TransactionsView() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'transactions') return;
+
+      if (detail.action === 'refresh') {
+        void load();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [load]);
+
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-3">
       <PageHeader
         title="Журнал операцій"
         description="Операції із залишками доступні лише для перегляду."
@@ -2223,9 +2812,13 @@ function TransactionsView() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-slate-50 p-3">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-bold text-blue-900">{value}</p>
+    <div className="min-h-16 rounded border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2">
+      <p className="truncate text-xs font-medium text-[var(--text-secondary)]">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-xl font-semibold tabular-nums text-[var(--primary)]">
+        {value}
+      </p>
     </div>
   );
 }
@@ -2236,7 +2829,7 @@ function SimpleTable({
   onRowClick,
 }: {
   headers: string[];
-  rows: string[][];
+  rows: React.ReactNode[][];
   onRowClick?: (index: number) => void;
 }) {
   if (rows.length === 0) {
@@ -2244,36 +2837,39 @@ function SimpleTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead className="bg-slate-50 text-left text-slate-600">
-          <tr>
-            {headers.map((header) => (
-              <th key={header} className="px-4 py-3 font-semibold">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row, index) => (
-            <tr
-              key={`${row.join('-')}-${index}`}
-              className={onRowClick ? 'cursor-pointer hover:bg-slate-50' : ''}
-              onClick={() => onRowClick?.(index)}
-            >
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={`${cell}-${cellIndex}`}
-                  className="max-w-80 break-words px-4 py-3"
-                >
-                  {cell}
-                </td>
+    <div className="erp-panel overflow-hidden">
+      <div className="compact-scrollbar max-h-[560px] overflow-auto">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {headers.map((header) => (
+                <th key={header}>{header}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr
+                key={`${row.map((cell) => String(cell)).join('-')}-${index}`}
+                className={onRowClick ? 'cursor-pointer' : ''}
+                onClick={() => onRowClick?.(index)}
+              >
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={`${String(cell)}-${cellIndex}`}
+                    className="max-w-80 break-words"
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t border-[var(--border)] bg-[var(--toolbar-background)] px-2 py-1 text-xs text-[var(--text-secondary)]">
+        Записів у таблиці: {rows.length}
+      </div>
     </div>
   );
 }
@@ -2292,12 +2888,37 @@ function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="erp-panel flex flex-col gap-2 border-l-4 border-l-[var(--primary)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h2 className="text-2xl font-bold text-slate-950">{title}</h2>
-        <p className="mt-1 text-sm text-slate-600">{description}</p>
+        <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]">
+          {title}
+        </h2>
+        <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
+          {description}
+        </p>
       </div>
       {action}
+    </div>
+  );
+}
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div>
+      <h3 className="text-base font-semibold text-[var(--text-primary)]">
+        {title}
+      </h3>
+      {description ? (
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+          {description}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -2311,20 +2932,34 @@ function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/40 p-4">
-      <div className="mx-auto my-6 w-full max-w-3xl rounded-lg bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-xl font-bold">{title}</h3>
+    <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/35 p-2 sm:p-4">
+      <div className="mx-auto my-2 flex max-h-[calc(100vh-1rem)] w-full max-w-3xl flex-col rounded-md border border-[var(--border)] bg-white shadow-lg sm:my-6">
+        <div className="flex h-10 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--toolbar-background)] px-3">
+          <h3 className="text-sm font-semibold">{title}</h3>
           <button
-            className="rounded-md border border-slate-300 px-3 py-1 text-sm"
+            aria-label="Закрити"
+            className="btn btn-outline !min-h-7 !w-auto !px-2"
             type="button"
             onClick={onClose}
           >
-            Закрити
+            ×
           </button>
         </div>
-        {children}
+        <div className="compact-scrollbar min-h-0 overflow-y-auto p-3">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -2338,8 +2973,8 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-sm font-medium text-slate-700">
-      {label}
+    <label className="grid gap-1 text-[13px] font-medium text-[var(--text-primary)] sm:grid-cols-[150px_minmax(0,1fr)] sm:items-center">
+      <span>{label}</span>
       {children}
     </label>
   );
@@ -2376,16 +3011,16 @@ function FormActions({
   onClose: () => void;
 }) {
   return (
-    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+    <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] bg-[var(--surface-muted)] px-0 pt-3 sm:flex-row sm:justify-end">
       <button
-        className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold"
+        className="btn btn-outline"
         type="button"
         onClick={onClose}
       >
         Скасувати
       </button>
       <button
-        className="rounded-md bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        className="btn btn-primary"
         disabled={saving}
         type="submit"
       >
@@ -2410,13 +3045,13 @@ function PaginationControls({
   const canGoForward = totalPages > 0 && page < totalPages;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between">
-      <span className="text-slate-600">
+    <div className="erp-panel flex flex-col gap-2 bg-[var(--toolbar-background)] px-2 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-[var(--text-secondary)]">
         Записів: {total}. Сторінка {page} з {totalPages || 1}
       </span>
       <div className="flex gap-2">
         <button
-          className="rounded-md border border-slate-300 px-3 py-2 disabled:opacity-50"
+          className="btn btn-outline !w-auto"
           disabled={!canGoBack}
           type="button"
           onClick={() => onPage(page - 1)}
@@ -2424,7 +3059,7 @@ function PaginationControls({
           Назад
         </button>
         <button
-          className="rounded-md border border-slate-300 px-3 py-2 disabled:opacity-50"
+          className="btn btn-outline !w-auto"
           disabled={!canGoForward}
           type="button"
           onClick={() => onPage(page + 1)}
@@ -2436,42 +3071,13 @@ function PaginationControls({
   );
 }
 
-function EntityHeader({
-  title,
-  subtitle,
-  active,
-  onEdit,
-}: {
-  title: string;
-  subtitle: string;
-  active: boolean;
-  onEdit: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0">
-        <p className="break-words font-semibold">{title}</p>
-        <p className="text-sm text-slate-500">{subtitle}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <StatusBadge active={active} />
-        <button
-          className="text-sm font-semibold text-blue-900"
-          type="button"
-          onClick={onEdit}
-        >
-          Редагувати
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
-      className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold ${
-        active ? 'bg-blue-900 text-white' : 'bg-slate-200 text-slate-700'
+      className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${
+        active
+          ? 'border-green-700/15 bg-green-50 text-[var(--success)]'
+          : 'border-slate-200 bg-[var(--surface-muted)] text-[var(--text-secondary)]'
       }`}
     >
       {active ? 'Активний' : 'Неактивний'}
@@ -2479,18 +3085,73 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
+function StatusPill({ status }: { status: string }) {
+  const normalized = status.toLowerCase();
+  const tone =
+    normalized.includes('error') || normalized.includes('failed')
+      ? 'danger'
+      : normalized.includes('warning') || normalized.includes('partial')
+        ? 'warning'
+        : normalized.includes('completed') || normalized.includes('valid')
+          ? 'success'
+          : normalized.includes('uploaded')
+            ? 'info'
+            : 'neutral';
+
+  const toneClass = {
+    success: 'border-green-700/15 bg-green-50 text-[var(--success)]',
+    warning: 'border-amber-700/15 bg-amber-50 text-[var(--warning)]',
+    danger: 'border-red-700/15 bg-red-50 text-[var(--danger)]',
+    info: 'border-sky-700/15 bg-sky-50 text-[var(--info)]',
+    neutral: 'border-slate-200 bg-[var(--surface-muted)] text-[var(--text-secondary)]',
+  }[tone];
+
+  return (
+    <span
+      className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClass}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function Alert({
+  tone,
+  title,
+  message,
+}: {
+  tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+  title: string;
+  message: string;
+}) {
+  const toneClass = {
+    success: 'border-green-700/15 bg-green-50 text-[var(--success)]',
+    warning: 'border-amber-700/15 bg-amber-50 text-[var(--warning)]',
+    danger: 'border-red-700/15 bg-red-50 text-[var(--danger)]',
+    info: 'border-sky-700/15 bg-sky-50 text-[var(--info)]',
+    neutral: 'border-slate-200 bg-[var(--surface-muted)] text-[var(--text-primary)]',
+  }[tone];
+
+  return (
+    <div className={`rounded-lg border p-4 text-sm ${toneClass}`}>
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 opacity-85">{message}</p>
+    </div>
+  );
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="break-words text-slate-900">{value}</dd>
+      <dt className="font-medium text-[var(--text-secondary)]">{label}</dt>
+      <dd className="break-words text-[var(--text-primary)]">{value}</dd>
     </div>
   );
 }
 
 function LoadingMessage() {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+    <div className="app-card p-4 text-sm text-[var(--text-secondary)]">
       Завантаження даних...
     </div>
   );
@@ -2498,15 +3159,16 @@ function LoadingMessage() {
 
 function ErrorMessage({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-      {message}
+    <div className="rounded-lg border border-red-700/15 bg-red-50 p-4 text-sm text-[var(--danger)]">
+      <p className="font-semibold">Помилка</p>
+      <p className="mt-1">{message}</p>
     </div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-600 shadow-sm">
+    <div className="app-card p-6 text-center text-sm text-[var(--text-secondary)]">
       {message}
     </div>
   );

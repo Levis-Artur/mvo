@@ -50,11 +50,13 @@ export function ApiStatus() {
   const isChecking = state === 'checking';
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+    <div className="app-card bg-[var(--surface-muted)] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500">Стан API</p>
-          <p className="mt-1 text-lg font-semibold text-slate-950">
+          <p className="text-sm font-medium text-[var(--text-secondary)]">
+            Стан API
+          </p>
+          <p className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
             {isChecking
               ? 'Перевірка сервера'
               : isAvailable
@@ -63,12 +65,12 @@ export function ApiStatus() {
           </p>
         </div>
         <span
-          className={`inline-flex w-fit items-center rounded-full px-3 py-1 text-sm font-medium ${
+          className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-sm font-medium ${
             isChecking
-              ? 'bg-slate-200 text-slate-700'
+              ? 'border-slate-200 bg-white text-[var(--text-secondary)]'
               : isAvailable
-                ? 'bg-blue-900 text-white'
-                : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                ? 'border-green-700/15 bg-green-50 text-[var(--success)]'
+                : 'border-red-700/15 bg-red-50 text-[var(--danger)]'
           }`}
         >
           {isChecking ? 'Очікування' : isAvailable ? 'Online' : 'Offline'}
