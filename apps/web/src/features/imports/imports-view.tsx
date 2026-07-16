@@ -41,6 +41,10 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
     setUploadOpen,
     confirmOpen,
     setConfirmOpen,
+    commitLoading,
+    commitError,
+    commitSuccess,
+    setCommitSuccess,
     load,
     loadImport,
     openImport,
@@ -388,6 +392,7 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
           onClose={() => setConfirmOpen(false)}
         >
           <div className="grid gap-4">
+            {commitError ? <ErrorMessage message={commitError} /> : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <Stat
                 label="Нові позиції"
@@ -413,6 +418,7 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
             <div className="flex justify-end gap-2">
               <button
                 className="btn btn-outline"
+                disabled={commitLoading}
                 type="button"
                 onClick={() => setConfirmOpen(false)}
               >
@@ -420,10 +426,11 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
               </button>
               <button
                 className="btn btn-primary"
+                disabled={commitLoading}
                 type="button"
                 onClick={() => void commitSelected()}
               >
-                Провести
+                {commitLoading ? 'Проведення...' : 'Провести'}
               </button>
             </div>
           </div>
@@ -442,6 +449,12 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
         />
       ) : null}
       {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+      {commitSuccess ? (
+        <Toast
+          message={commitSuccess}
+          onClose={() => setCommitSuccess('')}
+        />
+      ) : null}
     </section>
   );
 }

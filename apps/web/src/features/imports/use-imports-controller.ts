@@ -8,6 +8,7 @@ import { can } from '@/lib/authz';
 import type { ImportBatch, ImportRow, ResponsiblePerson } from '@/lib/types';
 import { getErrorMessage } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import { executeImportCommit } from './commit-import';
 
 
 export function useImportsController(initialImportId?: string) {
@@ -37,6 +38,9 @@ export function useImportsController(initialImportId?: string) {
   const [error, setError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [commitLoading, setCommitLoading] = useState(false);
+  const [commitError, setCommitError] = useState('');
+  const [commitSuccess, setCommitSuccess] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -143,9 +147,20 @@ export function useImportsController(initialImportId?: string) {
 
   async function commitSelected() {
     if (!selected) return;
-    setSelected(await apiClient.commitImport(selected.id));
-    setConfirmOpen(false);
-    await reloadSelected();
+    await executeImportCommit({
+      commit: () => apiClient.commitImport(selected.id),
+      setLoading: setCommitLoading,
+      setError: setCommitError,
+      getErrorMessage,
+      onSuccess: async (batch) => {
+        setSelected(batch);
+        await loadImport(selected.id);
+        await load();
+        router.refresh();
+        setConfirmOpen(false);
+        setCommitSuccess('Імпорт успішно проведено');
+      },
+    });
   }
 
   async function cancelSelected() {
@@ -202,6 +217,10 @@ export function useImportsController(initialImportId?: string) {
     setUploadOpen,
     confirmOpen,
     setConfirmOpen,
+    commitLoading,
+    commitError,
+    commitSuccess,
+    setCommitSuccess,
     load,
     loadImport,
     openImport,

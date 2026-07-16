@@ -481,7 +481,11 @@ export class ImportsService {
         messages.push('МВО не знайдено');
       }
 
-      if (item && item.name.trim() !== row.itemNameRaw.trim()) {
+      if (
+        row.status !== 'SKIPPED' &&
+        item &&
+        item.name.trim() !== row.itemNameRaw.trim()
+      ) {
         status =
           status === ImportRowStatus.ERROR ? status : ImportRowStatus.WARNING;
         messages.push(
@@ -489,13 +493,19 @@ export class ImportsService {
         );
       }
 
-      if (!item && row.nomenclatureCodeRaw && row.status !== 'ERROR') {
+      if (
+        !item &&
+        row.nomenclatureCodeRaw &&
+        row.status !== 'ERROR' &&
+        row.status !== 'SKIPPED'
+      ) {
         status =
           status === ImportRowStatus.ERROR ? status : ImportRowStatus.WARNING;
         messages.push('Нова номенклатура буде створена автоматично');
       }
 
       if (
+        row.status !== 'SKIPPED' &&
         importType === ImportType.RECEIPT &&
         responsiblePerson &&
         row.parsedQuantity &&
@@ -589,7 +599,10 @@ export class ImportsService {
       where: { importBatchId: id },
     });
     const newItems = rows.filter(
-      (row) => !row.inventoryItemId && row.status !== ImportRowStatus.ERROR,
+      (row) =>
+        !row.inventoryItemId &&
+        row.status !== ImportRowStatus.ERROR &&
+        row.status !== ImportRowStatus.SKIPPED,
     ).length;
     const matchedPersons = new Set(
       rows
