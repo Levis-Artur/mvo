@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getErrorMessage } from '@/components/common/formatters';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
 import type {
   AuthUser,
   Pagination,
@@ -38,6 +39,7 @@ export function useStockDocumentsController(user: AuthUser) {
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [personsError, setPersonsError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState('');
 
@@ -61,9 +63,19 @@ export function useStockDocumentsController(user: AuthUser) {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    stockDocumentsService.persons({ isActive: true, page: 1, limit: 500 })
-      .then((response) => setPersons(response.items))
-      .catch((reason) => setError(getErrorMessage(reason)));
+    setPersonsError('');
+    fetchAllPages((pagination) =>
+      stockDocumentsService.persons({ ...pagination, isActive: true }),
+    )
+      .then((items) => {
+        setPersons(items);
+        setPersonsError('');
+      })
+      .catch((reason) =>
+        setPersonsError(
+          `Не вдалося завантажити список МВО: ${getErrorMessage(reason)}`,
+        ),
+      );
   }, []);
 
   const filteredDocuments = useMemo(() => {
@@ -77,12 +89,24 @@ export function useStockDocumentsController(user: AuthUser) {
 
   async function loadBalances(id: string) {
     setBalances([]);
+    setActionError('');
     if (!id) return;
     setLoadingBalances(true);
     try {
-      const response = await stockDocumentsService.balances({ responsiblePersonId: id, onlyPositive: true, page: 1, limit: 500 });
-      setBalances(response.items);
-    } catch (reason) { setActionError(getErrorMessage(reason)); }
+      const items = await fetchAllPages((pagination) =>
+        stockDocumentsService.balances({
+          ...pagination,
+          responsiblePersonId: id,
+          onlyPositive: true,
+        }),
+      );
+      setBalances(items.filter((item) => Number(item.quantity) > 0));
+      setActionError('');
+    } catch (reason) {
+      setActionError(
+        `Не вдалося завантажити залишки відправника: ${getErrorMessage(reason)}`,
+      );
+    }
     finally { setLoadingBalances(false); }
   }
 
@@ -136,7 +160,7 @@ export function useStockDocumentsController(user: AuthUser) {
     type, setType, status, setStatus, sourceId, setSourceId, destinationId, setDestinationId,
     dateFrom, setDateFrom, dateTo, setDateTo, search, setSearch,
     selected, setSelected, formType, setFormType, editing, confirming, setConfirming,
-    loading, loadingBalances, saving, actionLoading, error, actionError, toast, setToast,
+    loading, loadingBalances, saving, actionLoading, error, personsError, actionError, toast, setToast,
     load, loadBalances, openCreate, openEdit, save, perform,
   };
 }

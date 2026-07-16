@@ -267,3 +267,10 @@ Transaction
 ---
 
 End of document.
+
+## Stock movement documents
+
+Рух майна моделюється через `StockDocument` і `StockDocumentLine`.
+Проведені документи створюють незмінні `StockTransaction`, пов’язані через
+nullable `documentId` і `documentLineId`. Наявні імпортні операції залишаються
+сумісними, оскільки нові зовнішні ключі nullable.

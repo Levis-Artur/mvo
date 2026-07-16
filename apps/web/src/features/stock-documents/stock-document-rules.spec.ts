@@ -7,9 +7,12 @@ import type {
 } from '@/lib/types';
 import {
   availableBalanceOptions,
+  canAddDocumentLine,
   canChangeStockDocuments,
   documentDirection,
+  filterRecipientOptions,
   lifecycleActions,
+  personOptionLabel,
   recipientOptions,
   resolveSourceId,
   validateDocumentInput,
@@ -23,7 +26,15 @@ const mvoUser = {
 } as AuthUser;
 const auditor = { ...mvoUser, role: 'AUDITOR' } as AuthUser;
 const person = (id: string, active = true) =>
-  ({ id, isActive: active, lastName: id, firstName: 'Ім’я' }) as ResponsiblePerson;
+  ({
+    id,
+    isActive: active,
+    personnelNumber: id,
+    lastName: id,
+    firstName: 'Ім’я',
+    middleName: null,
+    management: { id: 'management-1', name: 'Управління забезпечення' },
+  }) as ResponsiblePerson;
 const balance = (id: string, quantity: string) =>
   ({ quantity, inventoryItem: { id, externalCode: id, name: id } }) as StockBalance;
 const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => ({
@@ -61,8 +72,35 @@ describe('stock document frontend rules', () => {
     expect(recipientOptions([person('person-2', false)], 'person-1')).toEqual([]);
   });
 
+  it('dropdown містить інших активних МВО з номером і ПІБ', () => {
+    const options = recipientOptions(
+      [person('003'), person('001'), person('002', false)],
+      '001',
+    );
+    expect(options.map(personOptionLabel)).toEqual(['003 — 003 Ім’я']);
+  });
+
+  it('пошук одержувачів працює за номером, ПІБ та управлінням', () => {
+    const arthur = {
+      ...person('person-2'),
+      personnelNumber: '003',
+      lastName: 'Левіс',
+      firstName: 'Артур',
+      middleName: 'Сергійович',
+    };
+    expect(filterRecipientOptions([arthur], 'person-1', '003')).toEqual([arthur]);
+    expect(filterRecipientOptions([arthur], 'person-1', 'левіс артур')).toEqual([arthur]);
+    expect(filterRecipientOptions([arthur], 'person-1', 'забезпечення')).toEqual([arthur]);
+  });
+
   it('номенклатура береться лише з позитивних залишків і без дублів', () => {
     expect(availableBalanceOptions([balance('a', '2'), balance('b', '0')], ['a'])).toEqual([]);
+  });
+
+  it('кнопка додавання активується після завантаження позитивних залишків', () => {
+    expect(canAddDocumentLine([balance('a', '2')], [], true, false)).toBe(true);
+    expect(canAddDocumentLine([balance('a', '0')], [], true, false)).toBe(false);
+    expect(canAddDocumentLine([balance('a', '2')], [], true, true)).toBe(false);
   });
 
   it('не дозволяє кількість більшу за залишок', () => {

@@ -23,7 +23,47 @@ export function recipientOptions(
   persons: ResponsiblePerson[],
   sourceId: string,
 ) {
-  return persons.filter((person) => person.id !== sourceId && person.isActive);
+  return persons
+    .filter((person) => person.id !== sourceId && person.isActive)
+    .sort(
+      (left, right) =>
+        left.personnelNumber.localeCompare(right.personnelNumber, 'uk-UA', {
+          numeric: true,
+        }) ||
+        personSearchText(left).localeCompare(personSearchText(right), 'uk-UA'),
+    );
+}
+
+export function personOptionLabel(person: ResponsiblePerson) {
+  const name = [person.lastName, person.firstName, person.middleName]
+    .filter(Boolean)
+    .join(' ');
+  return `${person.personnelNumber} — ${name}`;
+}
+
+export function filterRecipientOptions(
+  persons: ResponsiblePerson[],
+  sourceId: string,
+  search: string,
+) {
+  const needle = search.trim().toLocaleLowerCase('uk-UA');
+  const options = recipientOptions(persons, sourceId);
+  if (!needle) return options;
+  return options.filter((person) =>
+    personSearchText(person).toLocaleLowerCase('uk-UA').includes(needle),
+  );
+}
+
+function personSearchText(person: ResponsiblePerson) {
+  return [
+    person.personnelNumber,
+    person.lastName,
+    person.firstName,
+    person.middleName,
+    person.management?.name,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function availableBalanceOptions(
@@ -34,6 +74,19 @@ export function availableBalanceOptions(
     (balance) =>
       Number(balance.quantity) > 0 &&
       !selectedItemIds.includes(balance.inventoryItem.id),
+  );
+}
+
+export function canAddDocumentLine(
+  balances: StockBalance[],
+  selectedItemIds: string[],
+  sourceReady: boolean,
+  loading: boolean,
+) {
+  return (
+    sourceReady &&
+    !loading &&
+    availableBalanceOptions(balances, selectedItemIds).length > 0
   );
 }
 

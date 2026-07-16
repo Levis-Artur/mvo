@@ -398,6 +398,22 @@ Testing Requirements
 області доступу MVO.
 Forbidden Practices
 
+## Stock documents endpoints
+
+`GET /api/stock-documents`
+
+`GET /api/stock-documents/:id`
+
+`POST /api/stock-documents`
+
+`PATCH /api/stock-documents/:id`
+
+`DELETE /api/stock-documents/:id`
+
+`POST /api/stock-documents/:id/post`
+
+`POST /api/stock-documents/:id/cancel`
+
 Заборонено:
 
 повертати stack trace;

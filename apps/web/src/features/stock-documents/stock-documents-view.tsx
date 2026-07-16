@@ -37,6 +37,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       <input className="input md:col-span-2" placeholder="Пошук за номером або одержувачем" value={controller.search} onChange={(event) => controller.setSearch(event.target.value)} />
     </div>
     {controller.error ? <ErrorMessage message={controller.error} /> : null}
+    {controller.personsError ? <ErrorMessage message={controller.personsError} /> : null}
     {controller.loading ? <LoadingMessage /> : <StockDocumentsTable documents={controller.documents} user={user} onSelect={controller.setSelected} />}
     <PaginationControls page={controller.pagination.page} total={controller.pagination.total} totalPages={controller.pagination.totalPages} onPage={controller.setPage} />
     {controller.formType ? <StockDocumentForm user={user} type={controller.formType} document={controller.editing} persons={controller.persons} balances={controller.balances} loadingBalances={controller.loadingBalances} saving={controller.saving} error={controller.actionError} onSourceChange={(id) => void controller.loadBalances(id)} onSubmit={controller.save} onClose={() => controller.setFormType(null)} /> : null}

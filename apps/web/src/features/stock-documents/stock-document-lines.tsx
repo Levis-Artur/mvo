@@ -2,7 +2,10 @@
 
 import type { StockBalance } from '@/lib/types';
 import type { DocumentFormLine } from './stock-document.types';
-import { availableBalanceOptions } from './stock-document-rules';
+import {
+  availableBalanceOptions,
+  canAddDocumentLine,
+} from './stock-document-rules';
 
 export function StockDocumentLines({
   balances,
@@ -39,7 +42,9 @@ export function StockDocumentLines({
         <h4 className="text-sm font-semibold">Позиції документа</h4>
         <button
           className="btn btn-outline !w-auto"
-          disabled={disabled || availableBalanceOptions(balances, selectedIds).length === 0}
+          disabled={
+            !canAddDocumentLine(balances, selectedIds, !disabled, false)
+          }
           type="button"
           onClick={addLine}
         >

@@ -324,3 +324,9 @@ Transaction
 ---
 
 End of document.
+
+## StockDocument
+
+Універсальний документ руху майна. Тип `TRANSFER` передає майно між двома МВО,
+тип `ISSUE` видає майно зовнішньому одержувачу. Статуси: `DRAFT`, `POSTED`,
+`CANCELLED`. Рядки документа зберігаються у `StockDocumentLine`.

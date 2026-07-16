@@ -4,7 +4,12 @@ import { useMemo, useState } from 'react';
 import { ErrorMessage, Field, Modal, Select } from '@/components/common';
 import { fullName } from '@/components/common/formatters';
 import type { StockDocumentInput } from '@/lib/types';
-import { recipientOptions, resolveSourceId, validateDocumentInput } from './stock-document-rules';
+import {
+  filterRecipientOptions,
+  personOptionLabel,
+  resolveSourceId,
+  validateDocumentInput,
+} from './stock-document-rules';
 import { StockDocumentLines } from './stock-document-lines';
 import type { DocumentFormLine, StockDocumentFormProps } from './stock-document.types';
 
@@ -23,7 +28,11 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     document?.lines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, note: line.note ?? '' })) ?? [],
   );
   const [validationError, setValidationError] = useState('');
-  const recipients = useMemo(() => recipientOptions(persons, sourceId), [persons, sourceId]);
+  const [recipientSearch, setRecipientSearch] = useState('');
+  const recipients = useMemo(
+    () => filterRecipientOptions(persons, sourceId, recipientSearch),
+    [persons, recipientSearch, sourceId],
+  );
   const source = persons.find((person) => person.id === sourceId);
 
   async function submit(event: React.FormEvent) {
@@ -64,12 +73,22 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
           ) : (
             <Select required value={sourceId} onChange={changeSource}>
               <option value="">Оберіть МВО</option>
-              {persons.filter((person) => person.isActive).map((person) => <option key={person.id} value={person.id}>{fullName(person)}</option>)}
+              {persons.filter((person) => person.isActive).map((person) => <option key={person.id} value={person.id}>{personOptionLabel(person)}</option>)}
             </Select>
           )}
         </Field>
         {type === 'TRANSFER' ? (
-          <Field label="МВО-одержувач"><Select required value={destinationId} onChange={setDestinationId}><option value="">Оберіть МВО</option>{recipients.map((person) => <option key={person.id} value={person.id}>{fullName(person)}</option>)}</Select></Field>
+          <>
+            <Field label="Пошук МВО">
+              <input
+                className="input"
+                placeholder="Номер, ПІБ або управління"
+                value={recipientSearch}
+                onChange={(event) => setRecipientSearch(event.target.value)}
+              />
+            </Field>
+            <Field label="МВО-одержувач"><Select required value={destinationId} onChange={setDestinationId}><option value="">Оберіть МВО</option>{recipients.map((person) => <option key={person.id} value={person.id}>{personOptionLabel(person)}</option>)}</Select></Field>
+          </>
         ) : (
           <>
             <Field label="Одержувач"><input className="input" required value={recipientName} onChange={(event) => setRecipientName(event.target.value)} /></Field>

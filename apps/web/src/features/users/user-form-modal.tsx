@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { usersService as apiClient } from './users.service';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
 import type { ResponsiblePerson, UserRole, UserSummary } from '@/lib/types';
 import {
@@ -39,9 +40,10 @@ export function UserFormModal({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiClient
-      .responsiblePersons({ page: 1, limit: 200, isActive: true })
-      .then((response) => setPersons(response.items))
+    fetchAllPages((pagination) =>
+      apiClient.responsiblePersons({ ...pagination, isActive: true }),
+    )
+      .then(setPersons)
       .catch((reason: unknown) => setError(getErrorMessage(reason)));
   }, []);
 
