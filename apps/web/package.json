@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "jest"
   },
   "dependencies": {
     "next": "^15.4.1",
@@ -17,6 +18,9 @@
     "@types/node": "^24.0.14",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "tailwindcss": "^4.1.11"
+    "@types/jest": "^30.0.0",
+    "jest": "^30.4.2",
+    "tailwindcss": "^4.1.11",
+    "ts-jest": "^29.4.11"
   }
 }

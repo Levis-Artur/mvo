@@ -34,13 +34,91 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 type QueryValue = string | number | boolean | null | undefined;
 
+export type ApiErrorCode =
+  | 'VALIDATION_ERROR'
+  | 'BAD_REQUEST'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'UNIQUE_CONSTRAINT_VIOLATION'
+  | 'FOREIGN_KEY_CONSTRAINT_VIOLATION'
+  | 'RECORD_NOT_FOUND'
+  | 'HTTP_ERROR'
+  | 'INTERNAL_SERVER_ERROR'
+  | 'UNKNOWN_ERROR';
+
+export type ApiErrorPayload = {
+  statusCode: number;
+  code: ApiErrorCode;
+  message: string;
+  details: unknown;
+  path: string;
+  requestId: string;
+  timestamp: string;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly code: ApiErrorCode = 'UNKNOWN_ERROR',
+    public readonly requestId?: string,
+    public readonly details: unknown = null,
   ) {
     super(message);
+    this.name = 'ApiError';
   }
+}
+
+export async function createApiError(
+  response: Response,
+  fallbackMessage: string,
+): Promise<ApiError> {
+  try {
+    const payload = (await response.json()) as Partial<ApiErrorPayload>;
+
+    if (typeof payload.message === 'string') {
+      return new ApiError(
+        payload.message,
+        response.status,
+        isApiErrorCode(payload.code) ? payload.code : 'UNKNOWN_ERROR',
+        typeof payload.requestId === 'string'
+          ? payload.requestId
+          : (response.headers.get('x-request-id') ?? undefined),
+        payload.details ?? null,
+      );
+    }
+  } catch {
+    // The fallback below also handles non-JSON proxy and network responses.
+  }
+
+  return new ApiError(
+    response.statusText || fallbackMessage,
+    response.status,
+    'UNKNOWN_ERROR',
+    response.headers.get('x-request-id') ?? undefined,
+  );
+}
+
+function isApiErrorCode(value: unknown): value is ApiErrorCode {
+  return (
+    typeof value === 'string' &&
+    [
+      'VALIDATION_ERROR',
+      'BAD_REQUEST',
+      'UNAUTHORIZED',
+      'FORBIDDEN',
+      'NOT_FOUND',
+      'CONFLICT',
+      'UNIQUE_CONSTRAINT_VIOLATION',
+      'FOREIGN_KEY_CONSTRAINT_VIOLATION',
+      'RECORD_NOT_FOUND',
+      'HTTP_ERROR',
+      'INTERNAL_SERVER_ERROR',
+      'UNKNOWN_ERROR',
+    ].includes(value)
+  );
 }
 
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
@@ -77,20 +155,7 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    let message = 'Помилка запиту до сервера';
-
-    try {
-      const body = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(body.message)) {
-        message = body.message.join('; ');
-      } else if (body.message) {
-        message = body.message;
-      }
-    } catch {
-      message = response.statusText || message;
-    }
-
-    throw new ApiError(message, response.status);
+    throw await createApiError(response, 'Помилка запиту до сервера');
   }
 
   return (await response.json()) as T;
@@ -104,18 +169,7 @@ async function uploadRequest<T>(path: string, body: FormData): Promise<T> {
   });
 
   if (!response.ok) {
-    let message = 'Помилка завантаження файлу';
-    try {
-      const payload = (await response.json()) as {
-        message?: string | string[];
-      };
-      message = Array.isArray(payload.message)
-        ? payload.message.join('; ')
-        : (payload.message ?? message);
-    } catch {
-      message = response.statusText || message;
-    }
-    throw new ApiError(message, response.status);
+    throw await createApiError(response, 'Помилка завантаження файлу');
   }
 
   return (await response.json()) as T;

@@ -20,6 +20,7 @@ import { ServicesModule } from './services/services.module';
 import { StockModule } from './stock/stock.module';
 import { UnitsModule } from './units/units.module';
 import { UsersModule } from './users/users.module';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 @Module({
   imports: [
@@ -42,6 +43,8 @@ import { UsersModule } from './users/users.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+
     consumer
       .apply(RequireAuthMiddleware)
       .exclude(

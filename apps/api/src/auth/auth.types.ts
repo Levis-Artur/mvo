@@ -13,5 +13,5 @@ export type CurrentUser = {
 export type AuthenticatedRequest = Request & {
   currentUser?: CurrentUser;
   currentSessionId?: string;
+  requestId?: string;
 };
-
