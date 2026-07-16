@@ -1,0 +1,238 @@
+﻿'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { responsiblePersonsService as apiClient } from './responsible-persons.service';
+import { useAuth } from '@/app/ui/auth-context';
+import { can } from '@/lib/authz';
+import type { Management, ResponsiblePerson, ResponsiblePersonsQuery, Service } from '@/lib/types';
+import {
+  ErrorMessage,
+  LoadingMessage,
+  PageHeader,
+  PaginationControls,
+  Select,
+  getErrorMessage,
+} from '@/components/common';
+import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+
+
+import { PersonsTable } from './persons-table';
+import { CreateMvoAccountModal } from './create-mvo-account-modal';
+import { PersonForm } from './person-form';
+
+export function PersonsView() {
+  const { user } = useAuth();
+  const canWritePersons = can(user, 'write', 'responsiblePersons');
+  const canCreateMvoUser =
+    can(user, 'write', 'users') || can(user, 'write', 'mvoUsers');
+  const [managements, setManagements] = useState<Management[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  });
+  const [filters, setFilters] = useState<ResponsiblePersonsQuery>({
+    page: 1,
+    limit: 20,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editingPerson, setEditingPerson] = useState<ResponsiblePerson | null>(
+    null,
+  );
+  const [accountPerson, setAccountPerson] = useState<ResponsiblePerson | null>(
+    null,
+  );
+  const [isFormOpen, setFormOpen] = useState(false);
+
+  const loadFilters = useCallback(async () => {
+    const [nextManagements, nextServices] = await Promise.all([
+      apiClient.managements(),
+      apiClient.services(
+        filters.managementId ? { managementId: filters.managementId } : {},
+      ),
+    ]);
+
+    setManagements(nextManagements);
+    setServices(nextServices);
+  }, [filters.managementId]);
+
+  const loadPersons = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await apiClient.responsiblePersons(filters);
+      setPersons(response.items);
+      setPagination(response.pagination);
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    loadFilters().catch((reason: unknown) => setError(getErrorMessage(reason)));
+  }, [loadFilters]);
+
+  useEffect(() => {
+    void loadPersons();
+  }, [loadPersons]);
+
+  useEffect(() => {
+    function handleToolbar(event: Event) {
+      const detail = getToolbarDetail(event);
+      if (detail?.view !== 'persons') return;
+
+      if (detail.action === 'create' && canWritePersons) {
+        setEditingPerson(null);
+        setFormOpen(true);
+      }
+
+      if (detail.action === 'refresh') {
+        void loadFilters();
+        void loadPersons();
+      }
+    }
+
+    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+  }, [canWritePersons, loadFilters, loadPersons]);
+
+  return (
+    <section className="grid gap-3">
+      <PageHeader
+        title="РњР’Рћ"
+        description="Р РµС”СЃС‚СЂ РјР°С‚РµСЂС–Р°Р»СЊРЅРѕ РІС–РґРїРѕРІС–РґР°Р»СЊРЅРёС… РѕСЃС–Р±."
+        action={
+          canWritePersons ? (
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => {
+              setEditingPerson(null);
+              setFormOpen(true);
+            }}
+          >
+            Р”РѕРґР°С‚Рё РњР’Рћ
+          </button>
+          ) : undefined
+        }
+      />
+
+      <div className="erp-toolbar p-2">
+        <div className="grid gap-2 md:grid-cols-4">
+          <input
+            className="input"
+            placeholder="РџРѕС€СѓРє"
+            value={filters.search ?? ''}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                search: event.target.value,
+                page: 1,
+              }))
+            }
+          />
+          <Select
+            value={filters.managementId ?? ''}
+            onChange={(managementId) =>
+              setFilters((current) => ({
+                ...current,
+                managementId,
+                serviceId: undefined,
+                unitId: undefined,
+                page: 1,
+              }))
+            }
+          >
+            <option value="">РЈСЃС– СѓРїСЂР°РІР»С–РЅРЅСЏ</option>
+            {managements.map((management) => (
+              <option key={management.id} value={management.id}>
+                {management.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={filters.serviceId ?? ''}
+            onChange={(serviceId) =>
+              setFilters((current) => ({
+                ...current,
+                serviceId,
+                unitId: undefined,
+                page: 1,
+              }))
+            }
+          >
+            <option value="">РЈСЃС– СЃР»СѓР¶Р±Рё</option>
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>
+                {service.name}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={
+              filters.isActive === undefined ? '' : String(filters.isActive)
+            }
+            onChange={(value) =>
+              setFilters((current) => ({
+                ...current,
+                isActive: value === '' ? undefined : value === 'true',
+                page: 1,
+              }))
+            }
+          >
+            <option value="">РЈСЃС– СЃС‚Р°С‚СѓСЃРё</option>
+            <option value="true">РђРєС‚РёРІРЅС–</option>
+            <option value="false">РќРµР°РєС‚РёРІРЅС–</option>
+          </Select>
+        </div>
+      </div>
+
+      {error ? <ErrorMessage message={error} /> : null}
+      {loading ? <LoadingMessage /> : null}
+      {!loading ? (
+        <PersonsTable
+          persons={persons}
+          canEdit={canWritePersons}
+          canCreateAccount={canCreateMvoUser}
+          onEdit={(person) => {
+            setEditingPerson(person);
+            setFormOpen(true);
+          }}
+          onCreateAccount={setAccountPerson}
+        />
+      ) : null}
+      <PaginationControls
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={pagination.total}
+        onPage={(page) => setFilters((current) => ({ ...current, page }))}
+      />
+
+      {isFormOpen ? (
+        <PersonForm
+          person={editingPerson}
+          onClose={() => setFormOpen(false)}
+          onSaved={() => {
+            setFormOpen(false);
+            void loadFilters();
+            void loadPersons();
+          }}
+        />
+      ) : null}
+      {accountPerson ? (
+        <CreateMvoAccountModal
+          person={accountPerson}
+          onClose={() => setAccountPerson(null)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+
