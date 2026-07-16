@@ -184,6 +184,8 @@ export class StockService {
     comment?: string | null;
     importBatchId?: string | null;
     importRowId?: string | null;
+    documentId?: string | null;
+    documentLineId?: string | null;
   }) {
     const quantity = new Prisma.Decimal(input.quantity);
 
@@ -208,6 +210,8 @@ export class StockService {
       comment?: string | null;
       importBatchId?: string | null;
       importRowId?: string | null;
+      documentId?: string | null;
+      documentLineId?: string | null;
     },
   ) {
     const quantity = new Prisma.Decimal(input.quantity);
@@ -283,6 +287,61 @@ export class StockService {
         comment: input.comment,
         importBatchId: input.importBatchId,
         importRowId: input.importRowId,
+        documentId: input.documentId,
+        documentLineId: input.documentLineId,
+      },
+      include: transactionInclude,
+    });
+  }
+
+  async createDecreasingTransactionInTx(
+    tx: TransactionClient,
+    input: {
+      type: StockTransactionType;
+      responsiblePersonId: string;
+      inventoryItemId: string;
+      quantity: string | Prisma.Decimal;
+      occurredAt: Date;
+      sourceDocument?: string | null;
+      comment?: string | null;
+      documentId?: string | null;
+      documentLineId?: string | null;
+    },
+  ) {
+    const quantity = new Prisma.Decimal(input.quantity);
+    if (quantity.lte(0)) {
+      throw new BadRequestException('Кількість має бути більшою за 0');
+    }
+
+    const lockedBalances = await tx.$queryRaw<{ quantity: Prisma.Decimal }[]>`
+      SELECT "quantity"
+      FROM "StockBalance"
+      WHERE "responsiblePersonId" = ${input.responsiblePersonId}::uuid
+        AND "inventoryItemId" = ${input.inventoryItemId}::uuid
+      FOR UPDATE
+    `;
+    const balanceBefore = lockedBalances[0]?.quantity;
+    if (!balanceBefore || balanceBefore.lt(quantity)) {
+      throw new BadRequestException('Недостатній залишок для проведення документа');
+    }
+    const balanceAfter = balanceBefore.minus(quantity);
+
+    await tx.stockBalance.update({
+      where: {
+        responsiblePersonId_inventoryItemId: {
+          responsiblePersonId: input.responsiblePersonId,
+          inventoryItemId: input.inventoryItemId,
+        },
+      },
+      data: { quantity: balanceAfter },
+    });
+
+    return tx.stockTransaction.create({
+      data: {
+        ...input,
+        quantity,
+        balanceBefore,
+        balanceAfter,
       },
       include: transactionInclude,
     });

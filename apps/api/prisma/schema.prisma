@@ -36,6 +36,23 @@ enum StockTransactionType {
   MANUAL_RECEIPT
   ADJUSTMENT_INCREASE
   ADJUSTMENT_DECREASE
+  TRANSFER_OUT
+  TRANSFER_IN
+  ISSUE
+  TRANSFER_REVERSAL_OUT
+  TRANSFER_REVERSAL_IN
+  ISSUE_REVERSAL
+}
+
+enum StockDocumentType {
+  TRANSFER
+  ISSUE
+}
+
+enum StockDocumentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
 }
 
 enum InventoryItemReviewStatus {
@@ -66,6 +83,7 @@ enum SecurityEventType {
   SESSIONS_REVOKED
   ACCESS_DENIED
   OWNER_DESTRUCTIVE_ACTION
+  STOCK_DOCUMENT_ACTION
 }
 
 model Management {
@@ -141,6 +159,8 @@ model ResponsiblePerson {
   stockTransactions      StockTransaction[]
   importRows             ImportRow[]
   user                   User?
+  sourceStockDocuments   StockDocument[]    @relation("StockDocumentSource")
+  destinationStockDocuments StockDocument[] @relation("StockDocumentDestination")
 
   @@index([managementId])
   @@index([serviceId])
@@ -174,6 +194,9 @@ model User {
   sessions             UserSession[]
   actorSecurityEvents  SecurityEvent[]    @relation("SecurityEventActor")
   targetSecurityEvents SecurityEvent[]    @relation("SecurityEventTarget")
+  createdStockDocuments   StockDocument[]  @relation("StockDocumentCreatedBy")
+  postedStockDocuments    StockDocument[]  @relation("StockDocumentPostedBy")
+  cancelledStockDocuments StockDocument[]  @relation("StockDocumentCancelledBy")
 
   @@index([role])
   @@index([isActive])
@@ -234,6 +257,7 @@ model InventoryItem {
   stockBalances     StockBalance[]
   stockTransactions StockTransaction[]
   importRows        ImportRow[]
+  stockDocumentLines StockDocumentLine[]
 
   @@index([name])
   @@index([reviewStatus])
@@ -268,17 +292,74 @@ model StockTransaction {
   sourceDocument      String?
   importBatchId       String?              @db.Uuid
   importRowId         String?              @unique @db.Uuid
+  documentId          String?              @db.Uuid
+  documentLineId      String?              @db.Uuid
   createdAt           DateTime             @default(now())
   responsiblePerson   ResponsiblePerson    @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
   inventoryItem       InventoryItem        @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   importBatch         ImportBatch?         @relation(fields: [importBatchId], references: [id], onDelete: Restrict)
   importRow           ImportRow?           @relation(fields: [importRowId], references: [id], onDelete: Restrict)
+  document            StockDocument?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  documentLine        StockDocumentLine?   @relation(fields: [documentLineId], references: [id], onDelete: Restrict)
 
   @@index([responsiblePersonId])
   @@index([inventoryItemId])
   @@index([type])
   @@index([occurredAt])
   @@index([importBatchId])
+  @@index([documentId])
+  @@index([documentLineId])
+}
+
+model StockDocument {
+  id                             String              @id @default(uuid()) @db.Uuid
+  documentNumber                 String              @unique
+  documentDate                   DateTime
+  type                           StockDocumentType
+  status                         StockDocumentStatus @default(DRAFT)
+  sourceResponsiblePersonId      String              @db.Uuid
+  destinationResponsiblePersonId String?             @db.Uuid
+  recipientName                  String?
+  recipientUnit                  String?
+  basis                          String?
+  note                           String?
+  createdByUserId                String              @db.Uuid
+  postedByUserId                 String?             @db.Uuid
+  postedAt                       DateTime?
+  cancelledByUserId              String?             @db.Uuid
+  cancelledAt                    DateTime?
+  createdAt                      DateTime            @default(now())
+  updatedAt                      DateTime            @updatedAt
+  sourceResponsiblePerson        ResponsiblePerson   @relation("StockDocumentSource", fields: [sourceResponsiblePersonId], references: [id], onDelete: Restrict)
+  destinationResponsiblePerson   ResponsiblePerson?  @relation("StockDocumentDestination", fields: [destinationResponsiblePersonId], references: [id], onDelete: Restrict)
+  createdByUser                  User                @relation("StockDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  postedByUser                   User?               @relation("StockDocumentPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict)
+  cancelledByUser                User?               @relation("StockDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+  lines                          StockDocumentLine[]
+  transactions                   StockTransaction[]
+
+  @@index([type])
+  @@index([status])
+  @@index([documentDate])
+  @@index([sourceResponsiblePersonId])
+  @@index([destinationResponsiblePersonId])
+  @@index([createdByUserId])
+}
+
+model StockDocumentLine {
+  id              String             @id @default(uuid()) @db.Uuid
+  documentId      String             @db.Uuid
+  inventoryItemId String             @db.Uuid
+  quantity        Decimal            @db.Decimal(18, 4)
+  note            String?
+  createdAt       DateTime           @default(now())
+  document        StockDocument      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  transactions    StockTransaction[]
+
+  @@unique([documentId, inventoryItemId])
+  @@index([documentId])
+  @@index([inventoryItemId])
 }
 
 model ImportBatch {
