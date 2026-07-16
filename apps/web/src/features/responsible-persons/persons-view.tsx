@@ -22,6 +22,7 @@ import { CreateMvoAccountModal } from './create-mvo-account-modal';
 import { PersonForm } from './person-form';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
+import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 
 export function PersonsView() {
   const { user } = useAuth();
@@ -248,7 +249,7 @@ export function PersonsView() {
       ) : null}
       {deletingPerson ? (
         <DestructiveActionModal
-          entityType="responsible-person"
+          entityType={ADMIN_ENTITY_TYPES.responsiblePerson}
           entityId={deletingPerson.id}
           onClose={() => setDeletingPerson(null)}
           onDeleted={async () => {

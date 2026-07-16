@@ -258,7 +258,9 @@ export class OwnerDestructiveActionsService {
       'inventory-items',
     ];
     if (!allowed.includes(value as AdminEntityType)) {
-      throw new BadRequestException('Безпечний сценарій видалення не визначений.');
+      throw new BadRequestException(
+        `Безпечний сценарій видалення для entityType "${value}" не визначений.`,
+      );
     }
     return value as AdminEntityType;
   }

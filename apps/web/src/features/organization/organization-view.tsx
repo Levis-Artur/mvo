@@ -22,6 +22,7 @@ import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-eve
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 import type { AdminEntityType } from '@/lib/types';
+import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 
 
 type OrgForm =
@@ -116,7 +117,7 @@ export function StructureView() {
                   <span className="truncate">в–ѕ {management.name}</span>
                   <StatusBadge active={management.isActive} />
                 </button>
-                {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'management', id: management.id })}>Видалити управління</button> : null}
+                {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: ADMIN_ENTITY_TYPES.management, id: management.id })}>Видалити управління</button> : null}
                 <div className="ml-4 border-l border-[var(--border)] pl-2">
                   {canWriteStructure ? (
                     <button
@@ -152,7 +153,7 @@ export function StructureView() {
                           {service.code}
                         </span>
                       </button>
-                      {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'service', id: service.id })}>Видалити службу</button> : null}
+                      {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: ADMIN_ENTITY_TYPES.service, id: service.id })}>Видалити службу</button> : null}
                       <div className="ml-4 border-l border-[var(--border-light)] pl-2">
                         {canWriteStructure ? (
                           <button
@@ -188,7 +189,7 @@ export function StructureView() {
                               {unit.code}
                             </span>
                           </button>
-                          {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'unit', id: unit.id })}>Видалити</button> : null}
+                          {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: ADMIN_ENTITY_TYPES.unit, id: unit.id })}>Видалити</button> : null}
                           </div>
                         ))}
                       </div>

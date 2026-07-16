@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ImportStatus, SecurityEventType, UserRole } from '@prisma/client';
 import { OwnerDestructiveActionsService } from './owner-destructive-actions.service';
 
@@ -116,6 +116,18 @@ describe('OwnerDestructiveActionsService', () => {
         { type: 'sessions', count: 2, action: 'DELETE' },
       ],
     });
+  });
+
+  it('reports the unsupported entityType in a clear 400 error', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.deletionPreview(owner, 'responsible-person', 'person-id'),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Безпечний сценарій видалення для entityType "responsible-person" не визначений.',
+      ),
+    );
   });
 
   it('rolls the whole transaction back when rollback fails', async () => {

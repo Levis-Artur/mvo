@@ -91,7 +91,7 @@ export function DestructiveActionModal({
                 </ul>
               </div>
             ) : null}
-            {entityType === 'import' && preview.blockers.some((item) => /rollback|відкот/i.test(item)) ? (
+            {entityType === 'imports' && preview.blockers.some((item) => /rollback|відкот/i.test(item)) ? (
               <p className="text-sm font-semibold text-[var(--warning)]">Перед видаленням потрібен rollback імпорту.</p>
             ) : null}
             <label className="flex items-center gap-2 text-sm">

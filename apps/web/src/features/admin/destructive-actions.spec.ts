@@ -9,7 +9,7 @@ import {
 } from './destructive-actions';
 
 const preview: DeletionPreview = {
-  entityType: 'user',
+  entityType: 'users',
   entityId: 'user-1',
   displayName: 'test-owner',
   canDelete: true,

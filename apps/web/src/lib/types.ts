@@ -120,13 +120,13 @@ export type ImportStatus =
   | 'ROLLED_BACK';
 
 export type AdminEntityType =
-  | 'import'
-  | 'responsible-person'
-  | 'management'
-  | 'service'
-  | 'unit'
-  | 'user'
-  | 'inventory-item';
+  | 'imports'
+  | 'responsible-persons'
+  | 'managements'
+  | 'services'
+  | 'units'
+  | 'users'
+  | 'inventory-items';
 
 export type DeletionPreview = {
   entityType: AdminEntityType;

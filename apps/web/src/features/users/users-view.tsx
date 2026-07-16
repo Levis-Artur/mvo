@@ -20,6 +20,7 @@ import { UserFormModal } from './user-form-modal';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 import { ResetTestDataModal } from '@/features/admin/reset-test-data-modal';
+import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 
 export function UsersView() {
   const { user } = useAuth();
@@ -181,7 +182,7 @@ export function UsersView() {
       ) : null}
       {deletingUser ? (
         <DestructiveActionModal
-          entityType="user"
+          entityType={ADMIN_ENTITY_TYPES.user}
           entityId={deletingUser.id}
           onClose={() => setDeletingUser(null)}
           onDeleted={async () => {

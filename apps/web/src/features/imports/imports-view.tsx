@@ -20,6 +20,7 @@ import { DestructiveActionModal } from '@/features/admin/destructive-action-moda
 import { importsService } from './imports.service';
 import { useState } from 'react';
 import { destructiveErrorMessage } from '@/features/admin/destructive-actions';
+import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 
 export function ImportsView({ initialImportId }: { initialImportId?: string }) {
   const {
@@ -430,7 +431,7 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
       ) : null}
       {deletingImportId ? (
         <DestructiveActionModal
-          entityType="import"
+          entityType={ADMIN_ENTITY_TYPES.import}
           entityId={deletingImportId}
           onClose={() => setDeletingImportId(null)}
           onDeleted={async () => {

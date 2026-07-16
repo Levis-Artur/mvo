@@ -9,6 +9,7 @@ import { ErrorMessage, Field, FormActions, LoadingMessage, Modal, PageHeader, Pa
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
+import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 
 export function NomenclatureView() {
   const { user } = useAuth();
@@ -194,7 +195,7 @@ export function NomenclatureView() {
         />
       ) : null}
       {deletingItem ? (
-        <DestructiveActionModal entityType="inventory-item" entityId={deletingItem.id} onClose={() => setDeletingItem(null)} onDeleted={async () => {
+        <DestructiveActionModal entityType={ADMIN_ENTITY_TYPES.inventoryItem} entityId={deletingItem.id} onClose={() => setDeletingItem(null)} onDeleted={async () => {
           await load();
           setToast('Номенклатуру видалено.');
         }} />
