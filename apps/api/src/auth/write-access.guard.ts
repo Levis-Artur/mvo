@@ -4,25 +4,32 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { UserRole } from '@prisma/client';
 import { AccessControlService } from './access-control.service';
 import type { AuthenticatedRequest } from './auth.types';
+import { IS_PUBLIC_KEY } from './public.decorator';
 import { getRequestContext } from './request-context';
 
 @Injectable()
 export class WriteAccessGuard implements CanActivate {
-  constructor(private readonly accessControl: AccessControlService) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly accessControl: AccessControlService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const user = request.currentUser;
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-    if (
-      (request.method === 'GET' && request.path === '/health') ||
-      (request.method === 'POST' && request.path === '/auth/login')
-    ) {
+    if (isPublic) {
       return true;
     }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const user = request.currentUser;
 
     if (!user) {
       throw new UnauthorizedException();

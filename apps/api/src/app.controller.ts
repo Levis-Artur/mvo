@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { Public } from './auth/public.decorator';
 import { PrismaService } from './prisma/prisma.service';
 
 type HealthResponse = {
@@ -10,6 +11,7 @@ type HealthResponse = {
 export class AppController {
   constructor(private readonly prisma: PrismaService) {}
 
+  @Public()
   @Get('health')
   async health(): Promise<HealthResponse> {
     await this.prisma.$queryRaw`SELECT 1`;

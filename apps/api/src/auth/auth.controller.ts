@@ -5,12 +5,14 @@ import type { AuthenticatedRequest } from './auth.types';
 import { clearSessionCookie, setSessionCookie } from './cookies';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { Public } from './public.decorator';
 import { getRequestContext } from './request-context';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @Public()
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -85,4 +87,3 @@ export class AuthController {
     return { status: 'ok' };
   }
 }
-

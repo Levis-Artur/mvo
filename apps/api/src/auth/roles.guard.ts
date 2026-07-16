@@ -9,6 +9,7 @@ import type { UserRole } from '@prisma/client';
 import { AccessControlService } from './access-control.service';
 import type { AuthenticatedRequest } from './auth.types';
 import { getRequestContext } from './request-context';
+import { IS_PUBLIC_KEY } from './public.decorator';
 import { ROLES_KEY } from './roles.decorator';
 
 @Injectable()
@@ -19,6 +20,15 @@ export class RolesGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
     const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
       context.getHandler(),
       context.getClass(),
