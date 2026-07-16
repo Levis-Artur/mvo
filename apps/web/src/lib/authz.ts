@@ -22,7 +22,7 @@ export type PermissionResource =
   | 'ownCard'
   | 'ownStock'
   | 'ownTransactions'
-  | 'ownTransfers'
+  | 'stockDocuments'
   | 'administration';
 
 export type AppView =
@@ -98,6 +98,7 @@ const permissions: Record<
     reports: ['read'],
     profile: ['read', 'write'],
     administration: ['read'],
+    stockDocuments: ['read', 'write'],
   },
   AUDITOR: {
     dashboard: ['read'],
@@ -109,6 +110,7 @@ const permissions: Record<
     transactions: ['read'],
     reports: ['read'],
     profile: ['read', 'write'],
+    stockDocuments: ['read'],
   },
   DPP_ADMIN: {
     dashboard: ['read'],
@@ -120,12 +122,13 @@ const permissions: Record<
     transactions: ['read'],
     mvoUsers: ['read', 'write', 'manage', 'resetPassword', 'revokeSessions'],
     profile: ['read', 'write'],
+    stockDocuments: ['read', 'write'],
   },
   MVO: {
     ownCard: ['read'],
     ownStock: ['read'],
     ownTransactions: ['read'],
-    ownTransfers: ['read', 'write'],
+    stockDocuments: ['read', 'write'],
     profile: ['read', 'write'],
   },
 };
@@ -139,6 +142,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Залишки', '/stock', 'stock', 'stock'),
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Користувачі', '/admin/users', 'users', 'users'),
     nav('Адміністрування', '#', 'administration', 'administration', {
       disabled: true,
@@ -153,6 +157,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Залишки', '/stock', 'stock', 'stock'),
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Звіти', '#', 'reports', 'reports', {
       disabled: true,
       title: UNIMPLEMENTED_TITLE,
@@ -166,13 +171,14 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Залишки', '/stock', 'stock', 'stock'),
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Користувачі МВО', '/mvo-users', 'users', 'mvoUsers'),
   ],
   MVO: [
     nav('Моя картка', '/my-card', 'my-card', 'ownCard'),
     nav('Моє майно', '/my-stock', 'my-stock', 'ownStock'),
     nav('Мої операції', '/my-transactions', 'my-transactions', 'ownTransactions'),
-    nav('Передачі', '/transfers', 'transfers', 'ownTransfers'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
 };
@@ -250,7 +256,7 @@ const toolbarByView: Partial<Record<AppView, ToolbarActionConfig[]>> = {
     }),
   ],
   transfers: [
-    action('Оновити', 'refresh', 'ownTransfers', 'read', { primary: true }),
+    action('Оновити', 'refresh', 'stockDocuments', 'read', { primary: true }),
   ],
 };
 

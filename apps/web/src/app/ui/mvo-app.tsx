@@ -8,7 +8,8 @@ import { AppHeader } from '@/components/layout/app-header';
 import { StatusBar } from '@/components/layout/status-bar';
 import { DashboardView } from '@/features/dashboard/dashboard-view';
 import { PersonsView } from '@/features/responsible-persons/persons-view';
-import { MyCardView, MyStockView, MyTransactionsView, MyTransfersView } from '@/features/responsible-persons/my-views';
+import { MyCardView, MyStockView, MyTransactionsView } from '@/features/responsible-persons/my-views';
+import { StockDocumentsView } from '@/features/stock-documents/stock-documents-view';
 import { UsersView } from '@/features/users/users-view';
 import { StructureView } from '@/features/organization/organization-view';
 import { NomenclatureView } from '@/features/inventory/inventory-view';
@@ -59,7 +60,7 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
       {view === 'my-card' ? <MyCardView /> : null}
       {view === 'my-stock' ? <MyStockView /> : null}
       {view === 'my-transactions' ? <MyTransactionsView /> : null}
-      {view === 'transfers' ? <MyTransfersView /> : null}
+      {view === 'transfers' ? <StockDocumentsView /> : null}
       {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних endpoint." /> : null}
       {view === 'administration' ? <PlaceholderView title="Адміністрування" description="Адміністративні налаштування ще не реалізовані." /> : null}
     </main></div>

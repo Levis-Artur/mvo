@@ -180,6 +180,71 @@ export type StockBalance = {
   >;
 };
 
+export type StockDocumentType = 'TRANSFER' | 'ISSUE';
+export type StockDocumentStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
+
+export type StockDocumentLine = {
+  id: string;
+  inventoryItemId: string;
+  quantity: string;
+  note: string | null;
+  inventoryItem: InventoryItem;
+};
+
+export type StockDocument = {
+  id: string;
+  documentNumber: string;
+  documentDate: string;
+  type: StockDocumentType;
+  status: StockDocumentStatus;
+  sourceResponsiblePersonId: string;
+  destinationResponsiblePersonId: string | null;
+  recipientName: string | null;
+  recipientUnit: string | null;
+  basis: string | null;
+  note: string | null;
+  postedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sourceResponsiblePerson: ResponsiblePerson;
+  destinationResponsiblePerson: ResponsiblePerson | null;
+  createdByUser: Pick<AuthUser, 'id' | 'username' | 'role'>;
+  postedByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
+  cancelledByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
+  lines: StockDocumentLine[];
+  totalPositions: number;
+  totalQuantity: string;
+};
+
+export type StockDocumentInput = {
+  documentNumber?: string;
+  documentDate: string;
+  type: StockDocumentType;
+  sourceResponsiblePersonId: string;
+  destinationResponsiblePersonId?: string;
+  recipientName?: string;
+  recipientUnit?: string;
+  basis?: string;
+  note?: string;
+  lines: {
+    inventoryItemId: string;
+    quantity: string;
+    note?: string;
+  }[];
+};
+
+export type StockDocumentsQuery = {
+  type?: StockDocumentType;
+  status?: StockDocumentStatus;
+  sourceResponsiblePersonId?: string;
+  destinationResponsiblePersonId?: string;
+  documentDateFrom?: string;
+  documentDateTo?: string;
+  page?: number;
+  limit?: number;
+};
+
 export type StockTransaction = {
   id: string;
   type: StockTransactionType;

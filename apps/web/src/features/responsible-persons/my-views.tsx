@@ -208,22 +208,3 @@ export function MyTransactionsView() {
 
 
 
-export function MyTransfersView() {
-
-  return (
-
-    <PlaceholderView
-
-      title="Передачі"
-
-      description="Окремий endpoint для власних передач ще не реалізований у backend."
-
-    />
-
-  );
-
-}
-
-
-
-

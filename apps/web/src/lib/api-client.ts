@@ -20,6 +20,9 @@ import type {
   Service,
   StockBalance,
   StockBalancesQuery,
+  StockDocument,
+  StockDocumentInput,
+  StockDocumentsQuery,
   StockTransaction,
   StockTransactionsQuery,
   Unit,
@@ -316,6 +319,26 @@ export const apiClient = {
       {},
       query,
     ),
+  stockDocuments: (query: StockDocumentsQuery) =>
+    request<PaginatedResponse<StockDocument>>('/stock-documents', {}, query),
+  stockDocument: (id: string) =>
+    request<StockDocument>(`/stock-documents/${id}`),
+  createStockDocument: (body: StockDocumentInput) =>
+    request<StockDocument>('/stock-documents', mutation('POST', body)),
+  updateStockDocument: (id: string, body: StockDocumentInput) =>
+    request<StockDocument>(`/stock-documents/${id}`, mutation('PATCH', body)),
+  deleteStockDocument: (id: string) =>
+    request<{ success: boolean }>(`/stock-documents/${id}`, {
+      method: 'DELETE',
+    }),
+  postStockDocument: (id: string) =>
+    request<StockDocument>(`/stock-documents/${id}/post`, {
+      method: 'POST',
+    }),
+  cancelStockDocument: (id: string) =>
+    request<StockDocument>(`/stock-documents/${id}/cancel`, {
+      method: 'POST',
+    }),
   manualReceipt: (body: {
     responsiblePersonId: string;
     inventoryItemId: string;

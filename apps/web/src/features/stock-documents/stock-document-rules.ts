@@ -1,0 +1,95 @@
+import type {
+  AuthUser,
+  ResponsiblePerson,
+  StockBalance,
+  StockDocument,
+  StockDocumentInput,
+} from '@/lib/types';
+
+export function canChangeStockDocuments(user: Pick<AuthUser, 'role'>) {
+  return user.role !== 'AUDITOR';
+}
+
+export function resolveSourceId(
+  user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
+  selectedSourceId: string,
+) {
+  return user.role === 'MVO'
+    ? (user.responsiblePersonId ?? '')
+    : selectedSourceId;
+}
+
+export function recipientOptions(
+  persons: ResponsiblePerson[],
+  sourceId: string,
+) {
+  return persons.filter((person) => person.id !== sourceId && person.isActive);
+}
+
+export function availableBalanceOptions(
+  balances: StockBalance[],
+  selectedItemIds: string[],
+) {
+  return balances.filter(
+    (balance) =>
+      Number(balance.quantity) > 0 &&
+      !selectedItemIds.includes(balance.inventoryItem.id),
+  );
+}
+
+export function validateDocumentInput(
+  input: StockDocumentInput,
+  balances: StockBalance[],
+) {
+  if (!input.sourceResponsiblePersonId) return 'Виберіть МВО-відправника';
+  if (input.type === 'TRANSFER' && !input.destinationResponsiblePersonId) {
+    return 'Виберіть МВО-одержувача';
+  }
+  if (input.type === 'ISSUE' && !input.recipientName?.trim()) {
+    return 'Вкажіть одержувача';
+  }
+  if (!input.lines.length) return 'Додайте хоча б одну позицію';
+  const ids = new Set<string>();
+  for (const line of input.lines) {
+    if (ids.has(line.inventoryItemId)) return 'Номенклатуру не можна дублювати';
+    ids.add(line.inventoryItemId);
+    const balance = balances.find(
+      (item) => item.inventoryItem.id === line.inventoryItemId,
+    );
+    const quantity = Number(line.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return 'Кількість повинна бути більшою за 0';
+    }
+    if (!balance || quantity > Number(balance.quantity)) {
+      return 'Кількість не може перевищувати доступний залишок';
+    }
+  }
+  return '';
+}
+
+export function documentDirection(
+  document: StockDocument,
+  user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
+) {
+  if (document.type === 'ISSUE') return 'Видача';
+  if (
+    user.role === 'MVO' &&
+    document.destinationResponsiblePersonId === user.responsiblePersonId
+  ) {
+    return 'Вхідна передача';
+  }
+  return 'Вихідна передача';
+}
+
+export function lifecycleActions(
+  document: Pick<StockDocument, 'status'>,
+  user: Pick<AuthUser, 'role'>,
+) {
+  const writable = canChangeStockDocuments(user);
+  return {
+    edit: writable && document.status === 'DRAFT',
+    post: writable && document.status === 'DRAFT',
+    remove: writable && document.status === 'DRAFT',
+    cancel: writable && document.status === 'POSTED',
+  };
+}
