@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useState } from 'react';
 import { importsService as apiClient } from './imports.service';
@@ -38,22 +38,22 @@ export function ImportUploadModal({
   }
 
   return (
-    <Modal title="РќРѕРІРёР№ С–РјРїРѕСЂС‚" onClose={onClose}>
+    <Modal title="Новий імпорт" onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
-        <Field label="Р РµР¶РёРј">
+        <Field label="Режим">
           <Select
             value={importType}
             onChange={(value) => setImportType(value as ImportType)}
           >
-            <option value="INITIAL_BALANCE">РџРѕС‡Р°С‚РєРѕРІС– Р·Р°Р»РёС€РєРё</option>
-            <option value="RECEIPT">РќРѕРІС– РЅР°РґС…РѕРґР¶РµРЅРЅСЏ</option>
+            <option value="INITIAL_BALANCE">Початкові залишки</option>
+            <option value="RECEIPT">Нові надходження</option>
           </Select>
         </Field>
         <p className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--text-secondary)]">
           {importType === 'INITIAL_BALANCE'
-            ? 'Р‘СѓРґРµ РІРёРєРѕСЂРёСЃС‚Р°РЅРѕ РєРѕР»РѕРЅРєСѓ В«РљС–Р»СЊРєС–СЃС‚СЊ РєС–РЅ.В»'
-            : 'Р‘СѓРґРµ РІРёРєРѕСЂРёСЃС‚Р°РЅРѕ РєРѕР»РѕРЅРєСѓ В«РљС–Р»СЊРєС–СЃС‚СЊ Р”С‚В». РљРѕР»РѕРЅРєР° В«РљС–Р»СЊРєС–СЃС‚СЊ РєС–РЅ.В» РІРёРєРѕСЂРёСЃС‚РѕРІСѓС”С‚СЊСЃСЏ Р»РёС€Рµ РґР»СЏ Р·РІС–СЂРєРё.'}
+            ? 'Буде використано колонку «Кількість кін.»'
+            : 'Буде використано колонку «Кількість Дт». Колонка «Кількість кін.» використовується лише для звірки.'}
         </p>
         <input
           required

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 export function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
@@ -8,7 +8,7 @@ export function StatusBadge({ active }: { active: boolean }) {
           : 'border-slate-200 bg-[var(--surface-muted)] text-[var(--text-secondary)]'
       }`}
     >
-      {active ? 'РђРєС‚РёРІРЅРёР№' : 'РќРµР°РєС‚РёРІРЅРёР№'}
+      {active ? 'Активний' : 'Неактивний'}
     </span>
   );
 }
@@ -71,7 +71,7 @@ export function Alert({
 export function LoadingMessage() {
   return (
     <div className="app-card p-4 text-sm text-[var(--text-secondary)]">
-      Р—Р°РІР°РЅС‚Р°Р¶РµРЅРЅСЏ РґР°РЅРёС…...
+      Завантаження даних...
     </div>
   );
 }
@@ -79,7 +79,7 @@ export function LoadingMessage() {
 export function ErrorMessage({ message }: { message: string }) {
   return (
     <div className="rounded-lg border border-red-700/15 bg-red-50 p-4 text-sm text-[var(--danger)]">
-      <p className="font-semibold">РџРѕРјРёР»РєР°</p>
+      <p className="font-semibold">Помилка</p>
       <p className="mt-1">{message}</p>
     </div>
   );

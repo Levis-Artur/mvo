@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect } from 'react';
 export function Modal({
@@ -27,7 +27,7 @@ export function Modal({
         <div className="flex h-10 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--toolbar-background)] px-3">
           <h3 className="text-sm font-semibold">{title}</h3>
           <button
-            aria-label="Р—Р°РєСЂРёС‚Рё"
+            aria-label="Закрити"
             className="btn btn-outline !min-h-7 !w-auto !px-2"
             type="button"
             onClick={onClose}
@@ -95,14 +95,14 @@ export function FormActions({
         type="button"
         onClick={onClose}
       >
-        РЎРєР°СЃСѓРІР°С‚Рё
+        Скасувати
       </button>
       <button
         className="btn btn-primary"
         disabled={saving}
         type="submit"
       >
-        {saving ? 'Р—Р±РµСЂРµР¶РµРЅРЅСЏ...' : 'Р—Р±РµСЂРµРіС‚Рё'}
+        {saving ? 'Збереження...' : 'Зберегти'}
       </button>
     </div>
   );

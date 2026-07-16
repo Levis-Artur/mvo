@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
@@ -23,7 +23,7 @@ export function PersonStockTab({ personId }: { personId: string }) {
 
   return (
     <SimpleTable
-      headers={['РљРѕРґ', 'РќР°Р№РјРµРЅСѓРІР°РЅРЅСЏ', 'РљС–Р»СЊРєС–СЃС‚СЊ', 'РћРґ.']}
+      headers={['Код', 'Найменування', 'Кількість', 'Од.']}
       rows={balances.map((balance) => [
         balance.inventoryItem.externalCode,
         balance.inventoryItem.name,
@@ -50,13 +50,13 @@ export function PersonOperationsTab({ personId }: { personId: string }) {
   return (
     <SimpleTable
       headers={[
-        'Р”Р°С‚Р°',
-        'РўРёРї',
-        'РџРѕР·РёС†С–СЏ',
-        'РљС–Р»СЊРєС–СЃС‚СЊ',
-        'Р‘СѓР»Рѕ',
-        'РЎС‚Р°Р»Рѕ',
-        'Р”Р¶РµСЂРµР»Рѕ',
+        'Дата',
+        'Тип',
+        'Позиція',
+        'Кількість',
+        'Було',
+        'Стало',
+        'Джерело',
       ]}
       rows={transactions.map((transaction) => [
         new Date(transaction.occurredAt).toLocaleDateString('uk-UA'),

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
 import { usersService as apiClient } from './users.service';
@@ -77,10 +77,10 @@ export function UserFormModal({
   }
 
   return (
-    <Modal title={user ? 'Р РµРґР°РіСѓРІР°С‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°' : 'РЎС‚РІРѕСЂРёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°'} onClose={onClose}>
+    <Modal title={user ? 'Редагувати користувача' : 'Створити користувача'} onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
-        <Field label="Р›РѕРіС–РЅ">
+        <Field label="Логін">
           <input
             required
             className="input"
@@ -89,7 +89,7 @@ export function UserFormModal({
             onChange={(event) => setUsername(event.target.value)}
           />
         </Field>
-        <Field label="Р РѕР»СЊ">
+        <Field label="Роль">
           {ownerMode ? (
             <Select
               value={role}
@@ -105,13 +105,13 @@ export function UserFormModal({
             <input readOnly className="input" value={roleLabels.MVO} />
           )}
         </Field>
-        <Field label="РњР’Рћ">
+        <Field label="МВО">
           <Select
             required={requiresResponsiblePerson(role)}
             value={responsiblePersonId}
             onChange={setResponsiblePersonId}
           >
-            <option value="">Р‘РµР· РїСЂРёРІвЂ™СЏР·РєРё</option>
+            <option value="">Без прив’язки</option>
             {persons.map((person) => (
               <option key={person.id} value={person.id}>
                 {fullName(person)} В· {person.personnelNumber}
@@ -125,7 +125,7 @@ export function UserFormModal({
             type="checkbox"
             onChange={(event) => setMustChangePassword(event.target.checked)}
           />
-          Р’РёРјР°РіР°С‚Рё Р·РјС–РЅСѓ РїР°СЂРѕР»СЏ
+          Вимагати зміну пароля
         </label>
         <FormActions saving={saving} onClose={onClose} />
       </form>

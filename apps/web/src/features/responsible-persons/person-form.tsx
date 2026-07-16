@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
@@ -124,13 +124,13 @@ export function PersonForm({
   }
 
   return (
-    <Modal title={person ? 'Р РµРґР°РіСѓРІР°С‚Рё РњР’Рћ' : 'Р”РѕРґР°С‚Рё РњР’Рћ'} onClose={onClose}>
+    <Modal title={person ? 'Редагувати МВО' : 'Додати МВО'} onClose={onClose}>
       {person ? (
         <div className="mb-4 flex flex-wrap gap-2">
           {[
-            ['general', 'Р—Р°РіР°Р»СЊРЅС– РґР°РЅС–'],
-            ['stock', 'Р—Р°Р»РёС€РєРё'],
-            ['operations', 'РћРїРµСЂР°С†С–С—'],
+            ['general', 'Загальні дані'],
+            ['stock', 'Залишки'],
+            ['operations', 'Операції'],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -153,7 +153,7 @@ export function PersonForm({
         <form className="grid gap-3" onSubmit={submit}>
           {error ? <ErrorMessage message={error} /> : null}
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="РџСЂС–Р·РІРёС‰Рµ">
+            <Field label="Прізвище">
               <input
                 required
                 className="input"
@@ -166,7 +166,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="Р†РјвЂ™СЏ">
+            <Field label="Ім’я">
               <input
                 required
                 className="input"
@@ -179,7 +179,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="РџРѕ Р±Р°С‚СЊРєРѕРІС–">
+            <Field label="По батькові">
               <input
                 className="input"
                 value={form.middleName ?? ''}
@@ -191,7 +191,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="РўР°Р±РµР»СЊРЅРёР№ РЅРѕРјРµСЂ">
+            <Field label="Табельний номер">
               <input
                 required
                 className="input"
@@ -204,7 +204,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="РџРѕСЃР°РґР°">
+            <Field label="Посада">
               <input
                 className="input"
                 value={form.position ?? ''}
@@ -216,7 +216,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="РўРµР»РµС„РѕРЅ">
+            <Field label="Телефон">
               <input
                 className="input"
                 value={form.phone ?? ''}
@@ -241,7 +241,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="РЈРїСЂР°РІР»С–РЅРЅСЏ">
+            <Field label="Управління">
               <Select
                 required
                 value={form.managementId}
@@ -254,7 +254,7 @@ export function PersonForm({
                   }))
                 }
               >
-                <option value="">РћР±РµСЂС–С‚СЊ СѓРїСЂР°РІР»С–РЅРЅСЏ</option>
+                <option value="">Оберіть управління</option>
                 {managements.map((management) => (
                   <option key={management.id} value={management.id}>
                     {management.name}
@@ -262,7 +262,7 @@ export function PersonForm({
                 ))}
               </Select>
             </Field>
-            <Field label="РЎР»СѓР¶Р±Р°">
+            <Field label="Служба">
               <Select
                 required
                 value={form.serviceId}
@@ -270,7 +270,7 @@ export function PersonForm({
                   setForm((current) => ({ ...current, serviceId, unitId: '' }))
                 }
               >
-                <option value="">РћР±РµСЂС–С‚СЊ СЃР»СѓР¶Р±Сѓ</option>
+                <option value="">Оберіть службу</option>
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name}
@@ -278,14 +278,14 @@ export function PersonForm({
                 ))}
               </Select>
             </Field>
-            <Field label="РџС–РґСЂРѕР·РґС–Р»">
+            <Field label="Підрозділ">
               <Select
                 value={form.unitId ?? ''}
                 onChange={(unitId) =>
                   setForm((current) => ({ ...current, unitId }))
                 }
               >
-                <option value="">Р‘РµР· РїС–РґСЂРѕР·РґС–Р»Сѓ</option>
+                <option value="">Без підрозділу</option>
                 {units.map((unit) => (
                   <option key={unit.id} value={unit.id}>
                     {unit.name}
@@ -293,7 +293,7 @@ export function PersonForm({
                 ))}
               </Select>
             </Field>
-            <Field label="РќРѕРјРµСЂ РЅР°РєР°Р·Сѓ">
+            <Field label="Номер наказу">
               <input
                 className="input"
                 value={form.appointmentOrderNumber ?? ''}
@@ -305,7 +305,7 @@ export function PersonForm({
                 }
               />
             </Field>
-            <Field label="Р”Р°С‚Р° РїСЂРёР·РЅР°С‡РµРЅРЅСЏ">
+            <Field label="Дата призначення">
               <input
                 className="input"
                 type="date"
@@ -330,7 +330,7 @@ export function PersonForm({
                 }))
               }
             />
-            РђРєС‚РёРІРЅРёР№ Р·Р°РїРёСЃ
+            Активний запис
           </label>
           <FormActions saving={saving} onClose={onClose} />
         </form>

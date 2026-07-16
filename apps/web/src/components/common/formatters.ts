@@ -2,7 +2,7 @@ import { ApiError } from '@/lib/api-client';
 import type { CreateResponsiblePersonDto, ImportType, ResponsiblePerson, UserSummary } from '@/lib/types';
 
 export function importTypeLabel(type: ImportType) {
-  return type === 'INITIAL_BALANCE' ? 'РџРѕС‡Р°С‚РєРѕРІС– Р·Р°Р»РёС€РєРё' : 'РќР°РґС…РѕРґР¶РµРЅРЅСЏ';
+  return type === 'INITIAL_BALANCE' ? 'Початкові залишки' : 'Надходження';
 }
 
 export function fullName(person: ResponsiblePerson) {
@@ -24,7 +24,7 @@ export function responsiblePersonShortName(
 
 export function formatDateTime(value?: string | null) {
   if (!value) {
-    return 'РќРµРјР°С” РґР°РЅРёС…';
+    return 'Немає даних';
   }
 
   return new Intl.DateTimeFormat('uk-UA', {
@@ -61,7 +61,7 @@ export function getErrorMessage(reason: unknown) {
     return reason.message;
   }
 
-  return 'РЎС‚Р°Р»Р°СЃСЏ РЅРµРІС–РґРѕРјР° РїРѕРјРёР»РєР°';
+  return 'Сталася невідома помилка';
 }
 
 export { ApiError };

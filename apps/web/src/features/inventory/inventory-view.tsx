@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
@@ -76,8 +76,8 @@ export function NomenclatureView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР°"
-        description="Р¦РµРЅС‚СЂР°Р»С–Р·РѕРІР°РЅРёР№ РґРѕРІС–РґРЅРёРє РїРѕР·РёС†С–Р№ РјР°Р№РЅР°."
+        title="Номенклатура"
+        description="Централізований довідник позицій майна."
         action={
           canWriteNomenclature ? (
           <button
@@ -85,7 +85,7 @@ export function NomenclatureView() {
             type="button"
             onClick={() => setFormOpen(true)}
           >
-            Р”РѕРґР°С‚Рё РїРѕР·РёС†С–СЋ
+            Додати позицію
           </button>
           ) : undefined
         }
@@ -94,7 +94,7 @@ export function NomenclatureView() {
         <div className="grid gap-2 md:grid-cols-3">
           <input
             className="input"
-            placeholder="РџРѕС€СѓРє Р·Р° РєРѕРґРѕРј Р°Р±Рѕ РЅР°Р·РІРѕСЋ"
+            placeholder="Пошук за кодом або назвою"
             value={filters.search}
             onChange={(event) =>
               setFilters((current) => ({
@@ -109,9 +109,9 @@ export function NomenclatureView() {
               setFilters((current) => ({ ...current, reviewStatus }))
             }
           >
-            <option value="">РЈСЃС– СЃС‚Р°С‚СѓСЃРё РїРµСЂРµРІС–СЂРєРё</option>
-            <option value="NEEDS_REVIEW">РџРѕС‚СЂРµР±СѓСЋС‚СЊ РїРµСЂРµРІС–СЂРєРё</option>
-            <option value="VERIFIED">РџРµСЂРµРІС–СЂРµРЅС–</option>
+            <option value="">Усі статуси перевірки</option>
+            <option value="NEEDS_REVIEW">Потребують перевірки</option>
+            <option value="VERIFIED">Перевірені</option>
           </Select>
           <Select
             value={filters.isActive}
@@ -119,9 +119,9 @@ export function NomenclatureView() {
               setFilters((current) => ({ ...current, isActive }))
             }
           >
-            <option value="">РЈСЃС– Р·Р°РїРёСЃРё</option>
-            <option value="true">РђРєС‚РёРІРЅС–</option>
-            <option value="false">РќРµР°РєС‚РёРІРЅС–</option>
+            <option value="">Усі записи</option>
+            <option value="true">Активні</option>
+            <option value="false">Неактивні</option>
           </Select>
         </div>
       </div>
@@ -130,13 +130,13 @@ export function NomenclatureView() {
       {!loading ? (
         <SimpleTable
           headers={[
-            'РљРѕРґ',
-            'РќР°Р№РјРµРЅСѓРІР°РЅРЅСЏ',
-            'РћРґ.',
-            'РљР°С‚РµРіРѕСЂС–СЏ',
-            'РџРµСЂРµРІС–СЂРєР°',
-            'РњР’Рћ',
-            'Р—Р°Р»РёС€РѕРє',
+            'Код',
+            'Найменування',
+            'Од.',
+            'Категорія',
+            'Перевірка',
+            'МВО',
+            'Залишок',
           ]}
           rows={items.map((item) => [
             item.externalCode,
@@ -144,8 +144,8 @@ export function NomenclatureView() {
             item.unitOfMeasure ?? '-',
             item.category ?? '-',
             item.reviewStatus === 'NEEDS_REVIEW'
-              ? 'РџРѕС‚СЂРµР±СѓС” РїРµСЂРµРІС–СЂРєРё'
-              : 'РџРµСЂРµРІС–СЂРµРЅРѕ',
+              ? 'Потребує перевірки'
+              : 'Перевірено',
             String(item.responsiblePersonsCount ?? 0),
             item.totalQuantity ?? '0',
           ])}
@@ -209,11 +209,11 @@ export function InventoryItemForm({
   }
 
   return (
-    <Modal title="Р”РѕРґР°С‚Рё РЅРѕРјРµРЅРєР»Р°С‚СѓСЂСѓ" onClose={onClose}>
+    <Modal title="Додати номенклатуру" onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Р—РѕРІРЅС–С€РЅС–Р№ РєРѕРґ">
+          <Field label="Зовнішній код">
             <input
               required
               className="input"
@@ -226,7 +226,7 @@ export function InventoryItemForm({
               }
             />
           </Field>
-          <Field label="РќР°Р№РјРµРЅСѓРІР°РЅРЅСЏ">
+          <Field label="Найменування">
             <input
               required
               className="input"
@@ -236,7 +236,7 @@ export function InventoryItemForm({
               }
             />
           </Field>
-          <Field label="РћРґРёРЅРёС†СЏ РІРёРјС–СЂСѓ">
+          <Field label="Одиниця виміру">
             <input
               className="input"
               value={form.unitOfMeasure}
@@ -248,7 +248,7 @@ export function InventoryItemForm({
               }
             />
           </Field>
-          <Field label="РљР°С‚РµРіРѕСЂС–СЏ">
+          <Field label="Категорія">
             <input
               className="input"
               value={form.category}
@@ -261,7 +261,7 @@ export function InventoryItemForm({
             />
           </Field>
         </div>
-        <Field label="РћРїРёСЃ">
+        <Field label="Опис">
           <textarea
             className="input min-h-24"
             value={form.description}
@@ -273,7 +273,7 @@ export function InventoryItemForm({
             }
           />
         </Field>
-        <Field label="РЎС‚Р°С‚СѓСЃ РїРµСЂРµРІС–СЂРєРё">
+        <Field label="Статус перевірки">
           <Select
             value={form.reviewStatus}
             onChange={(reviewStatus) =>
@@ -283,8 +283,8 @@ export function InventoryItemForm({
               }))
             }
           >
-            <option value="VERIFIED">РџРµСЂРµРІС–СЂРµРЅРѕ</option>
-            <option value="NEEDS_REVIEW">РџРѕС‚СЂРµР±СѓС” РїРµСЂРµРІС–СЂРєРё</option>
+            <option value="VERIFIED">Перевірено</option>
+            <option value="NEEDS_REVIEW">Потребує перевірки</option>
           </Select>
         </Field>
         <label className="flex items-center gap-2 text-sm font-medium">
@@ -298,7 +298,7 @@ export function InventoryItemForm({
               }))
             }
           />
-          РђРєС‚РёРІРЅРёР№ Р·Р°РїРёСЃ
+          Активний запис
         </label>
         <FormActions saving={saving} onClose={onClose} />
       </form>

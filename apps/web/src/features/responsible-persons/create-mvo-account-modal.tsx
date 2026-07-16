@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
@@ -45,23 +45,23 @@ export function CreateMvoAccountModal({
   }
 
   return (
-    <Modal title="РЎС‚РІРѕСЂРёС‚Рё РѕР±Р»С–РєРѕРІРёР№ Р·Р°РїРёСЃ РњР’Рћ" onClose={onClose}>
+    <Modal title="Створити обліковий запис МВО" onClose={onClose}>
       <div className="grid gap-3">
         <Alert
           tone="warning"
-          title="РўРёРјС‡Р°СЃРѕРІРёР№ РїР°СЂРѕР»СЊ РїРѕРєР°Р·СѓС”С‚СЊСЃСЏ РѕРґРёРЅ СЂР°Р·"
-          message="РџС–СЃР»СЏ Р·Р°РєСЂРёС‚С‚СЏ С†СЊРѕРіРѕ РІС–РєРЅР° Р№РѕРіРѕ РЅРµ РјРѕР¶РЅР° Р±СѓРґРµ РІС–РґРЅРѕРІРёС‚Рё. Р—Р° РїРѕС‚СЂРµР±Рё РІРёРєРѕРЅР°Р№С‚Рµ reset password."
+          title="Тимчасовий пароль показується один раз"
+          message="Після закриття цього вікна його не можна буде відновити. За потреби виконайте reset password."
         />
         <div className="erp-panel p-3 text-sm">
           <p className="font-semibold">{fullName(person)}</p>
           <p className="mt-1 text-[var(--text-secondary)]">
-            РўР°Р±РµР»СЊРЅРёР№ РЅРѕРјРµСЂ: {person.personnelNumber}
+            Табельний номер: {person.personnelNumber}
           </p>
         </div>
 
         {temporaryPassword ? (
           <div className="grid gap-3">
-            <Field label="РўРёРјС‡Р°СЃРѕРІРёР№ РїР°СЂРѕР»СЊ">
+            <Field label="Тимчасовий пароль">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <input
                   readOnly
@@ -76,20 +76,20 @@ export function CreateMvoAccountModal({
                     setCopied(true);
                   }}
                 >
-                  {copied ? 'РЎРєРѕРїС–Р№РѕРІР°РЅРѕ' : 'РљРѕРїС–СЋРІР°С‚Рё'}
+                  {copied ? 'Скопійовано' : 'Копіювати'}
                 </button>
               </div>
             </Field>
             <div className="flex justify-end">
               <button className="btn btn-primary !w-auto" type="button" onClick={onClose}>
-                Р—Р°РєСЂРёС‚Рё
+                Закрити
               </button>
             </div>
           </div>
         ) : (
           <form className="grid gap-3" onSubmit={submit}>
             {error ? <ErrorMessage message={error} /> : null}
-            <Field label="Р›РѕРіС–РЅ">
+            <Field label="Логін">
               <input
                 required
                 className="input"

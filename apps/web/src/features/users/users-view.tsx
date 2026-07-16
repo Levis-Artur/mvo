@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { usersService as apiClient } from './users.service';
@@ -90,8 +90,8 @@ export function UsersView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title={userResource === 'users' ? 'РљРѕСЂРёСЃС‚СѓРІР°С‡С–' : 'РљРѕСЂРёСЃС‚СѓРІР°С‡С– РњР’Рћ'}
-        description="РљРµСЂСѓРІР°РЅРЅСЏ РґРѕСЃС‚СѓРїРѕРј РґРѕ СЃРёСЃС‚РµРјРё."
+        title={userResource === 'users' ? 'Користувачі' : 'Користувачі МВО'}
+        description="Керування доступом до системи."
         action={
           canWriteUsers ? (
             <button
@@ -102,7 +102,7 @@ export function UsersView() {
                 setFormOpen(true);
               }}
             >
-              РЎС‚РІРѕСЂРёС‚Рё РєРѕСЂРёСЃС‚СѓРІР°С‡Р°
+              Створити користувача
             </button>
           ) : undefined
         }

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { dashboardService as apiClient } from './dashboard.service';
@@ -31,7 +31,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: View) => void
     } catch {
       setStats(null);
       setError(
-        'РќРµ РІРґР°Р»РѕСЃСЏ РѕС‚СЂРёРјР°С‚Рё РїРѕРєР°Р·РЅРёРєРё dashboard. РџРµСЂРµРІС–СЂС‚Рµ РґРѕСЃС‚СѓРїРЅС–СЃС‚СЊ backend API.',
+        'Не вдалося отримати показники dashboard. Перевірте доступність backend API.',
       );
     } finally {
       setLoading(false);
@@ -55,23 +55,23 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: View) => void
   }, [loadStats]);
 
   const cards = [
-    ['РђРєС‚РёРІРЅС– РњР’Рћ', stats?.activeResponsiblePersons],
-    ['РЈРїСЂР°РІР»С–РЅРЅСЏ', stats?.managements],
-    ['РЎР»СѓР¶Р±Рё', stats?.services],
-    ['РџС–РґСЂРѕР·РґС–Р»Рё', stats?.units],
-    ['РќРѕРјРµРЅРєР»Р°С‚СѓСЂР°', stats?.inventoryItems],
-    ['РџРѕС‚СЂРµР±СѓСЋС‚СЊ РїРµСЂРµРІС–СЂРєРё', stats?.inventoryItemsNeedsReview],
-    ['РњР’Рћ С–Р· Р·Р°Р»РёС€РєР°РјРё', stats?.responsiblePersonsWithStock],
-    ['РџСЂРѕРІРµРґРµРЅС– С–РјРїРѕСЂС‚Рё', stats?.completedImports],
-    ['Р†РјРїРѕСЂС‚Рё Р· РїРѕРјРёР»РєР°РјРё', stats?.importsWithErrors],
-    ['Р РѕР·Р±С–Р¶РЅРѕСЃС‚С– РЅР°РґС…РѕРґР¶РµРЅСЊ', stats?.recentReceiptDiscrepancies],
+    ['Активні МВО', stats?.activeResponsiblePersons],
+    ['Управління', stats?.managements],
+    ['Служби', stats?.services],
+    ['Підрозділи', stats?.units],
+    ['Номенклатура', stats?.inventoryItems],
+    ['Потребують перевірки', stats?.inventoryItemsNeedsReview],
+    ['МВО із залишками', stats?.responsiblePersonsWithStock],
+    ['Проведені імпорти', stats?.completedImports],
+    ['Імпорти з помилками', stats?.importsWithErrors],
+    ['Розбіжності надходжень', stats?.recentReceiptDiscrepancies],
   ];
 
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="Р“РѕР»РѕРІРЅР°"
-        description="РџРѕС‚РѕС‡РЅРёР№ СЃС‚Р°РЅ РѕСЂРіР°РЅС–Р·Р°С†С–Р№РЅРѕС— СЃС‚СЂСѓРєС‚СѓСЂРё С‚Р° СЂРµС”СЃС‚СЂСѓ РњР’Рћ."
+        title="Головна"
+        description="Поточний стан організаційної структури та реєстру МВО."
       />
       {error ? <ErrorMessage message={error} /> : null}
       <div className="erp-panel grid gap-px overflow-hidden bg-[var(--border-light)] sm:grid-cols-2 xl:grid-cols-5">
@@ -96,28 +96,28 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: View) => void
       <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="erp-panel p-3">
           <SectionTitle
-            title="РџРѕС‚СЂРµР±СѓСЋС‚СЊ СѓРІР°РіРё"
-            description="РљРѕСЂРѕС‚РєРёР№ СЃРїРёСЃРѕРє РєРѕРЅС‚СЂРѕР»СЊРЅРёС… РїРѕРєР°Р·РЅРёРєС–РІ РґР»СЏ С‰РѕРґРµРЅРЅРѕС— РїРµСЂРµРІС–СЂРєРё."
+            title="Потребують уваги"
+            description="Короткий список контрольних показників для щоденної перевірки."
           />
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <Stat
-              label="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР° РЅР° РїРµСЂРµРІС–СЂС†С–"
+              label="Номенклатура на перевірці"
               value={stats?.inventoryItemsNeedsReview ?? 0}
             />
             <Stat
-              label="Р†РјРїРѕСЂС‚Рё Р· РїРѕРјРёР»РєР°РјРё"
+              label="Імпорти з помилками"
               value={stats?.importsWithErrors ?? 0}
             />
             <Stat
-              label="Р РѕР·Р±С–Р¶РЅРѕСЃС‚С–"
+              label="Розбіжності"
               value={stats?.recentReceiptDiscrepancies ?? 0}
             />
           </div>
         </div>
         <div className="erp-panel p-3">
           <SectionTitle
-            title="РЁРІРёРґРєС– РґС–С—"
-            description="РћСЃРЅРѕРІРЅС– СЂРѕР±РѕС‡С– СЂРѕР·РґС–Р»Рё СЃРёСЃС‚РµРјРё."
+            title="Швидкі дії"
+            description="Основні робочі розділи системи."
           />
           <div className="mt-3 grid gap-1.5">
             {can(user, 'write', 'imports') ? (
@@ -129,7 +129,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: View) => void
                   onNavigate('imports');
                 }}
               >
-                РќРѕРІРёР№ С–РјРїРѕСЂС‚
+                Новий імпорт
               </button>
             ) : null}
             {can(user, 'read', 'responsiblePersons') ? (
@@ -147,7 +147,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (view: View) => void
                 type="button"
                 onClick={() => onNavigate('stock')}
               >
-                РџРµСЂРµРіР»СЏРЅСѓС‚Рё Р·Р°Р»РёС€РєРё
+                Переглянути залишки
               </button>
             ) : null}
           </div>

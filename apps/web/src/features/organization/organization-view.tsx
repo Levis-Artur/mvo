@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { organizationService as apiClient } from './organization.service';
@@ -70,8 +70,8 @@ export function StructureView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="РћСЂРіР°РЅС–Р·Р°С†С–Р№РЅР° СЃС‚СЂСѓРєС‚СѓСЂР°"
-        description="РЈРїСЂР°РІР»С–РЅРЅСЏ, СЃР»СѓР¶Р±Рё С‚Р° РїС–РґСЂРѕР·РґС–Р»Рё."
+        title="Організаційна структура"
+        description="Управління, служби та підрозділи."
         action={
           canWriteStructure ? (
           <button
@@ -79,7 +79,7 @@ export function StructureView() {
             type="button"
             onClick={() => setOrgForm({ type: 'management' })}
           >
-            РЎС‚РІРѕСЂРёС‚Рё СѓРїСЂР°РІР»С–РЅРЅСЏ
+            Створити управління
           </button>
           ) : undefined
         }
@@ -87,12 +87,12 @@ export function StructureView() {
       {error ? <ErrorMessage message={error} /> : null}
       {loading ? <LoadingMessage /> : null}
       {!loading && managements.length === 0 ? (
-        <EmptyState message="РћСЂРіР°РЅС–Р·Р°С†С–Р№РЅСѓ СЃС‚СЂСѓРєС‚СѓСЂСѓ С‰Рµ РЅРµ СЃС‚РІРѕСЂРµРЅРѕ." />
+        <EmptyState message="Організаційну структуру ще не створено." />
       ) : null}
       <div className="grid min-h-[420px] gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className="erp-panel overflow-hidden">
           <div className="border-b border-[var(--border)] bg-[var(--toolbar-background)] px-2 py-1.5 text-xs font-semibold">
-            Р”РµСЂРµРІРѕ СЃС‚СЂСѓРєС‚СѓСЂРё
+            Дерево структури
           </div>
           <div className="compact-scrollbar max-h-[560px] overflow-auto p-2 text-[13px]">
             {managements.map((management) => (
@@ -121,7 +121,7 @@ export function StructureView() {
                         })
                       }
                     >
-                      + СЃР»СѓР¶Р±Р°
+                      + служба
                     </button>
                   ) : null}
                   {management.services?.map((service) => (
@@ -156,7 +156,7 @@ export function StructureView() {
                               })
                             }
                           >
-                            + РїС–РґСЂРѕР·РґС–Р»
+                            + підрозділ
                           </button>
                         ) : null}
                         {service.units?.map((unit) => (
@@ -189,23 +189,23 @@ export function StructureView() {
           </div>
         </div>
         <SimpleTable
-          headers={['РўРёРї', 'РќР°Р·РІР°', 'РљРѕРґ', 'РЎС‚Р°С‚СѓСЃ']}
+          headers={['Тип', 'Назва', 'Код', 'Статус']}
           rows={managements.flatMap((management) => [
             [
-              'РЈРїСЂР°РІР»С–РЅРЅСЏ',
+              'Управління',
               management.name,
               management.code,
               <StatusBadge key={`${management.id}-status`} active={management.isActive} />,
             ],
             ...(management.services ?? []).flatMap((service) => [
               [
-                'РЎР»СѓР¶Р±Р°',
+                'Служба',
                 service.name,
                 service.code,
                 <StatusBadge key={`${service.id}-status`} active={service.isActive} />,
               ],
               ...(service.units ?? []).map((unit) => [
-                'РџС–РґСЂРѕР·РґС–Р»',
+                'Підрозділ',
                 unit.name,
                 unit.code,
                 <StatusBadge key={`${unit.id}-status`} active={unit.isActive} />,
@@ -240,15 +240,15 @@ export function OrgFormModal({
   const title =
     form.type === 'management'
       ? form.data
-        ? 'Р РµРґР°РіСѓРІР°С‚Рё СѓРїСЂР°РІР»С–РЅРЅСЏ'
-        : 'РЎС‚РІРѕСЂРёС‚Рё СѓРїСЂР°РІР»С–РЅРЅСЏ'
+        ? 'Редагувати управління'
+        : 'Створити управління'
       : form.type === 'service'
         ? form.data
-          ? 'Р РµРґР°РіСѓРІР°С‚Рё СЃР»СѓР¶Р±Сѓ'
-          : 'РЎС‚РІРѕСЂРёС‚Рё СЃР»СѓР¶Р±Сѓ'
+          ? 'Редагувати службу'
+          : 'Створити службу'
         : form.data
-          ? 'Р РµРґР°РіСѓРІР°С‚Рё РїС–РґСЂРѕР·РґС–Р»'
-          : 'РЎС‚РІРѕСЂРёС‚Рё РїС–РґСЂРѕР·РґС–Р»';
+          ? 'Редагувати підрозділ'
+          : 'Створити підрозділ';
   const [name, setName] = useState(form.data?.name ?? '');
   const [shortName, setShortName] = useState(
     form.type === 'management' ? (form.data?.shortName ?? '') : '',
@@ -313,7 +313,7 @@ export function OrgFormModal({
     <Modal title={title} onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
-        <Field label="РќР°Р·РІР°">
+        <Field label="Назва">
           <input
             required
             className="input"
@@ -322,7 +322,7 @@ export function OrgFormModal({
           />
         </Field>
         {form.type === 'management' ? (
-          <Field label="РљРѕСЂРѕС‚РєР° РЅР°Р·РІР°">
+          <Field label="Коротка назва">
             <input
               className="input"
               value={shortName}
@@ -330,7 +330,7 @@ export function OrgFormModal({
             />
           </Field>
         ) : null}
-        <Field label="РљРѕРґ">
+        <Field label="Код">
           <input
             required
             className="input"
@@ -344,7 +344,7 @@ export function OrgFormModal({
             type="checkbox"
             onChange={(event) => setActive(event.target.checked)}
           />
-          РђРєС‚РёРІРЅРёР№ Р·Р°РїРёСЃ
+          Активний запис
         </label>
         <FormActions saving={saving} onClose={onClose} />
       </form>

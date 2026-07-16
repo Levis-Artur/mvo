@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
@@ -75,8 +75,8 @@ export function StockView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="Р—Р°Р»РёС€РєРё"
-        description="РџРѕС‚РѕС‡РЅС– Р·Р°Р»РёС€РєРё РјР°Р№РЅР° Р·Р° РњР’Рћ."
+        title="Залишки"
+        description="Поточні залишки майна за МВО."
         action={
           canWriteStock ? (
           <button
@@ -84,7 +84,7 @@ export function StockView() {
             type="button"
             onClick={() => setManualOpen(true)}
           >
-            Р”РѕРґР°С‚Рё РЅР°РґС…РѕРґР¶РµРЅРЅСЏ РІСЂСѓС‡РЅСѓ
+            Додати надходження вручну
           </button>
           ) : undefined
         }
@@ -93,7 +93,7 @@ export function StockView() {
         <div className="grid gap-2 md:grid-cols-3">
           <input
             className="input"
-            placeholder="РџРѕС€СѓРє"
+            placeholder="Пошук"
             value={filters.search}
             onChange={(event) =>
               setFilters((current) => ({
@@ -108,7 +108,7 @@ export function StockView() {
               setFilters((current) => ({ ...current, responsiblePersonId }))
             }
           >
-            <option value="">РЈСЃС– РњР’Рћ</option>
+            <option value="">Усі МВО</option>
             {persons.map((person) => (
               <option key={person.id} value={person.id}>
                 {fullName(person)}
@@ -126,20 +126,20 @@ export function StockView() {
                 }))
               }
             />
-            Р›РёС€Рµ РїРѕР·РёС‚РёРІРЅС– Р·Р°Р»РёС€РєРё
+            Лише позитивні залишки
           </label>
         </div>
       </div>
       {error ? <ErrorMessage message={error} /> : null}
       <SimpleTable
-        headers={['РњР’Рћ', 'РљРѕРґ', 'РќР°Р№РјРµРЅСѓРІР°РЅРЅСЏ', 'РћРґ.', 'Р—Р°Р»РёС€РѕРє', 'Р”С–С—']}
+        headers={['МВО', 'Код', 'Найменування', 'Од.', 'Залишок', 'Дії']}
         rows={balances.map((balance) => [
           balance.responsiblePerson.fullName,
           balance.inventoryItem.externalCode,
           balance.inventoryItem.name,
           balance.inventoryItem.unitOfMeasure ?? '-',
           balance.quantity,
-          'РџРµСЂРµРіР»СЏРЅСѓС‚Рё С–СЃС‚РѕСЂС–СЋ',
+          'Переглянути історію',
         ])}
       />
       <PaginationControls
@@ -204,10 +204,10 @@ export function ManualReceiptForm({
   }
 
   return (
-    <Modal title="Р”РѕРґР°С‚Рё РЅР°РґС…РѕРґР¶РµРЅРЅСЏ РІСЂСѓС‡РЅСѓ" onClose={onClose}>
+    <Modal title="Додати надходження вручну" onClose={onClose}>
       <form className="grid gap-3" onSubmit={submit}>
         {error ? <ErrorMessage message={error} /> : null}
-        <Field label="РњР’Рћ">
+        <Field label="МВО">
           <Select
             required
             value={form.responsiblePersonId}
@@ -215,7 +215,7 @@ export function ManualReceiptForm({
               setForm((current) => ({ ...current, responsiblePersonId }))
             }
           >
-            <option value="">РћР±РµСЂС–С‚СЊ РњР’Рћ</option>
+            <option value="">Оберіть МВО</option>
             {persons.map((person) => (
               <option key={person.id} value={person.id}>
                 {fullName(person)}
@@ -223,7 +223,7 @@ export function ManualReceiptForm({
             ))}
           </Select>
         </Field>
-        <Field label="РќРѕРјРµРЅРєР»Р°С‚СѓСЂР°">
+        <Field label="Номенклатура">
           <Select
             required
             value={form.inventoryItemId}
@@ -231,16 +231,16 @@ export function ManualReceiptForm({
               setForm((current) => ({ ...current, inventoryItemId }))
             }
           >
-            <option value="">РћР±РµСЂС–С‚СЊ РїРѕР·РёС†С–СЋ</option>
+            <option value="">Оберіть позицію</option>
             {items.map((item) => (
               <option key={item.id} value={item.id}>
-                {item.externalCode} вЂ” {item.name}
+                {item.externalCode} — {item.name}
               </option>
             ))}
           </Select>
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="РљС–Р»СЊРєС–СЃС‚СЊ">
+          <Field label="Кількість">
             <input
               required
               className="input"
@@ -253,7 +253,7 @@ export function ManualReceiptForm({
               }
             />
           </Field>
-          <Field label="Р”Р°С‚Р°">
+          <Field label="Дата">
             <input
               required
               type="date"
@@ -267,7 +267,7 @@ export function ManualReceiptForm({
               }
             />
           </Field>
-          <Field label="Р”РѕРєСѓРјРµРЅС‚">
+          <Field label="Документ">
             <input
               className="input"
               value={form.sourceDocument}
@@ -279,7 +279,7 @@ export function ManualReceiptForm({
               }
             />
           </Field>
-          <Field label="РљРѕРјРµРЅС‚Р°СЂ">
+          <Field label="Коментар">
             <input
               className="input"
               value={form.comment}

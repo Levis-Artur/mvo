@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
@@ -50,20 +50,20 @@ export function TransactionsView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="Р–СѓСЂРЅР°Р» РѕРїРµСЂР°С†С–Р№"
-        description="РћРїРµСЂР°С†С–С— С–Р· Р·Р°Р»РёС€РєР°РјРё РґРѕСЃС‚СѓРїРЅС– Р»РёС€Рµ РґР»СЏ РїРµСЂРµРіР»СЏРґСѓ."
+        title="Журнал операцій"
+        description="Операції із залишками доступні лише для перегляду."
       />
       {error ? <ErrorMessage message={error} /> : null}
       <SimpleTable
         headers={[
-          'Р”Р°С‚Р°',
-          'РўРёРї',
-          'РњР’Рћ',
-          'РџРѕР·РёС†С–СЏ',
-          'РљС–Р»СЊРєС–СЃС‚СЊ',
-          'Р‘СѓР»Рѕ',
-          'РЎС‚Р°Р»Рѕ',
-          'Р”Р¶РµСЂРµР»Рѕ',
+          'Дата',
+          'Тип',
+          'МВО',
+          'Позиція',
+          'Кількість',
+          'Було',
+          'Стало',
+          'Джерело',
         ]}
         rows={transactions.map((item) => [
           new Date(item.occurredAt).toLocaleDateString('uk-UA'),

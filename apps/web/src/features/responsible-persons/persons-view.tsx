@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
@@ -105,8 +105,8 @@ export function PersonsView() {
   return (
     <section className="grid gap-3">
       <PageHeader
-        title="РњР’Рћ"
-        description="Р РµС”СЃС‚СЂ РјР°С‚РµСЂС–Р°Р»СЊРЅРѕ РІС–РґРїРѕРІС–РґР°Р»СЊРЅРёС… РѕСЃС–Р±."
+        title="МВО"
+        description="Реєстр матеріально відповідальних осіб."
         action={
           canWritePersons ? (
           <button
@@ -117,7 +117,7 @@ export function PersonsView() {
               setFormOpen(true);
             }}
           >
-            Р”РѕРґР°С‚Рё РњР’Рћ
+            Додати МВО
           </button>
           ) : undefined
         }
@@ -127,7 +127,7 @@ export function PersonsView() {
         <div className="grid gap-2 md:grid-cols-4">
           <input
             className="input"
-            placeholder="РџРѕС€СѓРє"
+            placeholder="Пошук"
             value={filters.search ?? ''}
             onChange={(event) =>
               setFilters((current) => ({
@@ -149,7 +149,7 @@ export function PersonsView() {
               }))
             }
           >
-            <option value="">РЈСЃС– СѓРїСЂР°РІР»С–РЅРЅСЏ</option>
+            <option value="">Усі управління</option>
             {managements.map((management) => (
               <option key={management.id} value={management.id}>
                 {management.name}
@@ -167,7 +167,7 @@ export function PersonsView() {
               }))
             }
           >
-            <option value="">РЈСЃС– СЃР»СѓР¶Р±Рё</option>
+            <option value="">Усі служби</option>
             {services.map((service) => (
               <option key={service.id} value={service.id}>
                 {service.name}
@@ -186,9 +186,9 @@ export function PersonsView() {
               }))
             }
           >
-            <option value="">РЈСЃС– СЃС‚Р°С‚СѓСЃРё</option>
-            <option value="true">РђРєС‚РёРІРЅС–</option>
-            <option value="false">РќРµР°РєС‚РёРІРЅС–</option>
+            <option value="">Усі статуси</option>
+            <option value="true">Активні</option>
+            <option value="false">Неактивні</option>
           </Select>
         </div>
       </div>

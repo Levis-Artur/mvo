@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { EmptyState } from './feedback';
 
 export function Stat({ label, value }: { label: string; value: number }) {
@@ -24,7 +24,7 @@ export function SimpleTable({
   onRowClick?: (index: number) => void;
 }) {
   if (rows.length === 0) {
-    return <EmptyState message="Р”Р°РЅС– РІС–РґСЃСѓС‚РЅС–." />;
+    return <EmptyState message="Дані відсутні." />;
   }
 
   return (
@@ -59,7 +59,7 @@ export function SimpleTable({
         </table>
       </div>
       <div className="border-t border-[var(--border)] bg-[var(--toolbar-background)] px-2 py-1 text-xs text-[var(--text-secondary)]">
-        Р—Р°РїРёСЃС–РІ Сѓ С‚Р°Р±Р»РёС†С–: {rows.length}
+        Записів у таблиці: {rows.length}
       </div>
     </div>
   );
@@ -82,7 +82,7 @@ export function PaginationControls({
   return (
     <div className="erp-panel flex flex-col gap-2 bg-[var(--toolbar-background)] px-2 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between">
       <span className="text-[var(--text-secondary)]">
-        Р—Р°РїРёСЃС–РІ: {total}. РЎС‚РѕСЂС–РЅРєР° {page} Р· {totalPages || 1}
+        Записів: {total}. Сторінка {page} з {totalPages || 1}
       </span>
       <div className="flex gap-2">
         <button
@@ -91,7 +91,7 @@ export function PaginationControls({
           type="button"
           onClick={() => onPage(page - 1)}
         >
-          РќР°Р·Р°Рґ
+          Назад
         </button>
         <button
           className="btn btn-outline !w-auto"
@@ -99,7 +99,7 @@ export function PaginationControls({
           type="button"
           onClick={() => onPage(page + 1)}
         >
-          Р”Р°Р»С–
+          Далі
         </button>
       </div>
     </div>

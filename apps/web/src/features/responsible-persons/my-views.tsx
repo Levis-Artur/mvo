@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 
 
@@ -32,7 +32,7 @@ export function MyCardView() {
 
       setLoading(false);
 
-      setError('Р”Рѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ РїСЂРёРІвЂ™СЏР·Р°РЅРѕ РєР°СЂС‚РєСѓ РњР’Рћ.');
+      setError('До користувача не прив’язано картку МВО.');
 
       return;
 
@@ -62,9 +62,9 @@ export function MyCardView() {
 
       <PageHeader
 
-        title="РњРѕСЏ РєР°СЂС‚РєР°"
+        title="Моя картка"
 
-        description="РџРµСЂСЃРѕРЅР°Р»СЊРЅР° РєР°СЂС‚РєР° РјР°С‚РµСЂС–Р°Р»СЊРЅРѕ РІС–РґРїРѕРІС–РґР°Р»СЊРЅРѕС— РѕСЃРѕР±Рё."
+        description="Персональна картка матеріально відповідальної особи."
 
       />
 
@@ -78,27 +78,27 @@ export function MyCardView() {
 
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 
-            <InfoRow label="РџР†Рџ" value={fullName(person)} />
+            <InfoRow label="ПІП" value={fullName(person)} />
 
-            <InfoRow label="РўР°Р±РµР»СЊРЅРёР№ РЅРѕРјРµСЂ" value={person.personnelNumber} />
+            <InfoRow label="Табельний номер" value={person.personnelNumber} />
 
-            <InfoRow label="РџРѕСЃР°РґР°" value={person.position ?? '-'} />
+            <InfoRow label="Посада" value={person.position ?? '-'} />
 
-            <InfoRow label="РЈРїСЂР°РІР»С–РЅРЅСЏ" value={person.management.name} />
+            <InfoRow label="Управління" value={person.management.name} />
 
-            <InfoRow label="РЎР»СѓР¶Р±Р°" value={person.service.name} />
+            <InfoRow label="Служба" value={person.service.name} />
 
-            <InfoRow label="РџС–РґСЂРѕР·РґС–Р»" value={person.unit?.name ?? '-'} />
+            <InfoRow label="Підрозділ" value={person.unit?.name ?? '-'} />
 
-            <InfoRow label="РўРµР»РµС„РѕРЅ" value={person.phone ?? '-'} />
+            <InfoRow label="Телефон" value={person.phone ?? '-'} />
 
             <InfoRow label="Email" value={person.email ?? '-'} />
 
             <InfoRow
 
-              label="РЎС‚Р°С‚СѓСЃ"
+              label="Статус"
 
-              value={person.isActive ? 'РђРєС‚РёРІРЅРёР№' : 'РќРµР°РєС‚РёРІРЅРёР№'}
+              value={person.isActive ? 'Активний' : 'Неактивний'}
 
             />
 
@@ -128,9 +128,9 @@ export function MyStockView() {
 
       <PlaceholderView
 
-        title="РњРѕС” РјР°Р№РЅРѕ"
+        title="Моє майно"
 
-        description="Р”Рѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ РїСЂРёРІвЂ™СЏР·Р°РЅРѕ РєР°СЂС‚РєСѓ РњР’Рћ."
+        description="До користувача не прив’язано картку МВО."
 
       />
 
@@ -146,9 +146,9 @@ export function MyStockView() {
 
       <PageHeader
 
-        title="РњРѕС” РјР°Р№РЅРѕ"
+        title="Моє майно"
 
-        description="Р’Р»Р°СЃРЅС– Р·Р°Р»РёС€РєРё РјР°Р№РЅР° Р·Р° РїСЂРёРІвЂ™СЏР·Р°РЅРѕСЋ РєР°СЂС‚РєРѕСЋ РњР’Рћ."
+        description="Власні залишки майна за прив’язаною карткою МВО."
 
       />
 
@@ -174,9 +174,9 @@ export function MyTransactionsView() {
 
       <PlaceholderView
 
-        title="РњРѕС— РѕРїРµСЂР°С†С–С—"
+        title="Мої операції"
 
-        description="Р”Рѕ РєРѕСЂРёСЃС‚СѓРІР°С‡Р° РЅРµ РїСЂРёРІвЂ™СЏР·Р°РЅРѕ РєР°СЂС‚РєСѓ РњР’Рћ."
+        description="До користувача не прив’язано картку МВО."
 
       />
 
@@ -192,9 +192,9 @@ export function MyTransactionsView() {
 
       <PageHeader
 
-        title="РњРѕС— РѕРїРµСЂР°С†С–С—"
+        title="Мої операції"
 
-        description="РћРїРµСЂР°С†С–С—, Сѓ СЏРєРёС… РїРѕС‚РѕС‡РЅР° РњР’Рћ С” СЃС‚РѕСЂРѕРЅРѕСЋ."
+        description="Операції, у яких поточна МВО є стороною."
 
       />
 
@@ -214,9 +214,9 @@ export function MyTransfersView() {
 
     <PlaceholderView
 
-      title="РџРµСЂРµРґР°С‡С–"
+      title="Передачі"
 
-      description="РћРєСЂРµРјРёР№ endpoint РґР»СЏ РІР»Р°СЃРЅРёС… РїРµСЂРµРґР°С‡ С‰Рµ РЅРµ СЂРµР°Р»С–Р·РѕРІР°РЅРёР№ Сѓ backend."
+      description="Окремий endpoint для власних передач ще не реалізований у backend."
 
     />
 
