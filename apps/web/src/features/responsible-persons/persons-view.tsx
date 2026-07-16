@@ -11,6 +11,7 @@ import {
   PageHeader,
   PaginationControls,
   Select,
+  Toast,
   getErrorMessage,
 } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
@@ -19,6 +20,8 @@ import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-eve
 import { PersonsTable } from './persons-table';
 import { CreateMvoAccountModal } from './create-mvo-account-modal';
 import { PersonForm } from './person-form';
+import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 
 export function PersonsView() {
   const { user } = useAuth();
@@ -47,6 +50,9 @@ export function PersonsView() {
     null,
   );
   const [isFormOpen, setFormOpen] = useState(false);
+  const [deletingPerson, setDeletingPerson] = useState<ResponsiblePerson | null>(null);
+  const [toast, setToast] = useState('');
+  const canDelete = canShowDestructiveActions(user?.role);
 
   const loadFilters = useCallback(async () => {
     const [nextManagements, nextServices] = await Promise.all([
@@ -197,6 +203,7 @@ export function PersonsView() {
       {loading ? <LoadingMessage /> : null}
       {!loading ? (
         <PersonsTable
+          canDelete={canDelete}
           persons={persons}
           canEdit={canWritePersons}
           canCreateAccount={canCreateMvoUser}
@@ -205,6 +212,14 @@ export function PersonsView() {
             setFormOpen(true);
           }}
           onCreateAccount={setAccountPerson}
+          onDelete={setDeletingPerson}
+          onDeactivate={(person) => {
+            void apiClient
+              .updateResponsiblePerson(person.id, { isActive: false })
+              .then(loadPersons)
+              .then(() => setToast('МВО деактивовано.'))
+              .catch((reason: unknown) => setError(getErrorMessage(reason)));
+          }}
         />
       ) : null}
       <PaginationControls
@@ -231,6 +246,18 @@ export function PersonsView() {
           onClose={() => setAccountPerson(null)}
         />
       ) : null}
+      {deletingPerson ? (
+        <DestructiveActionModal
+          entityType="responsible-person"
+          entityId={deletingPerson.id}
+          onClose={() => setDeletingPerson(null)}
+          onDeleted={async () => {
+            await loadPersons();
+            setToast('МВО видалено.');
+          }}
+        />
+      ) : null}
+      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
     </section>
   );
 }

@@ -116,7 +116,30 @@ export type ImportStatus =
   | 'COMPLETED'
   | 'PARTIALLY_COMPLETED'
   | 'FAILED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'ROLLED_BACK';
+
+export type AdminEntityType =
+  | 'import'
+  | 'responsible-person'
+  | 'management'
+  | 'service'
+  | 'unit'
+  | 'user'
+  | 'inventory-item';
+
+export type DeletionPreview = {
+  entityType: AdminEntityType;
+  entityId: string;
+  displayName: string;
+  canDelete: boolean;
+  blockers: string[];
+  dependencies: {
+    type: string;
+    count: number;
+    action: 'BLOCK' | 'DELETE' | 'DETACH' | 'RETAIN';
+  }[];
+};
 export type ImportRowStatus =
   'VALID' | 'WARNING' | 'ERROR' | 'SKIPPED' | 'IMPORTED';
 export type StockTransactionType =

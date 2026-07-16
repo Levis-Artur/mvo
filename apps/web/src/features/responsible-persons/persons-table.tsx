@@ -13,12 +13,18 @@ export function PersonsTable({
   canCreateAccount,
   onEdit,
   onCreateAccount,
+  canDelete,
+  onDelete,
+  onDeactivate,
 }: {
   persons: ResponsiblePerson[];
   canEdit: boolean;
   canCreateAccount: boolean;
   onEdit: (person: ResponsiblePerson) => void;
   onCreateAccount: (person: ResponsiblePerson) => void;
+  canDelete: boolean;
+  onDelete: (person: ResponsiblePerson) => void;
+  onDeactivate: (person: ResponsiblePerson) => void;
 }) {
   if (persons.length === 0) {
     return <EmptyState message="МВО не знайдено." />;
@@ -76,6 +82,21 @@ export function PersonsTable({
                         Створити обліковий запис
                       </button>
                     ) : null}
+                    {canEdit && person.isActive ? (
+                      <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onDeactivate(person)}>
+                        Деактивувати
+                      </button>
+                    ) : null}
+                    {canEdit ? (
+                      <>
+                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити управління</button>
+                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити службу</button>
+                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити підрозділ</button>
+                      </>
+                    ) : null}
+                    {canDelete ? (
+                      <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => onDelete(person)}>Видалити</button>
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -121,6 +142,12 @@ export function PersonsTable({
                 >
                   Створити обліковий запис
                 </button>
+              ) : null}
+              {canEdit && person.isActive ? (
+                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onDeactivate(person)}>Деактивувати</button>
+              ) : null}
+              {canDelete ? (
+                <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => onDelete(person)}>Видалити</button>
               ) : null}
             </div>
           </div>

@@ -10,12 +10,16 @@ import {
   LoadingMessage,
   PageHeader,
   TemporaryPasswordModal,
+  Toast,
   getErrorMessage,
 } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
 
 import { UsersTable } from './users-table';
 import { UserFormModal } from './user-form-modal';
+import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
+import { ResetTestDataModal } from '@/features/admin/reset-test-data-modal';
 
 export function UsersView() {
   const { user } = useAuth();
@@ -29,6 +33,10 @@ export function UsersView() {
   const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
   const [isFormOpen, setFormOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [deletingUser, setDeletingUser] = useState<UserSummary | null>(null);
+  const [toast, setToast] = useState('');
+  const [resetOpen, setResetOpen] = useState(false);
+  const canDelete = canShowDestructiveActions(user?.role);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -94,6 +102,7 @@ export function UsersView() {
         description="Керування доступом до системи."
         action={
           canWriteUsers ? (
+            <div className="flex flex-wrap gap-2">
             <button
               className="btn btn-primary"
               type="button"
@@ -104,6 +113,12 @@ export function UsersView() {
             >
               Створити користувача
             </button>
+            {canDelete ? (
+              <button className="btn btn-danger" type="button" onClick={() => setResetOpen(true)}>
+                Очистити тестові дані
+              </button>
+            ) : null}
+            </div>
           ) : undefined
         }
       />
@@ -112,6 +127,7 @@ export function UsersView() {
       {loading ? <LoadingMessage /> : null}
       {!loading ? (
         <UsersTable
+          canDelete={canDelete}
           canResetPassword={canResetPasswords}
           canRevokeSessions={canRevokeSessions}
           canWrite={canWriteUsers}
@@ -138,6 +154,7 @@ export function UsersView() {
           onUnblock={(targetUser) =>
             void runUserAction(() => apiClient.unblockUser(targetUser.id))
           }
+          onDelete={setDeletingUser}
         />
       ) : null}
 
@@ -160,6 +177,27 @@ export function UsersView() {
         <TemporaryPasswordModal
           temporaryPassword={temporaryPassword}
           onClose={() => setTemporaryPassword('')}
+        />
+      ) : null}
+      {deletingUser ? (
+        <DestructiveActionModal
+          entityType="user"
+          entityId={deletingUser.id}
+          onClose={() => setDeletingUser(null)}
+          onDeleted={async () => {
+            await loadUsers();
+            setToast('Користувача видалено.');
+          }}
+        />
+      ) : null}
+      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+      {resetOpen ? (
+        <ResetTestDataModal
+          onClose={() => setResetOpen(false)}
+          onReset={async () => {
+            await loadUsers();
+            setToast('Тестові дані очищено.');
+          }}
         />
       ) : null}
     </section>

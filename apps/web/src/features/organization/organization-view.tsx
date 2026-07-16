@@ -15,9 +15,13 @@ import {
   PageHeader,
   SimpleTable,
   StatusBadge,
+  Toast,
   getErrorMessage,
 } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
+import type { AdminEntityType } from '@/lib/types';
 
 
 type OrgForm =
@@ -32,6 +36,9 @@ export function StructureView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [orgForm, setOrgForm] = useState<OrgForm | null>(null);
+  const [deleting, setDeleting] = useState<{ type: AdminEntityType; id: string } | null>(null);
+  const [toast, setToast] = useState('');
+  const canDelete = canShowDestructiveActions(user?.role);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +116,7 @@ export function StructureView() {
                   <span className="truncate">в–ѕ {management.name}</span>
                   <StatusBadge active={management.isActive} />
                 </button>
+                {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'management', id: management.id })}>Видалити управління</button> : null}
                 <div className="ml-4 border-l border-[var(--border)] pl-2">
                   {canWriteStructure ? (
                     <button
@@ -144,6 +152,7 @@ export function StructureView() {
                           {service.code}
                         </span>
                       </button>
+                      {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'service', id: service.id })}>Видалити службу</button> : null}
                       <div className="ml-4 border-l border-[var(--border-light)] pl-2">
                         {canWriteStructure ? (
                           <button
@@ -160,8 +169,8 @@ export function StructureView() {
                           </button>
                         ) : null}
                         {service.units?.map((unit) => (
+                          <div key={unit.id} className="flex items-center gap-1">
                           <button
-                            key={unit.id}
                             className="flex h-8 w-full items-center justify-between gap-2 rounded px-2 text-left hover:bg-[var(--hover-row)]"
                             type="button"
                             onClick={() =>
@@ -179,6 +188,8 @@ export function StructureView() {
                               {unit.code}
                             </span>
                           </button>
+                          {canDelete ? <button className="btn btn-danger !min-h-7 !w-fit" type="button" onClick={() => setDeleting({ type: 'unit', id: unit.id })}>Видалити</button> : null}
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -224,6 +235,18 @@ export function StructureView() {
           }}
         />
       ) : null}
+      {deleting ? (
+        <DestructiveActionModal
+          entityType={deleting.type}
+          entityId={deleting.id}
+          onClose={() => setDeleting(null)}
+          onDeleted={async () => {
+            await load();
+            setToast('Запис структури видалено.');
+          }}
+        />
+      ) : null}
+      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
     </section>
   );
 }

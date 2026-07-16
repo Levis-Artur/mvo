@@ -18,6 +18,7 @@ import { ImportParserService, ParsedImportRow } from './import-parser.service';
 import { ListImportRowsQueryDto } from './dto/list-import-rows-query.dto';
 import { ListImportsQueryDto } from './dto/list-imports-query.dto';
 import { UpdateImportMappingsDto } from './dto/update-import-mappings.dto';
+import { normalizeImportFilename } from './import-filename.util';
 
 const importInclude = {
   rows: false,
@@ -40,7 +41,7 @@ export class ImportsService {
       throw new BadRequestException('Файл не передано');
     }
 
-    const originalFilename = this.sanitizeFilename(input.file.originalname);
+    const originalFilename = normalizeImportFilename(input.file.originalname);
     if (!/\.(csv|tsv)$/i.test(originalFilename)) {
       throw new BadRequestException('Підтримуються лише .csv або .tsv файли');
     }
@@ -620,10 +621,6 @@ export class ImportsService {
         'Завершений або скасований імпорт не можна змінювати',
       );
     }
-  }
-
-  private sanitizeFilename(filename: string): string {
-    return filename.replace(/[\\/]/g, '_').replace(/\.\./g, '_').slice(0, 255);
   }
 
   private async runSerializable<T>(operation: () => Promise<T>): Promise<T> {

@@ -22,6 +22,8 @@ export function UsersTable({
   onRevokeSessions,
   onDeactivate,
   onActivate,
+  canDelete,
+  onDelete,
 }: {
   users: UserSummary[];
   canWrite: boolean;
@@ -34,6 +36,8 @@ export function UsersTable({
   onRevokeSessions: (user: UserSummary) => void;
   onDeactivate: (user: UserSummary) => void;
   onActivate: (user: UserSummary) => void;
+  canDelete: boolean;
+  onDelete: (user: UserSummary) => void;
 }) {
   if (users.length === 0) {
     return <EmptyState message="Користувачів не знайдено." />;
@@ -139,6 +143,15 @@ export function UsersTable({
                         onClick={() => onActivate(item)}
                       >
                         Activate
+                      </button>
+                    ) : null}
+                    {canDelete ? (
+                      <button
+                        className="btn btn-danger !min-h-0 !w-fit !p-0"
+                        type="button"
+                        onClick={() => onDelete(item)}
+                      >
+                        Видалити
                       </button>
                     ) : null}
                   </div>

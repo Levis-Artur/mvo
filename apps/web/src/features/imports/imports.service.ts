@@ -10,4 +10,5 @@ export const importsService = {
   commitImport: apiClient.commitImport,
   cancelImport: apiClient.cancelImport,
   uploadImport: apiClient.uploadImport,
+  rollbackImport: apiClient.rollbackImport,
 };

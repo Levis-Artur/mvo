@@ -5,8 +5,10 @@ import { inventoryService as apiClient } from './inventory.service';
 import { useAuth } from '@/app/ui/auth-context';
 import { can } from '@/lib/authz';
 import type { InventoryItem } from '@/lib/types';
-import { ErrorMessage, Field, FormActions, LoadingMessage, Modal, PageHeader, PaginationControls, Select, SimpleTable, getErrorMessage } from '@/components/common';
+import { ErrorMessage, Field, FormActions, LoadingMessage, Modal, PageHeader, PaginationControls, Select, SimpleTable, Toast, getErrorMessage } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 
 export function NomenclatureView() {
   const { user } = useAuth();
@@ -26,6 +28,10 @@ export function NomenclatureView() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+  const [toast, setToast] = useState('');
+  const canDelete = canShowDestructiveActions(user?.role);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +143,7 @@ export function NomenclatureView() {
             'Перевірка',
             'МВО',
             'Залишок',
+            'Дії',
           ]}
           rows={items.map((item) => [
             item.externalCode,
@@ -148,6 +155,25 @@ export function NomenclatureView() {
               : 'Перевірено',
             String(item.responsiblePersonsCount ?? 0),
             item.totalQuantity ?? '0',
+            <div key={`${item.id}-actions`} className="flex flex-wrap gap-2">
+              {canWriteNomenclature ? (
+                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => {
+                  setEditingItem(item);
+                  setFormOpen(true);
+                }}>Редагувати</button>
+              ) : null}
+              {canWriteNomenclature && item.isActive ? (
+                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => {
+                  void apiClient.updateInventoryItem(item.id, { isActive: false })
+                    .then(load)
+                    .then(() => setToast('Номенклатуру архівовано.'))
+                    .catch((reason: unknown) => setError(getErrorMessage(reason)));
+                }}>Архівувати</button>
+              ) : null}
+              {canDelete ? (
+                <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => setDeletingItem(item)}>Видалити</button>
+              ) : null}
+            </div>,
           ])}
         />
       ) : null}
@@ -159,6 +185,7 @@ export function NomenclatureView() {
       />
       {formOpen ? (
         <InventoryItemForm
+          item={editingItem}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false);
@@ -166,25 +193,34 @@ export function NomenclatureView() {
           }}
         />
       ) : null}
+      {deletingItem ? (
+        <DestructiveActionModal entityType="inventory-item" entityId={deletingItem.id} onClose={() => setDeletingItem(null)} onDeleted={async () => {
+          await load();
+          setToast('Номенклатуру видалено.');
+        }} />
+      ) : null}
+      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
     </section>
   );
 }
 
 export function InventoryItemForm({
+  item,
   onClose,
   onSaved,
 }: {
+  item?: InventoryItem | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    externalCode: '',
-    name: '',
-    unitOfMeasure: '',
-    category: '',
-    description: '',
-    reviewStatus: 'VERIFIED' as 'VERIFIED' | 'NEEDS_REVIEW',
-    isActive: true,
+    externalCode: item?.externalCode ?? '',
+    name: item?.name ?? '',
+    unitOfMeasure: item?.unitOfMeasure ?? '',
+    category: item?.category ?? '',
+    description: item?.description ?? '',
+    reviewStatus: item?.reviewStatus ?? ('VERIFIED' as 'VERIFIED' | 'NEEDS_REVIEW'),
+    isActive: item?.isActive ?? true,
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -194,12 +230,17 @@ export function InventoryItemForm({
     setSaving(true);
     setError('');
     try {
-      await apiClient.createInventoryItem({
+      const payload = {
         ...form,
         unitOfMeasure: form.unitOfMeasure || null,
         category: form.category || null,
         description: form.description || null,
-      });
+      };
+      if (item) {
+        await apiClient.updateInventoryItem(item.id, payload);
+      } else {
+        await apiClient.createInventoryItem(payload);
+      }
       onSaved();
     } catch (reason) {
       setError(getErrorMessage(reason));

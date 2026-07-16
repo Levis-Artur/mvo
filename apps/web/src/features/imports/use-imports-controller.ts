@@ -13,6 +13,7 @@ import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-eve
 export function useImportsController(initialImportId?: string) {
   const { user } = useAuth();
   const canWriteImports = can(user, 'write', 'imports');
+  const isOwner = user?.role === 'OWNER';
   const router = useRouter();
   const [imports, setImports] = useState<ImportBatch[]>([]);
   const [selected, setSelected] = useState<ImportBatch | null>(null);
@@ -184,6 +185,7 @@ export function useImportsController(initialImportId?: string) {
 
   return {
     canWriteImports,
+    isOwner,
     router,
     imports,
     selected,

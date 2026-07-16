@@ -19,6 +19,7 @@ enum ImportStatus {
   PARTIALLY_COMPLETED
   FAILED
   CANCELLED
+  ROLLED_BACK
 }
 
 enum ImportRowStatus {
@@ -64,6 +65,7 @@ enum SecurityEventType {
   ROLE_CHANGED
   SESSIONS_REVOKED
   ACCESS_DENIED
+  OWNER_DESTRUCTIVE_ACTION
 }
 
 model Management {

@@ -12,13 +12,19 @@ import {
   StatusPill,
   fullName,
   importTypeLabel,
+  Toast,
 } from '@/components/common';
 import { ImportUploadModal } from './import-upload-modal';
 import { useImportsController } from './use-imports-controller';
+import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import { importsService } from './imports.service';
+import { useState } from 'react';
+import { destructiveErrorMessage } from '@/features/admin/destructive-actions';
 
 export function ImportsView({ initialImportId }: { initialImportId?: string }) {
   const {
     canWriteImports,
+    isOwner,
     router,
     imports,
     selected,
@@ -45,6 +51,8 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
     canCommit,
     refreshRowsWithFilters,
   } = useImportsController(initialImportId);
+  const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
 
   return (
     <section className="grid gap-3">
@@ -328,6 +336,38 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
               </button>
             </div>
           ) : null}
+          {isOwner ? (
+            <div className="flex flex-wrap gap-2">
+              {selected.status === 'COMPLETED' ? (
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  onClick={() => {
+                    void importsService
+                      .rollbackImport(selected.id)
+                      .then(async () => {
+                        await load();
+                        await loadImport(selected.id);
+                        setToast('Імпорт відкотено.');
+                      })
+                      .catch((reason: unknown) =>
+                        setToast(destructiveErrorMessage(reason)),
+                      );
+                  }}
+                >
+                  Відкотити імпорт
+                </button>
+              ) : (
+                <button
+                  className="btn btn-danger"
+                  type="button"
+                  onClick={() => setDeletingImportId(selected.id)}
+                >
+                  Видалити імпорт
+                </button>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {uploadOpen && canWriteImports ? (
@@ -388,6 +428,19 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
           </div>
         </Modal>
       ) : null}
+      {deletingImportId ? (
+        <DestructiveActionModal
+          entityType="import"
+          entityId={deletingImportId}
+          onClose={() => setDeletingImportId(null)}
+          onDeleted={async () => {
+            router.push('/imports');
+            await load();
+            setToast('Імпорт видалено.');
+          }}
+        />
+      ) : null}
+      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
     </section>
   );
 }

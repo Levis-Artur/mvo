@@ -138,5 +138,50 @@ describe('ImportsService', () => {
       }),
     ).resolves.toEqual({ id: 'batch' });
     expect(prisma.stockBalance.findUnique).not.toHaveBeenCalled();
+    expect(prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ originalFilename: 'test.csv' }),
+      }),
+    );
+  });
+
+  it('stores and returns the normalized upload filename', async () => {
+    const { service, prisma, parser } = createService();
+    const expectedFilename = 'Залишки майна.csv';
+    const uploadedFilename = Buffer.from(expectedFilename, 'utf8').toString(
+      'latin1',
+    );
+    parser.parse.mockReturnValue({
+      fileHash: 'normalized-name-hash',
+      encoding: 'utf-8',
+      delimiter: ',',
+      totalRows: 0,
+      rows: [],
+    });
+    prisma.importBatch.findUnique.mockResolvedValue(null);
+    prisma.importBatch.create.mockImplementation(({ data }) =>
+      Promise.resolve({ id: 'batch', ...data }),
+    );
+
+    const result = await service.upload({
+      file: {
+        originalname: uploadedFilename,
+        buffer: Buffer.from('content'),
+        size: 7,
+      } as Express.Multer.File,
+      importType: ImportType.INITIAL_BALANCE,
+      maxFileSizeBytes: 1024,
+    });
+
+    expect(prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          originalFilename: expectedFilename,
+        }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ originalFilename: expectedFilename }),
+    );
   });
 });

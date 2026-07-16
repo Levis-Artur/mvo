@@ -5,7 +5,9 @@ import type {
   CreateServiceDto,
   CreateUnitDto,
   AuthUser,
+  AdminEntityType,
   DashboardStats,
+  DeletionPreview,
   ImportBatch,
   ImportRow,
   ImportType,
@@ -175,7 +177,10 @@ async function uploadRequest<T>(path: string, body: FormData): Promise<T> {
   return (await response.json()) as T;
 }
 
-function mutation<TBody>(method: 'POST' | 'PATCH', body: TBody): RequestInit {
+function mutation<TBody>(
+  method: 'POST' | 'PATCH' | 'DELETE',
+  body: TBody,
+): RequestInit {
   return {
     method,
     body: JSON.stringify(body),
@@ -228,6 +233,32 @@ export const apiClient = {
     request<UserSummary>(`/users/${id}/deactivate`, { method: 'POST' }),
   activateUser: (id: string) =>
     request<UserSummary>(`/users/${id}/activate`, { method: 'POST' }),
+
+  deletionPreview: (entityType: AdminEntityType, id: string) =>
+    request<DeletionPreview>(
+      `/admin/deletion-preview/${entityType}/${encodeURIComponent(id)}`,
+    ),
+  deleteAdminEntity: (
+    entityType: AdminEntityType,
+    id: string,
+    force: boolean,
+  ) =>
+    request<{ success: boolean }>(
+      `/admin/${entityType}/${encodeURIComponent(id)}`,
+      mutation('DELETE', {
+        force,
+        confirmation: `DELETE ${entityType}:${id}`,
+      }),
+    ),
+  rollbackImport: (id: string) =>
+    request<ImportBatch>(`/admin/imports/${encodeURIComponent(id)}/rollback`, {
+      method: 'POST',
+    }),
+  resetTestData: () =>
+    request<{ success: boolean }>(
+      '/admin/test-data/reset',
+      mutation('POST', { confirmation: 'DELETE TEST DATA' }),
+    ),
 
   dashboardStats: () => request<DashboardStats>('/dashboard/stats'),
 

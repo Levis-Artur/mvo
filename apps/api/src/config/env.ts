@@ -7,6 +7,7 @@ type Environment = {
   corsOrigin: string;
   databaseUrl: string;
   maxImportFileSizeBytes: number;
+  ownerDestructiveActionsEnabled: boolean;
 };
 
 export function loadEnvironment(): void {
@@ -65,6 +66,9 @@ export function validateEnvironment(): Environment {
     process.env.MAX_IMPORT_FILE_SIZE_BYTES ??
       maxImportFileSizeMegabytes * 1024 * 1024,
   );
+  const ownerDestructiveActionsEnabled =
+    (process.env.OWNER_DESTRUCTIVE_ACTIONS_ENABLED ?? 'false').toLowerCase() ===
+    'true';
 
   if (corsOrigin === '*') {
     throw new Error('CORS_ORIGIN must be a concrete origin, not *');
@@ -84,5 +88,6 @@ export function validateEnvironment(): Environment {
     corsOrigin,
     databaseUrl,
     maxImportFileSizeBytes,
+    ownerDestructiveActionsEnabled,
   };
 }
