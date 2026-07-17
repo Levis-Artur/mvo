@@ -7,7 +7,9 @@ export function requiredConfirmation(preview: DeletionPreview, force: boolean) {
 export function isConfirmationValid(preview: DeletionPreview, force: boolean, value: string) { return value === requiredConfirmation(preview, force); }
 export function destructiveErrorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 403 && /destructive|режим/i.test(error.message)) return DESTRUCTIVE_MODE_DISABLED_MESSAGE;
-  return error instanceof Error ? error.message : 'Не вдалося виконати операцію.';
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error && /[А-Яа-яІіЇїЄє]/.test(error.message)) return error.message;
+  return 'Не вдалося виконати операцію. Перевірте з’єднання із сервером.';
 }
 export async function executeDestructiveAction(options: {
   preview: DeletionPreview; force: boolean; confirmation: string;

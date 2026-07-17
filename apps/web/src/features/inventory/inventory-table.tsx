@@ -43,14 +43,14 @@ export function InventoryTable({
         const statuses = inventoryItemStatuses(item);
         return [
           <span className="font-mono font-semibold" key="code">{item.externalCode}</span>,
-          <button
-            className="text-left font-semibold text-[var(--color-primary)] hover:underline"
+          <Button
+            variant="link"
             key="name"
             type="button"
             onClick={() => onView(item)}
           >
             {item.name}
-          </button>,
+          </Button>,
           item.unitOfMeasure ?? '—',
           <StatusBadge key="active" tone={item.isActive ? 'success' : 'neutral'}>
             {statuses.active}

@@ -2,8 +2,8 @@
 
 import { Button, DataTable, StatusBadge } from '@/components/ui';
 import { formatDateTime, isUserLocked, responsiblePersonShortName } from '@/components/common';
+import { roleLabels } from '@/lib/authz';
 import type { ResponsiblePerson, UserSummary } from '@/lib/types';
-import { displayRoleLabels } from './user-role-labels';
 
 type UserAction = (user: UserSummary) => void;
 
@@ -28,7 +28,7 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
     const locked = isUserLocked(item);
     return [
       <strong key="username">{item.username}</strong>,
-      displayRoleLabels[item.role],
+      roleLabels[item.role],
       item.responsiblePerson ? responsiblePersonShortName(item.responsiblePerson) : 'Не прив’язано',
       person?.management.name ?? '—',
       <StatusBadge key="active" tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Активний' : 'Неактивний'}</StatusBadge>,

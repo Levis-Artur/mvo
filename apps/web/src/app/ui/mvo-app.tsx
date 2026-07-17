@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getNavigationItems, getViewHref, type AppView } from '@/lib/authz';
+import { getNavigationItems, getViewHref, roleLabels, type AppView } from '@/lib/authz';
 import { useAuth } from './auth-context';
 import { AppShell } from '@/components/layout/app-shell';
 import { PlaceholderView } from '@/components/common';
@@ -17,7 +17,6 @@ import { MyCardView, MyStockView, MyTransactionsView } from '@/features/responsi
 import { PersonsView } from '@/features/responsible-persons/persons-view';
 import { StockDocumentsView } from '@/features/stock-documents/stock-documents-view';
 import { UsersView } from '@/features/users/users-view';
-import { displayRoleLabel } from '@/features/users/user-role-labels';
 
 export type View = AppView;
 
@@ -42,7 +41,7 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
 
   function selectView(nextView: View) { setView(nextView); router.push(getViewHref(user, nextView)); }
 
-  return <AppShell apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} currentView={view} navigationItems={navigationItems} navRef={topNavRef} user={user} userLabel={user ? `${user.username} · ${displayRoleLabel(user.role)}` : ''} onLogout={logout} onSelectView={selectView}>
+  return <AppShell apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} navigationItems={navigationItems} navRef={topNavRef} user={user} userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''} onLogout={logout} onSelectView={selectView}>
     {view === 'home' ? <DashboardView apiCheckedAt={apiCheckedAt} apiState={apiState} onNavigate={selectView} /> : null}
     {view === 'persons' ? <PersonsView /> : null}
     {view === 'structure' ? <StructureView /> : null}
@@ -55,7 +54,7 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
     {view === 'my-stock' ? <MyStockView /> : null}
     {view === 'my-transactions' ? <MyTransactionsView /> : null}
     {view === 'transfers' ? <StockDocumentsView /> : null}
-    {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних endpoint." /> : null}
+    {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних можливостей API." /> : null}
     {view === 'administration' ? <AdministrationView /> : null}
   </AppShell>;
 }

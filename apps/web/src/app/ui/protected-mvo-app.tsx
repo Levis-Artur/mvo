@@ -9,6 +9,7 @@ import {
 } from '@/lib/authz';
 import { useAuth } from './auth-context';
 import { MvoApp } from './mvo-app';
+import { LoadingState } from '@/components/ui';
 
 type ProtectedMvoAppProps = {
   initialView?: AppView;
@@ -54,13 +55,8 @@ export function ProtectedMvoApp(props: ProtectedMvoAppProps) {
 
 export function AuthLoadingState() {
   return (
-    <div className="grid min-h-screen place-items-center bg-[var(--app-background)] px-4 text-[var(--text-primary)]">
-      <div className="app-card w-full max-w-sm p-5 text-center">
-        <p className="text-sm font-semibold">Перевірка сесії</p>
-        <p className="mt-2 text-xs text-[var(--text-secondary)]">
-          Зачекайте, будь ласка.
-        </p>
-      </div>
-    </div>
+    <main className="auth-page">
+      <LoadingState label="Перевірка сесії…" />
+    </main>
   );
 }

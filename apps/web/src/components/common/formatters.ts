@@ -37,8 +37,10 @@ export function normalizePersonForm(form: CreateResponsiblePersonDto): CreateRes
 
 export function getErrorMessage(reason: unknown) {
   if (reason instanceof ApiError) return reason.message;
-  if (reason instanceof Error) return reason.message;
-  return 'Сталася невідома помилка';
+  if (reason instanceof Error && /[А-Яа-яІіЇїЄє]/.test(reason.message)) {
+    return reason.message;
+  }
+  return 'Не вдалося виконати запит. Перевірте з’єднання із сервером.';
 }
 
 export { ApiError };

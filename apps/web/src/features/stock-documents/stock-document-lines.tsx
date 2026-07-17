@@ -56,7 +56,7 @@ export function StockDocumentLines({ balances, lines, disabled, loading, onChang
             <span className="block max-w-56 break-words" key="name">{current?.inventoryItem.name ?? '—'}</span>,
             current?.inventoryItem.unitOfMeasure ?? '—',
             current ? formatQuantity(current.quantity) : '—',
-            <div className="min-w-32" key="quantity"><input aria-invalid={Boolean(line.quantity && lineError)} className="input text-right" max={current?.quantity} min="0" step="any" type="number" value={line.quantity} onChange={(event) => updateLine(index, { quantity: event.target.value })} />{line.quantity && lineError ? <p className="mt-1 text-left text-xs text-[var(--color-danger)]" role="alert">{lineError}</p> : null}</div>,
+            <div className="min-w-32" key="quantity"><input aria-label={`Кількість рядка ${index + 1}`} aria-invalid={Boolean(line.quantity && lineError)} className="input text-right" max={current?.quantity} min="0" step="any" type="number" value={line.quantity} onChange={(event) => updateLine(index, { quantity: event.target.value })} />{line.quantity && lineError ? <p className="mt-1 text-left text-xs text-[var(--color-danger)]" role="alert">{lineError}</p> : null}</div>,
             <input aria-label={`Примітка рядка ${index + 1}`} className="input min-w-40" key="note" value={line.note} onChange={(event) => updateLine(index, { note: event.target.value })} />,
             <Button aria-label={`Видалити рядок ${index + 1}`} key="remove" variant="danger" type="button" onClick={() => onChange(lines.filter((_, currentIndex) => currentIndex !== index))}>Видалити</Button>,
           ];

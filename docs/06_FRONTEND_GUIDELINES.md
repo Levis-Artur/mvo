@@ -1,375 +1,298 @@
 # Frontend Development Guidelines
 
-Version: 1.0
+Version: 2.0
 
----
+## Призначення
 
-# Purpose
+Цей документ визначає UI/UX та архітектурні правила frontend для MVO Inventory Management System. Інтерфейс має бути офіційним, передбачуваним, компактним, доступним із клавіатури та придатним для екранів від 360 px.
 
-Цей документ визначає стандарти розробки Frontend для MVO Inventory Management System.
+Frontend відповідає за відображення даних, локальний UI state і виклики Backend API. Бізнес-рішення, авторизація та остаточна перевірка прав залишаються на backend.
 
-Frontend повинен бути:
+## Стек і структура
 
-- простим;
-- передбачуваним;
-- модульним;
-- легко підтримуваним.
+- Next.js App Router;
+- React;
+- TypeScript;
+- CSS design tokens і Tailwind utility classes;
+- спільний типізований `api-client`.
 
-Будь-яка нова функція повинна відповідати цим правилам.
+Рекомендована структура:
 
----
-
-# Technology Stack
-
-Frontend побудований на:
-
-- Next.js
-- React
-- TypeScript
-
----
-
-# General Principles
-
-Frontend відповідає лише за:
-
-- відображення даних;
-- взаємодію з користувачем;
-- локальний UI State;
-- виклики Backend API.
-
-Frontend не містить бізнес-логіки.
-
-Усі бізнес-рішення приймає Backend.
-
----
-
-# Folder Structure
-
-```
+```text
 src/
-
-app/
-components/
-features/
-hooks/
-lib/
-types/
-styles/
+  app/
+  components/
+    auth/
+    layout/
+    ui/
+  features/
+  lib/
+  styles/
+    tokens.css
+    components.css
+    layout.css
+    responsive.css
 ```
 
----
+Компонент має виконувати одну логічну задачу. Рекомендований розмір — до 300 рядків, максимально допустимий без обґрунтування — приблизно 400 рядків.
 
-# Components
+## Design tokens
 
-Компонент повинен виконувати лише одну задачу.
+Єдиним джерелом базових значень є `src/styles/tokens.css`.
 
-Неприпустимо:
+У tokens визначаються:
 
-- компонент на 1000+ рядків;
-- компонент, що містить бізнес-логіку;
-- компонент, який одночасно працює з API, формою, таблицею та модальним вікном.
+- шрифти та розміри тексту;
+- відступи;
+- радіуси;
+- висота контролів;
+- тіні;
+- основні, фонові та текстові кольори;
+- success, warning, danger та info кольори;
+- focus ring;
+- overlay;
+- контрольні viewport: 360, 768, 1024, 1440 і 1920 px.
 
----
+Заборонено додавати `#hex`, `rgb()`, `hsl()`, `text-red-*`, `bg-white` або інші локальні кольори поза `tokens.css`. Для нового кольору спочатку створюється семантичний token.
 
-# Component Size
+Правильно:
 
-Рекомендований розмір:
-
-до 300 рядків.
-
-Максимально допустимий:
-
-приблизно 400 рядків.
-
-Якщо компонент перевищує цей розмір — його необхідно розділити.
-
----
-
-# Feature Structure
-
-Кожна бізнес-можливість повинна бути ізольованою.
-
-Приклад:
-
-```
-features/
-
-documents/
-
-components/
-
-hooks/
-
-api/
-
-types/
+```tsx
+<p className="text-[var(--color-text-secondary)]">Допоміжний текст</p>
 ```
 
----
+Неправильно:
 
-# Shared Components
+```tsx
+<p className="text-slate-500">Допоміжний текст</p>
+```
 
-Повторювані компоненти повинні використовуватись повторно.
+## Layout
 
-Наприклад:
+Усі захищені робочі сторінки використовують `AppShell`, який містить:
 
-Button
+- `AppHeader`;
+- `MainNavigation`;
+- `PageContainer`;
+- `StatusFooter`.
 
-Modal
+Кожен feature view починається з `PageHeader`. Основні дії сторінки розташовуються у `PageHeader`; окрема дубльована toolbar не створюється.
 
-Dialog
+```tsx
+<section className="grid min-w-0 gap-4">
+  <PageHeader
+    title="Номенклатура"
+    description="Довідник майна."
+    action={<Button onClick={openForm}>Додати</Button>}
+  />
+  {content}
+</section>
+```
 
-Table
+Для контейнерів у grid/flex обов’язково враховувати `min-w-0`. Контент не повинен збільшувати ширину viewport.
 
-Loading
+## Базові компоненти
 
-EmptyState
+Повторюваний UI використовує компоненти з `components/ui`:
 
-Pagination
+- `Button`;
+- `Card`;
+- `DataTable`;
+- `FilterBar`;
+- `FormField`, `Input`, `Select`, `Textarea`, `Checkbox`;
+- `Modal` і `ConfirmationDialog`;
+- `Pagination`;
+- `StatusBadge`;
+- `LoadingState`, `EmptyState`, `ErrorState`;
+- `Toast`.
 
-SearchBar
+Нативні `<button>` поза реалізацією `Button` заборонені. Для кнопки, що виглядає як текстове посилання, використовується `variant="link"`.
 
-FilterPanel
+## Таблиці
 
-Badge
+Feature-компоненти не створюють власні HTML tables. Використовується `DataTable`.
 
-StatusChip
+Обов’язкові правила:
 
----
+- `ariaLabel` описує призначення таблиці;
+- числові колонки мають `numeric: true`;
+- статуси відображаються через `StatusBadge`;
+- остання колонка дій має `actions: true`;
+- loading та empty передаються у `DataTable`;
+- horizontal scroll залишається всередині `.data-table-scroll`;
+- великі набори даних мають `Pagination`;
+- API limit — лише 20, 50 або 100.
 
-# State Management
+```tsx
+<DataTable
+  ariaLabel="Залишки МВО"
+  columns={[
+    { label: 'Номенклатура' },
+    { label: 'Кількість', numeric: true },
+    { label: 'Статус' },
+    { label: 'Дії', actions: true },
+  ]}
+  loading={loading}
+  emptyMessage="Залишків немає."
+  rows={rows}
+/>
+```
 
-Локальний UI State:
+## Фільтри й пагінація
 
-React Hooks.
+Фільтри використовують `FilterBar`. Draft state не повинен автоматично запускати API-запит на кожен render. Запит виконується після «Застосувати», «Очистити» або «Оновити».
 
-Глобальний стан використовується лише тоді, коли він справді потрібний.
+Для завантаження всіх сторінок використовується `fetchAllPages`, який:
 
-Не створювати глобальний state без необхідності.
+- запитує `limit=100`;
+- не допускає нескінченного циклу;
+- об’єднує записи без дублікатів за `id`.
 
----
+Ніколи не передавати API `limit > 100`.
 
-# API
+## Форми
 
-Frontend працює лише через:
+Кожен control повинен мати видимий `label` через `FormField` або точний `aria-label`, якщо поле знаходиться всередині рядка таблиці.
 
-api-client
+Форма повинна:
+
+- використовувати типізований state;
+- позначати required fields;
+- показувати field error біля відповідного поля;
+- показувати загальну API error через `ErrorState`;
+- блокувати повторне submit;
+- показувати loading-текст кнопки;
+- підтримувати disabled і read-only state;
+- використовувати `autoComplete`, де це доречно.
+
+```tsx
+<FormField label="Логін" error={fieldError} required>
+  <Input
+    autoComplete="username"
+    disabled={saving}
+    value={username}
+    onChange={(event) => setUsername(event.target.value)}
+  />
+</FormField>
+```
+
+## Modal і confirmation
+
+Усі діалоги використовують спільний `Modal`.
+
+Він забезпечує:
+
+- `role="dialog"` та `aria-modal`;
+- focus trap;
+- закриття через Escape, якщо операція не критична;
+- повернення focus на opener;
+- scrollable body;
+- фіксований footer;
+- mobile width;
+- destructive style.
 
 Заборонено:
 
-fetch()
+- `alert()`, `confirm()` і `prompt()`;
+- custom backdrop у feature-компоненті;
+- відкривати modal поверх іншого modal.
 
-безпосередньо у компонентах.
+Перед переходом із details до edit/delete поточний modal спочатку закривається. Destructive actions завжди показують server blockers і typed confirmation.
 
----
-
-# Forms
-
-Форми повинні:
-
-- використовувати типізацію;
-- показувати помилки;
-- блокувати повторне відправлення;
-- мати стан завантаження.
-
----
-
-# Tables
-
-Будь-яка велика таблиця повинна підтримувати:
-
-- пагінацію;
-- сортування;
-- пошук;
-- фільтрацію.
-
----
-
-# Loading
-
-Будь-який запит повинен мати Loading State.
-
-Не допускається "заморожений" інтерфейс.
-
----
-
-# Empty State
-
-Якщо даних немає —
-
-користувач повинен отримати зрозуміле повідомлення.
-
-Не допускаються порожні таблиці без пояснення.
-
----
-
-# Error Handling
-
-Frontend показує лише зрозумілі повідомлення.
-
-Внутрішні технічні помилки не повинні відображатися користувачу.
-
----
-
-# Notifications
-
-Для повідомлень використовуються Toast або Alert.
-
-Повідомлення повинні бути:
-
-- короткими;
-- зрозумілими;
-- українською мовою.
-
----
-
-# Routing
-
-Використовується App Router.
-
-Маршрути повинні відповідати структурі системи.
-
-Приклад:
-
-```
-/documents
-
-/documents/:id
-
-/imports
-
-/users
+```tsx
+<Modal
+  destructive
+  closeOnEscape={!saving}
+  title="Підтвердження видалення"
+  footer={actions}
+  onClose={onClose}
+>
+  {error ? <ErrorState message={error} /> : content}
+</Modal>
 ```
 
----
+## Loading, empty, error і success
 
-# Authorization
+Кожен запит повинен мати видимий стан:
 
-Frontend приховує недоступні можливості.
+- `LoadingState` під час запиту;
+- `EmptyState`, якщо набір порожній;
+- `ErrorState` при помилці;
+- `Toast` або success alert після успішної mutation.
 
-Однак остаточна перевірка виконується Backend.
+Не можна показувати користувачу `Failed to fetch`, `Internal Server Error`, stack trace або інші технічні англомовні повідомлення. Стандартизоване повідомлення API українською має пріоритет; network errors перетворюються на безпечний український текст.
 
----
+Promise, який може бути rejected, повинен бути `await` у `try/catch` або мати `.catch()`. `void promise` без гарантованої внутрішньої обробки помилки заборонено.
 
-# Accessibility
+## Responsive
 
-Інтерфейс повинен:
+Контрольні viewport для перевірки: 360, 768, 1024, 1440 і 1920 px.
 
-- підтримувати навігацію клавіатурою;
-- мати коректні label;
-- використовувати semantic HTML.
+- до 899 px layout переходить в одну колонку;
+- navigation має власний horizontal scroll;
+- FilterBar і modal actions стають вертикальними;
+- forms переходять в одну колонку;
+- DataTable прокручується тільки у своєму контейнері;
+- footer приховує другорядні дані;
+- на 360 px зберігаються дії «Профіль» і «Вийти», а другорядний API badge може бути прихований;
+- від 1280 px dashboard використовує три колонки;
+- на широких екранах контент обмежується `--content-max` і центрується.
 
----
+Заборонено визначати layout через `window.innerWidth` у JavaScript. Використовуються CSS media queries.
 
-# Styling
+## Accessibility
 
-Стилі повинні бути однаковими у всьому застосунку.
+Обов’язково:
 
-Не допускається створення окремих стилів для однакових компонентів.
+- semantic HTML;
+- видимий `:focus-visible` із контрастом не нижче 3:1;
+- клавіатурна активація інтерактивних rows через Enter і Space;
+- `aria-current="page"` для активної навігації;
+- `aria-label` для icon-only buttons і таблиць;
+- label для form controls;
+- `aria-invalid` і `role="alert"` для помилок;
+- достатній контраст тексту за WCAG AA;
+- підтримка `prefers-reduced-motion`.
 
----
+Колір не може бути єдиним способом передавання стану: badge завжди містить текст.
 
-# Colors
+## Routing і authorization
 
-Використовується єдина палітра.
+URL і role-based navigation визначаються централізовано. Frontend приховує недоступні дії, але backend залишається остаточним джерелом прав.
 
-Кольори не повинні дублюватися вручну.
+- OWNER бачить повне адміністрування;
+- DPP_ADMIN керує дозволеними довідниками та користувачами МВО;
+- AUDITOR працює read-only;
+- MVO бачить лише власні дані та дозволені документи.
 
-Усі кольори визначаються через тему.
+Не створювати локальні перевірки ролей, якщо вже існують `can()`, navigation model або feature presentation model.
 
----
+## API
 
-# Icons
+Feature-компоненти працюють через service та спільний `api-client`. Прямий `fetch()` у feature-компонентах заборонений, крім централізованої перевірки health у shell.
 
-Для однакових дій використовуються однакові іконки.
+Не змінювати API contracts у межах UI-задачі. Не показувати password hashes, session tokens або внутрішні поля.
 
-Не допускається використання різних іконок для однакової функції.
-
----
-
-# Performance
-
-Не виконувати важкі обчислення у JSX.
-
-Використовувати:
-
-- useMemo
-- useCallback
-
-лише після вимірювання продуктивності.
-
-Передчасна оптимізація не допускається.
-
----
-
-# TypeScript
-
-Заборонено:
-
-```
-any
-```
-
-Використовувати:
-
-- interfaces
-- types
-- enums
-
----
-
-# Testing
-
-Кожен великий компонент повинен мати тести.
+## Testing і Definition of Done
 
 Перевіряються:
 
-- відображення;
-- взаємодія;
-- помилки;
-- loading;
-- empty state.
+- role-based routes і read-only режим;
+- loading, empty, error та success states;
+- modal focus і typed confirmation;
+- keyboard navigation;
+- limit не більше 100;
+- відсутність browser dialogs;
+- відсутність mojibake;
+- responsive/reduced-motion invariants.
 
----
+Перед завершенням:
 
-# Refactoring
+```text
+npm run lint
+npm run build
+npm test --workspace apps/web
+npm test --workspace apps/api
+```
 
-Перед рефакторингом необхідно переконатися:
-
-- поведінка не змінюється;
-- build проходить;
-- lint проходить;
-- тести проходять.
-
----
-
-# Forbidden
-
-Заборонено:
-
-- бізнес-логіка у JSX;
-- SQL;
-- Prisma;
-- fetch() у компонентах;
-- any;
-- дублювання компонентів;
-- копіювання однакового JSX;
-- приховані магічні числа.
-
----
-
-# Definition of Done
-
-Frontend-задача вважається завершеною лише якщо:
-
-- build проходить;
-- lint проходить;
-- тести проходять;
-- дизайн не порушено;
-- типізація коректна;
-- документація оновлена.
-
----
-
-End of document.
+Завдання завершене лише після успішних lint, build, tests, перевірки документації та `git diff --check`.

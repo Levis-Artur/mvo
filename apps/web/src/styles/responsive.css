@@ -4,8 +4,8 @@
   .dashboard-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 899px) {
-  .app-topbar__inner { align-items: flex-start; padding: var(--space-3); }
-  .app-brand__title, .app-user__identity, .app-user__profile { display: none; }
+  .app-topbar__inner { padding: var(--space-3); }
+  .app-brand__title, .app-user__identity { display: none; }
   .main-navigation__scroll { padding-inline: var(--space-2); }
   .page-container { padding: var(--space-3); }
   .dashboard-grid, .dashboard-panels { grid-template-columns: minmax(0, 1fr); }
@@ -25,7 +25,13 @@
   .ui-modal__footer, .form-actions { flex-direction: column-reverse; }
   .organization-node > summary, .organization-people > li { align-items: flex-start; flex-direction: column; }
 }
+@media (max-width: 700px) {
+  .profile-grid, .administration-grid { grid-template-columns: minmax(0, 1fr); }
+  .detail-list > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+}
 @media (max-width: 520px) {
   .dashboard-metrics { grid-template-columns: minmax(0, 1fr); }
   .app-user { gap: var(--space-2); }
+  .app-user__api { display: none; }
+  .app-user__profile svg { display: none; }
 }

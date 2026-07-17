@@ -22,7 +22,7 @@ export function ImportsTable({ imports, loading, onOpen }: {
       emptyMessage="Імпорти ще не завантажувалися."
       loading={loading}
       rows={imports.map((batch) => [
-        <button className="max-w-72 break-all text-left font-semibold text-[var(--color-primary)] hover:underline" key="file" type="button" onClick={() => onOpen(batch)}>{batch.originalFilename}</button>,
+        <Button className="max-w-72 break-all" key="file" variant="link" type="button" onClick={() => onOpen(batch)}>{batch.originalFilename}</Button>,
         importTypeLabel(batch.type),
         <ImportStatusBadge key="status" status={batch.status} />,
         batch.encoding,

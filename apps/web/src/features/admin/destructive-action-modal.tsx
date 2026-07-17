@@ -36,8 +36,8 @@ export function DestructiveActionModal({ entityType, entityId, onClose, onDelete
     {preview ? <><dl className="detail-list"><div><dt>Сутність</dt><dd>{preview.displayName}</dd></div><div><dt>ID</dt><dd className="font-mono">{preview.entityId}</dd></div></dl>
       <section><h3 className="font-semibold">Залежності</h3>{preview.dependencies.length ? <ul className="mt-2 grid gap-1 text-sm">{preview.dependencies.map((item) => <li key={`${item.type}-${item.action}`}>{item.type}: <strong>{item.count}</strong> — {actionLabels[item.action]}</li>)}</ul> : <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Пов’язаних записів немає.</p>}</section>
       {preview.blockers.length ? <div className="ui-alert" data-tone="danger"><strong>Операцію блокують:</strong><ul className="list-disc pl-5">{preview.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div> : null}
-      {entityType === 'imports' && preview.blockers.some((item) => /rollback|відкот/i.test(item)) ? <div className="ui-alert" data-tone="warning">Перед видаленням потрібен rollback імпорту.</div> : null}
-      <Checkbox checked={force} label="Force-delete тестових даних" onChange={(event) => { setForce(event.target.checked); setConfirmation(''); }} />
+      {entityType === 'imports' && preview.blockers.some((item) => /rollback|відкот/i.test(item)) ? <div className="ui-alert" data-tone="warning">Перед видаленням потрібно відкотити імпорт.</div> : null}
+      <Checkbox checked={force} label="Примусове видалення тестових даних" onChange={(event) => { setForce(event.target.checked); setConfirmation(''); }} />
       <FormField label={`Введіть «${requiredConfirmation(preview, force)}»`} required><Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></FormField></> : null}
   </div></Modal>;
 }

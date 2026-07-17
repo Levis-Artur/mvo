@@ -59,14 +59,14 @@ export function PersonsTable({
           <span className="font-mono font-semibold" key="number">
             {person.personnelNumber}
           </span>,
-          <button
-            className="text-left font-semibold text-[var(--color-primary)] hover:underline"
+          <Button
+            variant="link"
             key="name"
             type="button"
             onClick={() => onView(person)}
           >
             {personDisplayName(person)}
-          </button>,
+          </Button>,
           person.management.name,
           person.service.name,
           person.unit?.name ?? 'Без підрозділу',

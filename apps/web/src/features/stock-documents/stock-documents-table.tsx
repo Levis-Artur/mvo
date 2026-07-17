@@ -35,7 +35,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         ? fullName(document.destinationResponsiblePerson)
         : document.recipientName ?? '—';
       return [
-        <button className="font-semibold text-[var(--color-primary)] hover:underline" key="number" type="button" onClick={() => onView(document)}>{document.documentNumber}</button>,
+        <Button key="number" variant="link" type="button" onClick={() => onView(document)}>{document.documentNumber}</Button>,
         new Date(document.documentDate).toLocaleDateString('uk-UA'),
         <StatusBadge key="direction" tone={direction.tone}>{direction.label}</StatusBadge>,
         <StockDocumentStatusBadge key="status" status={document.status} />,

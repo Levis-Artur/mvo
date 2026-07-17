@@ -15,7 +15,7 @@ export function DashboardView({ apiState, apiCheckedAt, onNavigate }: { apiState
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const loadStats = useCallback(async () => { setLoading(true); setError(''); try { setStats(await dashboardService.dashboardStats()); } catch { setStats(null); setError('Не вдалося отримати показники головної сторінки. Перевірте доступність backend API.'); } finally { setLoading(false); } }, []);
+  const loadStats = useCallback(async () => { setLoading(true); setError(''); try { setStats(await dashboardService.dashboardStats()); } catch { setStats(null); setError('Не вдалося отримати показники головної сторінки. Перевірте доступність сервера API.'); } finally { setLoading(false); } }, []);
   useEffect(() => { void loadStats(); }, [loadStats]);
   useEffect(() => { const handleToolbar = (event: Event) => { const detail = getToolbarDetail(event); if (detail?.view === 'home' && detail.action === 'refresh') void loadStats(); }; window.addEventListener(TOOLBAR_EVENT, handleToolbar); return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar); }, [loadStats]);
   const state = dashboardContentState(loading, error, stats);

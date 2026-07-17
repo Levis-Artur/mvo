@@ -31,7 +31,7 @@ describe('API client errors', () => {
     });
   });
 
-  it('uses the response header and fallback values for non-JSON errors', async () => {
+  it('uses a localized fallback and the request header for non-JSON errors', async () => {
     const response = new Response('Bad gateway', {
       status: 502,
       statusText: 'Bad Gateway',
@@ -40,7 +40,7 @@ describe('API client errors', () => {
 
     const error = await createApiError(response, 'Помилка запиту');
 
-    expect(error.message).toBe('Bad Gateway');
+    expect(error.message).toBe('Помилка запиту');
     expect(error.code).toBe('UNKNOWN_ERROR');
     expect(error.requestId).toBe('proxy-request-1');
   });

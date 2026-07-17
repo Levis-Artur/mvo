@@ -99,7 +99,7 @@ export async function createApiError(
   }
 
   return new ApiError(
-    response.statusText || fallbackMessage,
+    fallbackMessage,
     response.status,
     'UNKNOWN_ERROR',
     response.headers.get('x-request-id') ?? undefined,

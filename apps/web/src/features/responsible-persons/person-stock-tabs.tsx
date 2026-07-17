@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
 import type { StockBalance, StockDocument, StockTransaction } from '@/lib/types';
-import { DataTable, ErrorState, StatusBadge } from '@/components/ui';
+import { DataTable, ErrorState } from '@/components/ui';
 import { getErrorMessage } from '@/components/common';
+import { transactionTypeLabel } from '@/features/inventory/transaction-model';
+import { StockDocumentStatusBadge } from '@/features/stock-documents/stock-document-status-badge';
 
 export function PersonStockTab({
   personId,
@@ -87,7 +89,7 @@ export function PersonOperationsTab({ personId }: { personId: string }) {
       loading={loading}
       rows={transactions.map((transaction) => [
         new Date(transaction.occurredAt).toLocaleDateString('uk-UA'),
-        transaction.type,
+        transactionTypeLabel(transaction.type),
         transaction.inventoryItem.name,
         transaction.quantity,
         transaction.balanceBefore,
@@ -164,18 +166,7 @@ export function PersonTransfersTab({ personId }: { personId: string }) {
                 .filter(Boolean)
                 .join(' ')
             : document.recipientName ?? '—',
-          <StatusBadge
-            key="status"
-            tone={
-              document.status === 'POSTED'
-                ? 'success'
-                : document.status === 'CANCELLED'
-                  ? 'danger'
-                  : 'warning'
-            }
-          >
-            {document.status}
-          </StatusBadge>,
+          <StockDocumentStatusBadge key="status" status={document.status} />,
         ];
       })}
     />

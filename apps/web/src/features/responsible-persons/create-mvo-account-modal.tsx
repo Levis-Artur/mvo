@@ -3,16 +3,9 @@
 import { FormEvent, useState } from 'react';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
 import type { ResponsiblePerson } from '@/lib/types';
-import { Button, Card, Input } from '@/components/ui';
-import {
-  Alert,
-  ErrorMessage,
-  Field,
-  FormActions,
-  Modal,
-  fullName,
-  getErrorMessage,
-} from '@/components/common';
+import { Button, Card, ErrorState, FormField, Input, Modal } from '@/components/ui';
+import { fullName, getErrorMessage } from '@/components/common';
+import { copyToClipboard } from '@/lib/copy-to-clipboard';
 export function CreateMvoAccountModal({
   person,
   onClose,
@@ -25,6 +18,7 @@ export function CreateMvoAccountModal({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,14 +39,16 @@ export function CreateMvoAccountModal({
     }
   }
 
+  const footer = temporaryPassword ? (
+    <Button type="button" onClick={onClose}>Закрити</Button>
+  ) : (
+    <><Button variant="outline" type="button" onClick={onClose}>Скасувати</Button><Button disabled={saving} form="create-mvo-account-form" type="submit">{saving ? 'Створення…' : 'Створити'}</Button></>
+  );
+
   return (
-    <Modal title="Створити обліковий запис МВО" onClose={onClose}>
+    <Modal closeOnEscape={!saving} footer={footer} title="Створити обліковий запис МВО" onClose={onClose}>
       <div className="grid gap-3">
-        <Alert
-          tone="warning"
-          title="Тимчасовий пароль показується один раз"
-          message="Після закриття цього вікна його не можна буде відновити. За потреби виконайте reset password."
-        />
+        <div className="ui-alert" data-tone="warning" role="status"><strong>Тимчасовий пароль показується один раз</strong><span>Після закриття цього вікна його не можна буде відновити. За потреби виконайте скидання пароля.</span></div>
         <Card>
           <p className="font-semibold">{fullName(person)}</p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -62,7 +58,8 @@ export function CreateMvoAccountModal({
 
         {temporaryPassword ? (
           <div className="grid gap-3">
-            <Field label="Тимчасовий пароль">
+            {copyError ? <ErrorState message={copyError} /> : null}
+            <FormField label="Тимчасовий пароль">
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   readOnly
@@ -73,24 +70,21 @@ export function CreateMvoAccountModal({
                   variant="outline"
                   type="button"
                   onClick={() => {
-                    void navigator.clipboard.writeText(temporaryPassword);
-                    setCopied(true);
+                    void copyToClipboard(temporaryPassword).then((success) => {
+                      setCopied(success);
+                      setCopyError(success ? '' : 'Не вдалося скопіювати пароль. Скопіюйте його вручну.');
+                    });
                   }}
                 >
                   {copied ? 'Скопійовано' : 'Копіювати'}
                 </Button>
               </div>
-            </Field>
-            <div className="flex justify-end">
-              <Button type="button" onClick={onClose}>
-                Закрити
-              </Button>
-            </div>
+            </FormField>
           </div>
         ) : (
-          <form className="grid gap-3" onSubmit={submit}>
-            {error ? <ErrorMessage message={error} /> : null}
-            <Field label="Логін">
+          <form className="grid gap-3" id="create-mvo-account-form" onSubmit={submit}>
+            {error ? <ErrorState message={error} /> : null}
+            <FormField label="Логін" required>
               <Input
                 required
                 className="input"
@@ -98,8 +92,7 @@ export function CreateMvoAccountModal({
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
               />
-            </Field>
-            <FormActions saving={saving} onClose={onClose} />
+            </FormField>
           </form>
         )}
       </div>

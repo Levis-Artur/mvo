@@ -20,7 +20,7 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
         <strong>Буде виконано reversal</strong>
         <span>Backend створить зворотні операції та відновить попередній вплив документа на залишки. Вихідні операції журналу не видаляються.</span>
       </div>
-      <p className="text-[var(--color-text-secondary)]">Якщо скасування небезпечне через поточні залишки або залежності, backend заблокує дію. Повідомлення буде показано тут без приховування.</p>
+      <p className="text-[var(--color-text-secondary)]">Якщо скасування небезпечне через поточні залишки або залежності, сервер заблокує дію. Повідомлення буде показано тут без приховування.</p>
     </div>
   </Modal>;
 }

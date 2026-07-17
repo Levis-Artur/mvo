@@ -1,6 +1,7 @@
 'use client';
 
-import { EmptyState, PageHeader } from '@/components/common';
+import { EmptyState } from '@/components/ui';
+import { PageHeader } from '@/components/layout/page-header';
 
 export function PlaceholderView({
   title,

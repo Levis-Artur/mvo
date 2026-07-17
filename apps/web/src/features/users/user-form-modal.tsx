@@ -2,12 +2,11 @@
 
 import { type FormEvent, useEffect, useState } from 'react';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
-import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole } from '@/lib/authz';
+import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
 import type { ResponsiblePerson, UserRole, UserSummary } from '@/lib/types';
 import { Button, Checkbox, ErrorState, FormField, Input, LoadingState, Modal, Select } from '@/components/ui';
 import { fullName, getErrorMessage } from '@/components/common';
 import { usersService } from './users.service';
-import { displayRoleLabels } from './user-role-labels';
 
 export function UserFormModal({ mode, user, onClose, onSaved }: {
   mode: 'users' | 'mvoUsers';
@@ -59,7 +58,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
         {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
         <FormField label="Логін" required><Input autoFocus minLength={3} value={username} onChange={(event) => setUsername(event.target.value)} /></FormField>
         <FormField label="Роль" required>
-          {ownerMode ? <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{displayRoleLabels[option]}</option>)}</Select> : <Input readOnly value={displayRoleLabels.MVO} />}
+          {ownerMode ? <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{roleLabels[option]}</option>)}</Select> : <Input readOnly value={roleLabels.MVO} />}
         </FormField>
         <FormField label="Пов’язаний МВО" required={requiresResponsiblePerson(role)}>
           <Select value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>
