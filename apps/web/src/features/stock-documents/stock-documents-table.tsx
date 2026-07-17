@@ -1,45 +1,60 @@
-'use client';
-
-import { StatusPill } from '@/components/common';
-import { formatDateTime, fullName } from '@/components/common/formatters';
 import type { AuthUser, StockDocument } from '@/lib/types';
-import { documentDirection } from './stock-document-rules';
+import { formatDateTime, fullName } from '@/components/common/formatters';
+import { Button, DataTable, StatusBadge } from '@/components/ui';
+import { formatQuantity } from '@/features/inventory/quantity-format';
+import {
+  documentDirectionPresentation,
+  lifecycleActions,
+} from './stock-document-rules';
+import { StockDocumentStatusBadge } from './stock-document-status-badge';
 
-const statusLabels = { DRAFT: 'Чернетка', POSTED: 'Проведено', CANCELLED: 'Скасовано' };
-
-export function StockDocumentsTable({
-  documents,
-  user,
-  onSelect,
-}: {
+export function StockDocumentsTable({ documents, user, loading, onView, onEdit, onPost, onCancel, onRemove }: {
   documents: StockDocument[];
   user: AuthUser;
-  onSelect: (document: StockDocument) => void;
+  loading: boolean;
+  onView: (document: StockDocument) => void;
+  onEdit: (document: StockDocument) => void;
+  onPost: (document: StockDocument) => void;
+  onCancel: (document: StockDocument) => void;
+  onRemove: (document: StockDocument) => void;
 }) {
-  if (!documents.length) {
-    return <div className="app-card p-6 text-center text-sm text-[var(--text-secondary)]">Документи не знайдено.</div>;
-  }
-  return (
-    <div className="erp-panel overflow-hidden">
-      <div className="compact-scrollbar overflow-auto">
-        <table className="data-table">
-          <thead><tr><th>Номер</th><th>Дата</th><th>Тип</th><th>Статус</th><th>Відправник</th><th>Одержувач</th><th>Позицій</th><th>Кількість</th><th>Автор</th><th>Проведено</th></tr></thead>
-          <tbody>
-            {documents.map((document) => (
-              <tr className="cursor-pointer" key={document.id} onClick={() => onSelect(document)}>
-                <td>{document.documentNumber}</td>
-                <td>{formatDateTime(document.documentDate)}</td>
-                <td><span className="rounded border border-[var(--border)] px-2 py-1 text-xs">{documentDirection(document, user)}</span></td>
-                <td><StatusPill status={statusLabels[document.status]} /></td>
-                <td>{fullName(document.sourceResponsiblePerson)}</td>
-                <td>{document.destinationResponsiblePerson ? fullName(document.destinationResponsiblePerson) : document.recipientName ?? '—'}</td>
-                <td>{document.totalPositions}</td><td>{document.totalQuantity}</td>
-                <td>{document.createdByUser.username}</td><td>{document.postedAt ? formatDateTime(document.postedAt) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  return <DataTable
+    ariaLabel="Список документів передачі та видачі"
+    columns={[
+      { label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Статус' },
+      { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Позицій', numeric: true },
+      { label: 'Загальна кількість', numeric: true }, { label: 'Автор' },
+      { label: 'Проведення' }, { label: 'Дії', actions: true },
+    ]}
+    emptyMessage="Документи за вказаними фільтрами не знайдено."
+    loading={loading}
+    rows={documents.map((document) => {
+      const direction = documentDirectionPresentation(document, user);
+      const actions = lifecycleActions(document, user);
+      const recipient = document.destinationResponsiblePerson
+        ? fullName(document.destinationResponsiblePerson)
+        : document.recipientName ?? '—';
+      return [
+        <button className="font-semibold text-[var(--color-primary)] hover:underline" key="number" type="button" onClick={() => onView(document)}>{document.documentNumber}</button>,
+        new Date(document.documentDate).toLocaleDateString('uk-UA'),
+        <StatusBadge key="direction" tone={direction.tone}>{direction.label}</StatusBadge>,
+        <StockDocumentStatusBadge key="status" status={document.status} />,
+        <span className="block max-w-52 break-words" key="source">{fullName(document.sourceResponsiblePerson)}</span>,
+        <span className="block max-w-52 break-words" key="recipient">{recipient}</span>,
+        document.totalPositions,
+        formatQuantity(document.totalQuantity),
+        document.createdByUser.username,
+        document.postedAt
+          ? <span key="posted">{formatDateTime(document.postedAt)} · {document.postedByUser?.username ?? '—'}</span>
+          : '—',
+        <div className="flex flex-wrap justify-end gap-1" key="actions">
+          <Button variant="ghost" type="button" onClick={() => onView(document)}>Переглянути</Button>
+          {actions.edit ? <Button variant="ghost" type="button" onClick={() => onEdit(document)}>Редагувати</Button> : null}
+          {actions.post ? <Button type="button" onClick={() => onPost(document)}>Провести</Button> : null}
+          {actions.cancel ? <Button variant="danger" type="button" onClick={() => onCancel(document)}>Скасувати</Button> : null}
+          {actions.remove ? <Button variant="danger" type="button" onClick={() => onRemove(document)}>Видалити</Button> : null}
+        </div>,
+      ];
+    })}
+  />;
 }
