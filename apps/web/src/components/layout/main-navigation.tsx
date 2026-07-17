@@ -2,7 +2,7 @@
 import type { RefObject } from 'react';
 import { usePathname } from 'next/navigation';
 import { Icon } from '@/components/ui';
-import type { NavigationItem, AppView } from '@/lib/authz';
+import type { AppView, NavigationItem } from '@/lib/authz';
 import { isNavigationActive, navigationIcon } from './navigation-model';
 
 export function MainNavigation({ items, navRef, onSelect }: { items: NavigationItem[]; navRef: RefObject<HTMLDivElement | null>; onSelect: (view: AppView) => void }) {

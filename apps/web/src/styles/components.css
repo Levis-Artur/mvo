@@ -73,6 +73,22 @@
 .ui-alert[data-tone='warning'] { border-color: var(--color-warning); background: var(--color-warning-soft); color: var(--color-warning); }
 .ui-alert[data-tone='danger'] { border-color: var(--color-danger); background: var(--color-danger-soft); color: var(--color-danger); }
 .ui-alert[data-tone='info'] { border-color: var(--color-info); background: var(--color-info-soft); color: var(--color-info); }
+.auth-page { display: grid; min-height: 100dvh; place-items: center; background: var(--color-navy-950); padding: var(--space-4); }
+.auth-panel { width: min(100%, 460px); overflow: hidden; border: 1px solid rgb(255 255 255 / 0.18); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: 0 18px 45px rgb(4 27 54 / 0.35); }
+.auth-panel__header { display: grid; gap: var(--space-2); background: var(--color-navy-900); padding: var(--space-5); color: white; }
+.auth-panel__brand { display: flex; align-items: center; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid rgb(255 255 255 / 0.16); }
+.auth-panel__brand > div { display: grid; gap: 0.15rem; }
+.auth-panel__brand span { color: var(--color-header-text); font-size: var(--text-xs); }
+.auth-panel__mark { display: grid; width: 48px; height: 40px; place-items: center; border: 1px solid rgb(255 255 255 / 0.4); border-radius: var(--radius-sm); color: white !important; font-weight: 800; }
+.auth-panel__header h1 { margin-top: var(--space-2); font-size: var(--text-xl); font-weight: 750; }
+.auth-panel__header > p { color: var(--color-header-text); font-size: var(--text-sm); }
+.auth-panel__body { display: grid; gap: var(--space-4); padding: var(--space-5); }
+.profile-grid, .administration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.detail-list { display: grid; margin: 0; }
+.detail-list > div { display: grid; grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr); gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-light); }
+.detail-list dt { color: var(--color-text-secondary); font-size: var(--text-sm); font-weight: 650; }
+.detail-list dd { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 700px) { .profile-grid, .administration-grid { grid-template-columns: 1fr; } .detail-list > div { grid-template-columns: 1fr; gap: var(--space-1); } }
 .erp-toolbar { border: 1px solid var(--color-border); background: var(--color-surface-muted); }
 .compact-scrollbar { scrollbar-width: thin; }
 .organization-node { min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }

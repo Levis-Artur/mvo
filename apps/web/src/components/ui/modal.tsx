@@ -15,18 +15,17 @@ export function Modal({ title, children, footer, onClose, size = 'medium', destr
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
     dialog?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
-    function handleKeyDown(event: KeyboardEvent) {
+    function keyDown(event: KeyboardEvent) {
       if (event.key === 'Escape' && closeOnEscape) { event.preventDefault(); onClose(); return; }
       if (event.key !== 'Tab' || !dialog) return;
       const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
       if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
       const currentIndex = focusable.findIndex((element) => element === document.activeElement);
-      const nextIndex = trappedFocusIndex(currentIndex < 0 ? 0 : currentIndex, focusable.length, event.shiftKey);
       event.preventDefault();
-      focusable[nextIndex]?.focus();
+      focusable[trappedFocusIndex(currentIndex < 0 ? 0 : currentIndex, focusable.length, event.shiftKey)]?.focus();
     }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => { document.removeEventListener('keydown', handleKeyDown); previousFocus?.focus(); };
+    document.addEventListener('keydown', keyDown);
+    return () => { document.removeEventListener('keydown', keyDown); previousFocus?.focus(); };
   }, [closeOnEscape, onClose]);
   return <div className="ui-modal-backdrop" role="presentation"><section aria-labelledby="ui-modal-title" aria-modal="true" className="ui-modal" data-destructive={destructive ? 'true' : undefined} data-size={size} ref={dialogRef} role="dialog" tabIndex={-1}>
     <header className="ui-modal__header"><h2 id="ui-modal-title">{title}</h2><Button aria-label="Закрити" variant="ghost" type="button" onClick={onClose}>×</Button></header>

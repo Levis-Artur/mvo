@@ -14,15 +14,5 @@ export function DataTable({ ariaLabel, columns, headers, rows, loading = false, 
   const state = resolveDataTableState(loading, rows.length);
   if (state === 'loading') return <div className="data-table-state"><LoadingState label="Завантаження таблиці…" /></div>;
   if (state === 'empty') return <div className="data-table-state"><EmptyState message={emptyMessage} /></div>;
-  return <div className="data-table-shell"><div className="compact-scrollbar data-table-scroll">
-    <table aria-label={ariaLabel} className="data-table"><thead><tr>{normalizedColumns.map((column) => (
-      <th className={column.numeric || column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : ''} key={column.label} scope="col">{column.label}</th>
-    ))}</tr></thead><tbody>{rows.map((row, index) => (
-      <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => {
-        if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); }
-      }} tabIndex={onRowClick ? 0 : undefined}>
-        {row.map((cell, cellIndex) => { const column = normalizedColumns[cellIndex]; return <td className={column?.numeric || column?.align === 'right' ? 'text-right tabular-nums' : column?.align === 'center' ? 'text-center' : column?.actions ? 'data-table__actions' : ''} key={cellIndex}>{cell}</td>; })}
-      </tr>
-    ))}</tbody></table>
-  </div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
+  return <div className="data-table-shell"><div className="compact-scrollbar data-table-scroll"><table aria-label={ariaLabel} className="data-table"><thead><tr>{normalizedColumns.map((column) => <th className={column.numeric || column.align === 'right' ? 'text-right' : column.align === 'center' ? 'text-center' : ''} key={column.label} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); } }} tabIndex={onRowClick ? 0 : undefined}>{row.map((cell, cellIndex) => { const column = normalizedColumns[cellIndex]; return <td className={column?.numeric || column?.align === 'right' ? 'text-right tabular-nums' : column?.align === 'center' ? 'text-center' : column?.actions ? 'data-table__actions' : ''} key={cellIndex}>{cell}</td>; })}</tr>)}</tbody></table></div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
 }

@@ -9,12 +9,8 @@ import {
 } from './destructive-actions';
 
 const preview: DeletionPreview = {
-  entityType: 'users',
-  entityId: 'user-1',
-  displayName: 'test-owner',
-  canDelete: true,
-  blockers: [],
-  dependencies: [{ type: 'sessions', count: 2, action: 'DELETE' }],
+  entityType: 'users', entityId: 'user-1', displayName: 'test-owner', canDelete: true,
+  blockers: [], dependencies: [{ type: 'sessions', count: 2, action: 'DELETE' }],
 };
 
 describe('OWNER destructive administration', () => {
@@ -22,47 +18,22 @@ describe('OWNER destructive administration', () => {
     expect(canShowDestructiveActions('MVO')).toBe(false);
     expect(canShowDestructiveActions('OWNER')).toBe(true);
   });
-
   it('preserves dependencies for the confirmation modal', () => {
-    expect(preview.dependencies).toEqual([
-      { type: 'sessions', count: 2, action: 'DELETE' },
-    ]);
+    expect(preview.dependencies).toEqual([{ type: 'sessions', count: 2, action: 'DELETE' }]);
   });
-
   it('does not send a request without the exact confirmation', async () => {
     const remove = jest.fn();
-    const result = await executeDestructiveAction({
-      preview,
-      force: false,
-      confirmation: 'delete',
-      remove,
-      onSuccess: jest.fn(),
-    });
-    expect(result).toBe(false);
+    expect(await executeDestructiveAction({ preview, force: false, confirmation: 'delete', remove, onSuccess: jest.fn() })).toBe(false);
     expect(remove).not.toHaveBeenCalled();
     expect(isConfirmationValid(preview, true, 'test-owner')).toBe(true);
   });
-
   it('refreshes the table after success', async () => {
     const reload = jest.fn();
-    await executeDestructiveAction({
-      preview,
-      force: false,
-      confirmation: 'ВИДАЛИТИ',
-      remove: jest.fn().mockResolvedValue({ success: true }),
-      onSuccess: reload,
-    });
+    await executeDestructiveAction({ preview, force: false, confirmation: 'ВИДАЛИТИ', remove: jest.fn().mockResolvedValue({ success: true }), onSuccess: reload });
     expect(reload).toHaveBeenCalledTimes(1);
   });
-
   it('shows the server-disabled message and regular API errors', () => {
-    expect(
-      destructiveErrorMessage(
-        new ApiError('Destructive administration disabled', 403, 'FORBIDDEN'),
-      ),
-    ).toBe(DESTRUCTIVE_MODE_DISABLED_MESSAGE);
-    expect(
-      destructiveErrorMessage(new ApiError('Залежність блокує видалення', 409)),
-    ).toBe('Залежність блокує видалення');
+    expect(destructiveErrorMessage(new ApiError('Destructive administration disabled', 403, 'FORBIDDEN'))).toBe(DESTRUCTIVE_MODE_DISABLED_MESSAGE);
+    expect(destructiveErrorMessage(new ApiError('Залежність блокує видалення', 409))).toBe('Залежність блокує видалення');
   });
 });

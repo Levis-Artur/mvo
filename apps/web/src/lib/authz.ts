@@ -298,14 +298,30 @@ export function can(
   return permissions[user.role][resource]?.includes(actionName) ?? false;
 }
 
+const navigationLabels: Record<AppView, string> = {
+  home: 'Головна', persons: 'МВО', structure: 'Організаційна структура',
+  nomenclature: 'Номенклатура', stock: 'Залишки', imports: 'Імпорт',
+  transactions: 'Журнал операцій', users: 'Користувачі', reports: 'Звіти',
+  administration: 'Адміністрування', 'my-card': 'Моя картка', 'my-stock': 'Моє майно',
+  'my-transactions': 'Мої операції', transfers: 'Передачі', profile: 'Профіль',
+};
+
 export function getNavigationItems(user: AuthUser | null) {
   if (!user) {
     return [];
   }
 
-  return navigationByRole[user.role].filter((item) =>
-    item.disabled ? true : can(user, item.action ?? 'read', item.resource),
-  );
+  return navigationByRole[user.role]
+    .map((item) => ({
+      ...item,
+      label: navigationLabels[item.view],
+      ...(user.role === 'OWNER' && item.view === 'administration'
+        ? { href: '/admin', disabled: false, title: undefined }
+        : {}),
+    }))
+    .filter((item) =>
+      item.disabled ? true : can(user, item.action ?? 'read', item.resource),
+    );
 }
 
 export function getDefaultAppPath(user: AuthUser | null) {

@@ -1,74 +1,47 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { usersService as apiClient } from './users.service';
+import { type FormEvent, useEffect, useState } from 'react';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
-import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
+import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole } from '@/lib/authz';
 import type { ResponsiblePerson, UserRole, UserSummary } from '@/lib/types';
-import {
-  ErrorMessage,
-  Field,
-  FormActions,
-  Modal,
-  Select,
-  fullName,
-  getErrorMessage,
-} from '@/components/common';
-export function UserFormModal({
-  mode,
-  user,
-  onClose,
-  onSaved,
-}: {
+import { Button, Checkbox, ErrorState, FormField, Input, LoadingState, Modal, Select } from '@/components/ui';
+import { fullName, getErrorMessage } from '@/components/common';
+import { usersService } from './users.service';
+import { displayRoleLabels } from './user-role-labels';
+
+export function UserFormModal({ mode, user, onClose, onSaved }: {
   mode: 'users' | 'mvoUsers';
   user: UserSummary | null;
   onClose: () => void;
   onSaved: (temporaryPassword?: string) => void;
 }) {
-  const ownerMode = mode === 'users';
   const [username, setUsername] = useState(user?.username ?? '');
   const [role, setRole] = useState<UserRole>(user?.role ?? 'MVO');
-  const [responsiblePersonId, setResponsiblePersonId] = useState(
-    user?.responsiblePersonId ?? '',
-  );
-  const [mustChangePassword, setMustChangePassword] = useState(
-    user?.mustChangePassword ?? true,
-  );
-  const roleOptions = getAssignableUserRoles(mode, user?.role);
+  const [responsiblePersonId, setResponsiblePersonId] = useState(user?.responsiblePersonId ?? '');
+  const [mustChangePassword, setMustChangePassword] = useState(user?.mustChangePassword ?? true);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
-  const [error, setError] = useState('');
+  const [loadingPersons, setLoadingPersons] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const ownerMode = mode === 'users';
 
   useEffect(() => {
-    fetchAllPages((pagination) =>
-      apiClient.responsiblePersons({ ...pagination, isActive: true }),
-    )
-      .then(setPersons)
-      .catch((reason: unknown) => setError(getErrorMessage(reason)));
+    fetchAllPages((pagination) => usersService.responsiblePersons({ ...pagination, isActive: true }))
+      .then(setPersons).catch((reason: unknown) => setError(getErrorMessage(reason)))
+      .finally(() => setLoadingPersons(false));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError('');
-
     const selectedRole = resolveUserFormRole(mode, role);
-
     try {
       if (user) {
-        await apiClient.updateUser(user.id, {
-          username,
-          role: selectedRole,
-          responsiblePersonId: responsiblePersonId || null,
-          mustChangePassword,
-        });
+        await usersService.updateUser(user.id, { username: username.trim(), role: selectedRole, responsiblePersonId: responsiblePersonId || null, mustChangePassword });
         onSaved();
       } else {
-        const response = await apiClient.createUser({
-          username,
-          role: selectedRole,
-          responsiblePersonId: responsiblePersonId || undefined,
-        });
+        const response = await usersService.createUser({ username: username.trim(), role: selectedRole, responsiblePersonId: responsiblePersonId || undefined });
         onSaved(response.temporaryPassword);
       }
     } catch (reason) {
@@ -78,62 +51,24 @@ export function UserFormModal({
     }
   }
 
+  const footer = <><Button variant="outline" type="button" onClick={onClose}>Скасувати</Button><Button disabled={saving || loadingPersons} form="user-form" type="submit">{saving ? 'Збереження…' : 'Зберегти'}</Button></>;
   return (
-    <Modal title={user ? 'Редагувати користувача' : 'Створити користувача'} onClose={onClose}>
-      <form className="grid gap-3" onSubmit={submit}>
-        {error ? <ErrorMessage message={error} /> : null}
-        <Field label="Логін">
-          <input
-            required
-            className="input"
-            minLength={3}
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-          />
-        </Field>
-        <Field label="Роль">
-          {ownerMode ? (
-            <Select
-              value={role}
-              onChange={(value) => setRole(value as UserRole)}
-            >
-              {roleOptions.map((roleOption) => (
-                <option key={roleOption} value={roleOption}>
-                  {roleLabels[roleOption]}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <input readOnly className="input" value={roleLabels.MVO} />
-          )}
-        </Field>
-        <Field label="МВО">
-          <Select
-            required={requiresResponsiblePerson(role)}
-            value={responsiblePersonId}
-            onChange={setResponsiblePersonId}
-          >
+    <Modal closeOnEscape={!saving} footer={footer} title={user ? 'Редагування користувача' : 'Новий користувач'} onClose={onClose}>
+      <form className="grid gap-4" id="user-form" onSubmit={submit}>
+        {error ? <ErrorState message={error} /> : null}
+        {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
+        <FormField label="Логін" required><Input autoFocus minLength={3} value={username} onChange={(event) => setUsername(event.target.value)} /></FormField>
+        <FormField label="Роль" required>
+          {ownerMode ? <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{displayRoleLabels[option]}</option>)}</Select> : <Input readOnly value={displayRoleLabels.MVO} />}
+        </FormField>
+        <FormField label="Пов’язаний МВО" required={requiresResponsiblePerson(role)}>
+          <Select value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>
             <option value="">Без прив’язки</option>
-            {persons.map((person) => (
-              <option key={person.id} value={person.id}>
-                {fullName(person)} В· {person.personnelNumber}
-              </option>
-            ))}
+            {persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
           </Select>
-        </Field>
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            checked={mustChangePassword}
-            type="checkbox"
-            onChange={(event) => setMustChangePassword(event.target.checked)}
-          />
-          Вимагати зміну пароля
-        </label>
-        <FormActions saving={saving} onClose={onClose} />
+        </FormField>
+        <FormField label="Пароль"><Checkbox checked={mustChangePassword} label="Вимагати зміну пароля під час наступного входу" onChange={(event) => setMustChangePassword(event.target.checked)} /></FormField>
       </form>
     </Modal>
   );
 }
-
-
-

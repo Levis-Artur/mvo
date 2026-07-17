@@ -1,167 +1,55 @@
 'use client';
 
-import type { UserSummary } from '@/lib/types';
-import { roleLabels } from '@/lib/authz';
-import {
-  EmptyState,
-  StatusBadge,
-  StatusPill,
-  formatDateTime,
-  isUserLocked,
-  responsiblePersonShortName,
-} from '@/components/common';
-export function UsersTable({
-  users,
-  canWrite,
-  canResetPassword,
-  canRevokeSessions,
-  onEdit,
-  onResetPassword,
-  onBlock,
-  onUnblock,
-  onRevokeSessions,
-  onDeactivate,
-  onActivate,
-  canDelete,
-  onDelete,
-}: {
+import { Button, DataTable, StatusBadge } from '@/components/ui';
+import { formatDateTime, isUserLocked, responsiblePersonShortName } from '@/components/common';
+import type { ResponsiblePerson, UserSummary } from '@/lib/types';
+import { displayRoleLabels } from './user-role-labels';
+
+type UserAction = (user: UserSummary) => void;
+
+export function UsersTable({ users, personsById, canWrite, canResetPassword, canRevokeSessions, canDelete, onEdit, onResetPassword, onBlock, onUnblock, onRevokeSessions, onDeactivate, onActivate, onDelete }: {
   users: UserSummary[];
+  personsById: Map<string, ResponsiblePerson>;
   canWrite: boolean;
   canResetPassword: boolean;
   canRevokeSessions: boolean;
-  onEdit: (user: UserSummary) => void;
-  onResetPassword: (user: UserSummary) => void;
-  onBlock: (user: UserSummary) => void;
-  onUnblock: (user: UserSummary) => void;
-  onRevokeSessions: (user: UserSummary) => void;
-  onDeactivate: (user: UserSummary) => void;
-  onActivate: (user: UserSummary) => void;
   canDelete: boolean;
-  onDelete: (user: UserSummary) => void;
+  onEdit: UserAction;
+  onResetPassword: UserAction;
+  onBlock: UserAction;
+  onUnblock: UserAction;
+  onRevokeSessions: UserAction;
+  onDeactivate: UserAction;
+  onActivate: UserAction;
+  onDelete: UserAction;
 }) {
-  if (users.length === 0) {
-    return <EmptyState message="Користувачів не знайдено." />;
-  }
+  const rows = users.map((item) => {
+    const person = item.responsiblePersonId ? personsById.get(item.responsiblePersonId) : undefined;
+    const locked = isUserLocked(item);
+    return [
+      <strong key="username">{item.username}</strong>,
+      displayRoleLabels[item.role],
+      item.responsiblePerson ? responsiblePersonShortName(item.responsiblePerson) : 'Не прив’язано',
+      person?.management.name ?? '—',
+      <StatusBadge key="active" tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Активний' : 'Неактивний'}</StatusBadge>,
+      <StatusBadge key="password" tone={item.mustChangePassword ? 'warning' : 'success'}>{item.mustChangePassword ? 'Потрібна зміна' : 'Актуальний'}</StatusBadge>,
+      <span className="tabular-nums" key="attempts">{item.failedLoginAttempts}</span>,
+      locked ? <StatusBadge key="locked" tone="danger">До {formatDateTime(item.lockedUntil)}</StatusBadge> : 'Не заблоковано',
+      formatDateTime(item.lastLoginAt),
+      <div className="flex flex-wrap justify-end gap-1" key="actions">
+        {canWrite ? <Button variant="outline" type="button" onClick={() => onEdit(item)}>Редагувати</Button> : null}
+        {canResetPassword ? <Button variant="outline" type="button" onClick={() => onResetPassword(item)}>Скинути пароль</Button> : null}
+        {canWrite ? <Button variant="outline" type="button" onClick={() => locked ? onUnblock(item) : onBlock(item)}>{locked ? 'Розблокувати' : 'Заблокувати'}</Button> : null}
+        {canRevokeSessions ? <Button variant="outline" type="button" onClick={() => onRevokeSessions(item)}>Відкликати сесії</Button> : null}
+        {canWrite ? <Button variant="outline" type="button" onClick={() => item.isActive ? onDeactivate(item) : onActivate(item)}>{item.isActive ? 'Деактивувати' : 'Активувати'}</Button> : null}
+        {canDelete ? <Button variant="danger" type="button" onClick={() => onDelete(item)}>Видалити</Button> : null}
+      </div>,
+    ];
+  });
 
-  return (
-    <div className="erp-panel overflow-hidden">
-      <div className="compact-scrollbar overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {[
-                'Логін',
-                'Роль',
-                'Статус',
-                'ResponsiblePerson',
-                'Останній вхід',
-                'Дії',
-              ].map((header) => (
-                <th key={header}>{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((item) => (
-              <tr key={item.id}>
-                <td className="font-medium">{item.username}</td>
-                <td>{roleLabels[item.role]}</td>
-                <td>
-                  <div className="flex flex-wrap gap-1">
-                    <StatusBadge active={item.isActive} />
-                    {isUserLocked(item) ? (
-                      <StatusPill status="BLOCKED" />
-                    ) : null}
-                  </div>
-                </td>
-                <td>
-                  {item.responsiblePerson
-                    ? responsiblePersonShortName(item.responsiblePerson)
-                    : '-'}
-                </td>
-                <td>{formatDateTime(item.lastLoginAt)}</td>
-                <td>
-                  <div className="flex flex-wrap gap-2">
-                    {canWrite ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onEdit(item)}
-                      >
-                        Редагувати
-                      </button>
-                    ) : null}
-                    {canResetPassword ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onResetPassword(item)}
-                      >
-                        Reset password
-                      </button>
-                    ) : null}
-                    {canWrite && isUserLocked(item) ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onUnblock(item)}
-                      >
-                        Unblock
-                      </button>
-                    ) : null}
-                    {canWrite && !isUserLocked(item) ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onBlock(item)}
-                      >
-                        Block
-                      </button>
-                    ) : null}
-                    {canRevokeSessions ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onRevokeSessions(item)}
-                      >
-                        Revoke sessions
-                      </button>
-                    ) : null}
-                    {canWrite && item.isActive ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onDeactivate(item)}
-                      >
-                        Deactivate
-                      </button>
-                    ) : null}
-                    {canWrite && !item.isActive ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onActivate(item)}
-                      >
-                        Activate
-                      </button>
-                    ) : null}
-                    {canDelete ? (
-                      <button
-                        className="btn btn-danger !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onDelete(item)}
-                      >
-                        Видалити
-                      </button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  return <DataTable ariaLabel="Користувачі системи" columns={[
+    { label: 'Логін' }, { label: 'Роль' }, { label: 'Пов’язаний МВО' }, { label: 'Управління' },
+    { label: 'Активність' }, { label: 'Тимчасовий пароль' }, { label: 'Невдалі входи', numeric: true },
+    { label: 'Блокування' }, { label: 'Останній вхід' }, { label: 'Дії', actions: true },
+  ]} emptyMessage="Користувачів не знайдено." rows={rows} />;
 }
-

@@ -1,208 +1,86 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { usersService as apiClient } from './users.service';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/app/ui/auth-context';
-import { can, getUserManagementResource } from '@/lib/authz';
-import type { UserSummary } from '@/lib/types';
-import {
-  ErrorMessage,
-  LoadingMessage,
-  PageHeader,
-  TemporaryPasswordModal,
-  Toast,
-  getErrorMessage,
-} from '@/components/common';
+import { TemporaryPasswordModal } from '@/components/dialogs/temporary-password-modal';
+import { PageHeader } from '@/components/layout/page-header';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
-
-import { UsersTable } from './users-table';
-import { UserFormModal } from './user-form-modal';
+import { Button, ErrorState, FilterBar, LoadingState, Select, Toast } from '@/components/ui';
+import { getErrorMessage } from '@/components/common';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
-import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
-import { ResetTestDataModal } from '@/features/admin/reset-test-data-modal';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
+import { can, getUserManagementResource } from '@/lib/authz';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
+import type { ResponsiblePerson, UserSummary } from '@/lib/types';
+import { UserFormModal } from './user-form-modal';
+import { filterUsers, indexResponsiblePersons } from './user-model';
+import { usersService } from './users.service';
+import { UsersTable } from './users-table';
 
 export function UsersView() {
   const { user } = useAuth();
-  const userResource = getUserManagementResource(user);
-  const canWriteUsers = can(user, 'write', userResource);
-  const canResetPasswords = can(user, 'resetPassword', userResource);
-  const canRevokeSessions = can(user, 'revokeSessions', userResource);
+  const resource = getUserManagementResource(user);
+  const canWrite = can(user, 'write', resource);
+  const canReset = can(user, 'resetPassword', resource);
+  const canRevoke = can(user, 'revokeSessions', resource);
   const [users, setUsers] = useState<UserSummary[]>([]);
+  const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editingUser, setEditingUser] = useState<UserSummary | null>(null);
-  const [isFormOpen, setFormOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [roleDraft, setRoleDraft] = useState('');
+  const [statusDraft, setStatusDraft] = useState('');
+  const [filters, setFilters] = useState({ search: '', role: '', status: '' });
+  const [editing, setEditing] = useState<UserSummary | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
-  const [deletingUser, setDeletingUser] = useState<UserSummary | null>(null);
-  const [toast, setToast] = useState('');
-  const [resetOpen, setResetOpen] = useState(false);
-  const canDelete = canShowDestructiveActions(user?.role);
+  const [deleting, setDeleting] = useState<UserSummary | null>(null);
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
     try {
-      setUsers(await apiClient.users());
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    } finally {
-      setLoading(false);
-    }
+      const [nextUsers, nextPersons] = await Promise.all([
+        usersService.users(),
+        fetchAllPages((pagination) => usersService.responsiblePersons(pagination)),
+      ]);
+      setUsers(nextUsers); setPersons(nextPersons);
+    } catch (reason) { setError(getErrorMessage(reason)); }
+    finally { setLoading(false); }
   }, []);
 
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void loadUsers();
-  }, [loadUsers]);
-
-  useEffect(() => {
-    function handleToolbar(event: Event) {
+    function toolbar(event: Event) {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'users') return;
-
-      if (detail.action === 'create' && canWriteUsers) {
-        setEditingUser(null);
-        setFormOpen(true);
-      }
-
-      if (detail.action === 'refresh') {
-        void loadUsers();
-      }
+      if (detail.action === 'create' && canWrite) { setEditing(null); setFormOpen(true); }
+      if (detail.action === 'refresh') void load();
     }
+    window.addEventListener(TOOLBAR_EVENT, toolbar);
+    return () => window.removeEventListener(TOOLBAR_EVENT, toolbar);
+  }, [canWrite, load]);
 
-    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
-    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [canWriteUsers, loadUsers]);
+  const visibleUsers = useMemo(() => filterUsers(users, filters.search, filters.role, filters.status), [filters, users]);
+  const personsById = useMemo(() => indexResponsiblePersons(persons), [persons]);
 
-  async function runUserAction(
-    action: () => Promise<unknown>,
-    options: { reload?: boolean } = { reload: true },
-  ) {
+  async function action(run: () => Promise<unknown>, success: string) {
     setError('');
-    try {
-      await action();
-      if (options.reload) {
-        await loadUsers();
-      }
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    }
+    try { await run(); await load(); setToast({ message: success, tone: 'success' }); }
+    catch (reason) { const message = getErrorMessage(reason); setError(message); setToast({ message, tone: 'error' }); }
   }
 
-  async function resetPassword(targetUser: UserSummary) {
-    await runUserAction(async () => {
-      const response = await apiClient.resetUserPassword(targetUser.id);
-      setTemporaryPassword(response.temporaryPassword);
-    });
-  }
-
-  return (
-    <section className="grid gap-3">
-      <PageHeader
-        title={userResource === 'users' ? 'Користувачі' : 'Користувачі МВО'}
-        description="Керування доступом до системи."
-        action={
-          canWriteUsers ? (
-            <div className="flex flex-wrap gap-2">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => {
-                setEditingUser(null);
-                setFormOpen(true);
-              }}
-            >
-              Створити користувача
-            </button>
-            {canDelete ? (
-              <button className="btn btn-danger" type="button" onClick={() => setResetOpen(true)}>
-                Очистити тестові дані
-              </button>
-            ) : null}
-            </div>
-          ) : undefined
-        }
-      />
-
-      {error ? <ErrorMessage message={error} /> : null}
-      {loading ? <LoadingMessage /> : null}
-      {!loading ? (
-        <UsersTable
-          canDelete={canDelete}
-          canResetPassword={canResetPasswords}
-          canRevokeSessions={canRevokeSessions}
-          canWrite={canWriteUsers}
-          users={users}
-          onActivate={(targetUser) =>
-            void runUserAction(() => apiClient.activateUser(targetUser.id))
-          }
-          onBlock={(targetUser) =>
-            void runUserAction(() => apiClient.blockUser(targetUser.id))
-          }
-          onDeactivate={(targetUser) =>
-            void runUserAction(() => apiClient.deactivateUser(targetUser.id))
-          }
-          onEdit={(targetUser) => {
-            setEditingUser(targetUser);
-            setFormOpen(true);
-          }}
-          onResetPassword={(targetUser) => {
-            void resetPassword(targetUser);
-          }}
-          onRevokeSessions={(targetUser) =>
-            void runUserAction(() => apiClient.revokeUserSessions(targetUser.id))
-          }
-          onUnblock={(targetUser) =>
-            void runUserAction(() => apiClient.unblockUser(targetUser.id))
-          }
-          onDelete={setDeletingUser}
-        />
-      ) : null}
-
-      {isFormOpen ? (
-        <UserFormModal
-          mode={userResource}
-          user={editingUser}
-          onClose={() => setFormOpen(false)}
-          onSaved={(password) => {
-            setFormOpen(false);
-            if (password) {
-              setTemporaryPassword(password);
-            }
-            void loadUsers();
-          }}
-        />
-      ) : null}
-
-      {temporaryPassword ? (
-        <TemporaryPasswordModal
-          temporaryPassword={temporaryPassword}
-          onClose={() => setTemporaryPassword('')}
-        />
-      ) : null}
-      {deletingUser ? (
-        <DestructiveActionModal
-          entityType={ADMIN_ENTITY_TYPES.user}
-          entityId={deletingUser.id}
-          onClose={() => setDeletingUser(null)}
-          onDeleted={async () => {
-            await loadUsers();
-            setToast('Користувача видалено.');
-          }}
-        />
-      ) : null}
-      {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
-      {resetOpen ? (
-        <ResetTestDataModal
-          onClose={() => setResetOpen(false)}
-          onReset={async () => {
-            await loadUsers();
-            setToast('Тестові дані очищено.');
-          }}
-        />
-      ) : null}
-    </section>
-  );
+  return <section className="grid gap-4">
+    <PageHeader icon="users" title={resource === 'users' ? 'Користувачі' : 'Користувачі МВО'} description="Керування обліковими записами, ролями та доступом до системи." action={<div className="flex flex-wrap gap-2">{canWrite ? <Button icon="users" type="button" onClick={() => { setEditing(null); setFormOpen(true); }}>Створити користувача</Button> : null}<Button icon="refresh" variant="outline" type="button" onClick={() => void load()}>Оновити</Button></div>} />
+    <FilterBar search={searchDraft} loading={loading} onSearchChange={setSearchDraft} onApply={() => setFilters({ search: searchDraft, role: roleDraft, status: statusDraft })} onReset={() => { setSearchDraft(''); setRoleDraft(''); setStatusDraft(''); setFilters({ search: '', role: '', status: '' }); }} onRefresh={() => void load()}>
+      <label className="filter-bar__field"><span>Роль</span><Select value={roleDraft} onChange={(event) => setRoleDraft(event.target.value)}><option value="">Усі ролі</option><option value="OWNER">Власник</option><option value="DPP_ADMIN">Адміністратор ДПП</option><option value="AUDITOR">Аудитор</option><option value="MVO">МВО</option></Select></label>
+      <label className="filter-bar__field"><span>Активність</span><Select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value)}><option value="">Усі</option><option value="active">Активні</option><option value="inactive">Неактивні</option></Select></label>
+    </FilterBar>
+    {error ? <ErrorState message={error} /> : null}
+    {loading ? <LoadingState label="Завантаження користувачів…" /> : <UsersTable users={visibleUsers} personsById={personsById} canWrite={canWrite} canResetPassword={canReset} canRevokeSessions={canRevoke} canDelete={user?.role === 'OWNER'} onEdit={(item) => { setEditing(item); setFormOpen(true); }} onResetPassword={(item) => void action(async () => { const result = await usersService.resetUserPassword(item.id); setTemporaryPassword(result.temporaryPassword); }, 'Тимчасовий пароль створено.')} onBlock={(item) => void action(() => usersService.blockUser(item.id), 'Користувача заблоковано.')} onUnblock={(item) => void action(() => usersService.unblockUser(item.id), 'Користувача розблоковано.')} onRevokeSessions={(item) => void action(() => usersService.revokeUserSessions(item.id), 'Сесії відкликано.')} onDeactivate={(item) => void action(() => usersService.deactivateUser(item.id), 'Користувача деактивовано.')} onActivate={(item) => void action(() => usersService.activateUser(item.id), 'Користувача активовано.')} onDelete={setDeleting} />}
+    {formOpen ? <UserFormModal mode={resource} user={editing} onClose={() => setFormOpen(false)} onSaved={(password) => { setFormOpen(false); if (password) setTemporaryPassword(password); void load(); setToast({ message: editing ? 'Користувача оновлено.' : 'Користувача створено.', tone: 'success' }); }} /> : null}
+    {temporaryPassword ? <TemporaryPasswordModal temporaryPassword={temporaryPassword} onClose={() => setTemporaryPassword('')} /> : null}
+    {deleting ? <DestructiveActionModal entityType={ADMIN_ENTITY_TYPES.user} entityId={deleting.id} onClose={() => setDeleting(null)} onDeleted={async () => { await load(); setToast({ message: 'Користувача видалено.', tone: 'success' }); }} /> : null}
+    {toast ? <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} /> : null}
+  </section>;
 }
-
-
