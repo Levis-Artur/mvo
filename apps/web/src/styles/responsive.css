@@ -23,6 +23,7 @@
   .ui-pagination__actions { display: grid; grid-template-columns: 1fr 1fr; }
   .ui-pagination__limit { grid-column: 1 / -1; justify-content: space-between; }
   .ui-modal__footer, .form-actions { flex-direction: column-reverse; }
+  .organization-node > summary, .organization-people > li { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 520px) {
   .dashboard-metrics { grid-template-columns: minmax(0, 1fr); }

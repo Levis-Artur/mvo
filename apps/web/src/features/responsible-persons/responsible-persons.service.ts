@@ -9,6 +9,8 @@ export const responsiblePersonsService = {
   createResponsiblePerson: apiClient.createResponsiblePerson,
   updateResponsiblePerson: apiClient.updateResponsiblePerson,
   createUser: apiClient.createUser,
+  users: apiClient.users,
+  stockDocuments: apiClient.stockDocuments,
   getResponsiblePersonStockBalances:
     apiClient.getResponsiblePersonStockBalances,
   getResponsiblePersonStockTransactions:

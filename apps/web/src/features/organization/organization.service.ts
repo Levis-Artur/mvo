@@ -8,4 +8,6 @@ export const organizationService = {
   updateService: apiClient.updateService,
   createUnit: apiClient.createUnit,
   updateUnit: apiClient.updateUnit,
+  responsiblePersons: apiClient.responsiblePersons,
+  updateResponsiblePerson: apiClient.updateResponsiblePerson,
 };

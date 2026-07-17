@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ErrorMessage, LoadingMessage, Modal } from '@/components/common';
+import {
+  Button,
+  ErrorState,
+  Input,
+  LoadingState,
+  Modal,
+} from '@/components/ui';
 import type { AdminEntityType, DeletionPreview } from '@/lib/types';
 import { adminService } from './admin.service';
 import {
@@ -61,10 +67,15 @@ export function DestructiveActionModal({
   }
 
   return (
-    <Modal title="Підтвердження видалення" onClose={onClose}>
+    <Modal
+      closeOnEscape={!saving}
+      destructive
+      title="Підтвердження видалення"
+      onClose={onClose}
+    >
       <div className="grid gap-4">
-        {loading ? <LoadingMessage /> : null}
-        {error ? <ErrorMessage message={error} /> : null}
+        {loading ? <LoadingState label="Завантаження наслідків видалення…" /> : null}
+        {error ? <ErrorState message={error} /> : null}
         {preview ? (
           <>
             <dl className="grid gap-2 text-sm">
@@ -103,13 +114,13 @@ export function DestructiveActionModal({
             </label>
             <label className="grid gap-1 text-sm font-medium">
               Введіть «{requiredConfirmation(preview, force)}»
-              <input className="input" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
+              <Input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
             </label>
             <div className="flex justify-end gap-2">
-              <button className="btn btn-outline" type="button" onClick={onClose}>Скасувати</button>
-              <button className="btn btn-danger" disabled={saving} type="button" onClick={() => void remove()}>
+              <Button variant="outline" type="button" onClick={onClose}>Скасувати</Button>
+              <Button variant="danger" disabled={saving} type="button" onClick={() => void remove()}>
                 {saving ? 'Видалення...' : 'Видалити'}
-              </button>
+              </Button>
             </div>
           </>
         ) : null}

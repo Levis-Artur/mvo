@@ -1,159 +1,145 @@
 'use client';
 
-import type { ResponsiblePerson } from '@/lib/types';
-import {
-  EmptyState,
-  InfoRow,
-  StatusBadge,
-  fullName,
-} from '@/components/common';
+import type { ResponsiblePerson, UserSummary } from '@/lib/types';
+import { Button, DataTable, StatusBadge } from '@/components/ui';
+import { personDisplayName } from './persons-model';
+
+type StockPresence = boolean | undefined;
+
 export function PersonsTable({
   persons,
+  loading,
   canEdit,
   canCreateAccount,
+  canDelete,
+  accounts,
+  accountsAvailable,
+  stockPresence,
+  onView,
   onEdit,
   onCreateAccount,
-  canDelete,
   onDelete,
-  onDeactivate,
+  onToggleActive,
 }: {
   persons: ResponsiblePerson[];
+  loading: boolean;
   canEdit: boolean;
   canCreateAccount: boolean;
+  canDelete: boolean;
+  accounts: Map<string, UserSummary>;
+  accountsAvailable: boolean;
+  stockPresence: Record<string, StockPresence>;
+  onView: (person: ResponsiblePerson) => void;
   onEdit: (person: ResponsiblePerson) => void;
   onCreateAccount: (person: ResponsiblePerson) => void;
-  canDelete: boolean;
   onDelete: (person: ResponsiblePerson) => void;
-  onDeactivate: (person: ResponsiblePerson) => void;
+  onToggleActive: (person: ResponsiblePerson) => void;
 }) {
-  if (persons.length === 0) {
-    return <EmptyState message="МВО не знайдено." />;
-  }
-
   return (
-    <div className="app-card overflow-hidden">
-      <div className="hidden overflow-x-auto md:block">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {[
-                'ПІП',
-                'Табельний номер',
-                'Управління',
-                'Служба',
-                'Підрозділ',
-                'Статус',
-                'Дії',
-              ].map((header) => (
-                <th key={header} className="px-4 py-3">
-                  {header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {persons.map((person) => (
-              <tr key={person.id}>
-                <td className="px-4 py-3 font-medium">{fullName(person)}</td>
-                <td className="px-4 py-3">{person.personnelNumber}</td>
-                <td className="max-w-64 px-4 py-3">{person.management.name}</td>
-                <td className="px-4 py-3">{person.service.name}</td>
-                <td className="px-4 py-3">{person.unit?.name ?? '-'}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge active={person.isActive} />
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    {canEdit ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onEdit(person)}
-                      >
-                        Редагувати
-                      </button>
-                    ) : null}
-                    {canCreateAccount ? (
-                      <button
-                        className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                        type="button"
-                        onClick={() => onCreateAccount(person)}
-                      >
-                        Створити обліковий запис
-                      </button>
-                    ) : null}
-                    {canEdit && person.isActive ? (
-                      <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onDeactivate(person)}>
-                        Деактивувати
-                      </button>
-                    ) : null}
-                    {canEdit ? (
-                      <>
-                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити управління</button>
-                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити службу</button>
-                        <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onEdit(person)}>Змінити підрозділ</button>
-                      </>
-                    ) : null}
-                    {canDelete ? (
-                      <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => onDelete(person)}>Видалити</button>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="grid gap-3 p-3 md:hidden">
-        {persons.map((person) => (
-          <div
-            key={person.id}
-            className="rounded-md border border-slate-200 p-3"
+    <DataTable
+      ariaLabel="Реєстр матеріально відповідальних осіб"
+      columns={[
+        { label: 'Номер МВО' },
+        { label: 'ПІБ' },
+        { label: 'Управління' },
+        { label: 'Служба' },
+        { label: 'Підрозділ' },
+        { label: 'Обліковий запис' },
+        { label: 'Активність' },
+        { label: 'Залишки' },
+        { label: 'Дії', actions: true },
+      ]}
+      emptyMessage="МВО за вказаними фільтрами не знайдено."
+      loading={loading}
+      rows={persons.map((person) => {
+        const account = accounts.get(person.id);
+        const hasStock = stockPresence[person.id];
+
+        return [
+          <span className="font-mono font-semibold" key="number">
+            {person.personnelNumber}
+          </span>,
+          <button
+            className="text-left font-semibold text-[var(--color-primary)] hover:underline"
+            key="name"
+            type="button"
+            onClick={() => onView(person)}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words font-semibold">{fullName(person)}</p>
-                <p className="text-sm text-slate-500">
-                  {person.personnelNumber}
-                </p>
-              </div>
-              <StatusBadge active={person.isActive} />
-            </div>
-            <dl className="mt-3 grid gap-2 text-sm">
-              <InfoRow label="Управління" value={person.management.name} />
-              <InfoRow label="Служба" value={person.service.name} />
-              <InfoRow label="Підрозділ" value={person.unit?.name ?? '-'} />
-            </dl>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {canEdit ? (
-                <button
-                  className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                  type="button"
-                  onClick={() => onEdit(person)}
-                >
-                  Редагувати
-                </button>
-              ) : null}
-              {canCreateAccount ? (
-                <button
-                  className="btn btn-ghost !min-h-0 !w-fit !p-0"
-                  type="button"
-                  onClick={() => onCreateAccount(person)}
-                >
-                  Створити обліковий запис
-                </button>
-              ) : null}
-              {canEdit && person.isActive ? (
-                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => onDeactivate(person)}>Деактивувати</button>
-              ) : null}
-              {canDelete ? (
-                <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => onDelete(person)}>Видалити</button>
-              ) : null}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+            {personDisplayName(person)}
+          </button>,
+          person.management.name,
+          person.service.name,
+          person.unit?.name ?? 'Без підрозділу',
+          accountsAvailable ? (
+            account ? (
+              <StatusBadge key="account" tone="success">
+                {account.username}
+              </StatusBadge>
+            ) : (
+              <StatusBadge key="account" tone="warning">
+                Немає облікового запису
+              </StatusBadge>
+            )
+          ) : (
+            <StatusBadge key="account" tone="neutral">
+              Недоступно для ролі
+            </StatusBadge>
+          ),
+          <StatusBadge
+            key="active"
+            tone={person.isActive ? 'success' : 'neutral'}
+          >
+            {person.isActive ? 'Активний' : 'Неактивний'}
+          </StatusBadge>,
+          hasStock === undefined ? (
+            <StatusBadge key="stock" tone="info">
+              У картці МВО
+            </StatusBadge>
+          ) : (
+            <StatusBadge key="stock" tone={hasStock ? 'warning' : 'neutral'}>
+              {hasStock ? 'Має залишки' : 'Залишків немає'}
+            </StatusBadge>
+          ),
+          <div className="flex min-w-48 flex-wrap gap-1" key="actions">
+            <Button variant="ghost" type="button" onClick={() => onView(person)}>
+              Переглянути
+            </Button>
+            {canEdit ? (
+              <Button variant="ghost" type="button" onClick={() => onEdit(person)}>
+                Редагувати
+              </Button>
+            ) : null}
+            {canCreateAccount && accountsAvailable && !account ? (
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => onCreateAccount(person)}
+              >
+                Створити обліковий запис
+              </Button>
+            ) : null}
+            {canEdit ? (
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => onToggleActive(person)}
+              >
+                {person.isActive ? 'Деактивувати' : 'Активувати'}
+              </Button>
+            ) : null}
+            {canEdit ? (
+              <Button variant="ghost" type="button" onClick={() => onEdit(person)}>
+                Перемістити
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Button variant="danger" type="button" onClick={() => onDelete(person)}>
+                Видалити
+              </Button>
+            ) : null}
+          </div>,
+        ];
+      })}
+    />
   );
 }
-
