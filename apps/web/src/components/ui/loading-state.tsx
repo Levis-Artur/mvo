@@ -1,0 +1,1 @@
+export function LoadingState({ label = 'Завантаження даних…' }: { label?: string }) { return <div aria-busy="true" className="ui-state" role="status"><span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" /><span>{label}</span></div>; }

@@ -1,0 +1,4 @@
+import { StatusBadge } from '@/components/ui';
+import type { ApiState } from './app-header';
+export const APP_VERSION = '0.1.0';
+export function StatusFooter({ apiState, currentPage, userLabel }: { apiState: ApiState; currentPage: string; userLabel: string }) { const available = apiState === 'available'; return <footer className="status-footer"><div className="status-footer__group"><StatusBadge dot tone={available ? 'success' : apiState === 'checking' ? 'warning' : 'danger'}>Система {available ? 'готова' : apiState === 'checking' ? 'перевіряється' : 'недоступна'}</StatusBadge><span className="status-footer__section">Розділ: {currentPage}</span></div><div className="status-footer__group status-footer__secondary"><span>API: {available ? 'доступний' : apiState === 'checking' ? 'перевірка' : 'недоступний'}</span><span>Версія: {APP_VERSION}</span><span>Користувач: {userLabel}</span></div></footer>; }

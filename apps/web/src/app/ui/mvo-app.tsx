@@ -4,8 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getNavigationItems, getViewHref, roleLabels, type AppView } from '@/lib/authz';
 import { useAuth } from './auth-context';
-import { AppHeader } from '@/components/layout/app-header';
-import { StatusBar } from '@/components/layout/status-bar';
+import { AppShell } from '@/components/layout/app-shell';
 import { DashboardView } from '@/features/dashboard/dashboard-view';
 import { PersonsView } from '@/features/responsible-persons/persons-view';
 import { MyCardView, MyStockView, MyTransactionsView } from '@/features/responsible-persons/my-views';
@@ -26,7 +25,8 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
   const [view, setView] = useState<View>(initialView);
   const navigationItems = getNavigationItems(user);
   const [apiState, setApiState] = useState<'checking' | 'available' | 'unavailable'>('checking');
-  const topNavRef = useRef<HTMLElement | null>(null);
+  const [apiCheckedAt, setApiCheckedAt] = useState<Date | null>(null);
+  const topNavRef = useRef<HTMLDivElement | null>(null);
   const currentPage = navigationItems.find((item) => item.view === view);
 
   useEffect(() => {
@@ -36,8 +36,8 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/health`, { cache: 'no-store', signal: controller.signal })
-      .then((response) => setApiState(response.ok ? 'available' : 'unavailable'))
-      .catch(() => { if (!controller.signal.aborted) setApiState('unavailable'); });
+      .then((response) => { setApiState(response.ok ? 'available' : 'unavailable'); setApiCheckedAt(new Date()); })
+      .catch(() => { if (!controller.signal.aborted) { setApiState('unavailable'); setApiCheckedAt(new Date()); } });
     return () => controller.abort();
   }, []);
 
@@ -46,10 +46,8 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
     router.push(getViewHref(user, nextView));
   }
 
-  return <div className="flex min-h-screen flex-col bg-[var(--app-background)] text-[var(--text-primary)]">
-    <AppHeader apiState={apiState} currentView={view} navigationItems={navigationItems} topNavRef={topNavRef} user={user} onLogout={logout} onSelectView={selectView} />
-    <div className="flex min-h-0 flex-1 flex-col bg-[var(--workspace-background)]"><main className="compact-scrollbar min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-      {view === 'home' ? <DashboardView onNavigate={selectView} /> : null}
+  return <AppShell apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} currentView={view} navigationItems={navigationItems} navRef={topNavRef} user={user} userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''} onLogout={logout} onSelectView={selectView}>
+      {view === 'home' ? <DashboardView apiCheckedAt={apiCheckedAt} apiState={apiState} onNavigate={selectView} /> : null}
       {view === 'persons' ? <PersonsView /> : null}
       {view === 'structure' ? <StructureView /> : null}
       {view === 'stock' ? <StockView /> : null}
@@ -63,7 +61,5 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
       {view === 'transfers' ? <StockDocumentsView /> : null}
       {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних endpoint." /> : null}
       {view === 'administration' ? <PlaceholderView title="Адміністрування" description="Адміністративні налаштування ще не реалізовані." /> : null}
-    </main></div>
-    <StatusBar apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''} />
-  </div>;
+  </AppShell>;
 }

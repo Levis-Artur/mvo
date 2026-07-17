@@ -1,0 +1,1 @@
+export function EmptyState({ title = 'Дані відсутні', message }: { title?: string; message: string }) { return <div className="ui-state"><strong>{title}</strong><span className="text-[var(--color-text-secondary)]">{message}</span></div>; }
