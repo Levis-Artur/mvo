@@ -1,301 +1,172 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
-import { useAuth } from '@/app/ui/auth-context';
-import { can } from '@/lib/authz';
-import type { InventoryItem, ResponsiblePerson, StockBalance } from '@/lib/types';
-import { ErrorMessage, Field, FormActions, Modal, PageHeader, PaginationControls, Select, SimpleTable, fullName, getErrorMessage } from '@/components/common';
-import { focusFirstField, getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import type {
+  InventoryItem,
+  Management,
+  ResponsiblePerson,
+  Service,
+  StockBalance,
+  Unit,
+} from '@/lib/types';
+import { getErrorMessage } from '@/components/common';
+import { PageHeader } from '@/components/layout/page-header';
+import { Button, ErrorState, Pagination } from '@/components/ui';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
+import {
+  focusFirstField,
+  getToolbarDetail,
+  TOOLBAR_EVENT,
+} from '@/components/layout/toolbar-events';
+import { StockBalancesTable } from './stock-balances-table';
+import { StockFilterBar } from './stock-filter-bar';
+import { StockSummaryCards } from './stock-summary-cards';
+import {
+  DEFAULT_STOCK_FILTERS,
+  filterProblematicBalances,
+  paginateBalances,
+  stockQueryFromFilters,
+  type StockFilterDraft,
+} from './stock-model';
 
 export function StockView() {
-  const { user } = useAuth();
-  const canWriteStock = can(user, 'write', 'stock');
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 0,
-  });
-  const [filters, setFilters] = useState({
-    search: '',
-    responsiblePersonId: '',
-    onlyPositive: true,
-  });
-  const [manualOpen, setManualOpen] = useState(false);
+  const [managements, setManagements] = useState<Management[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [draft, setDraft] = useState<StockFilterDraft>(DEFAULT_STOCK_FILTERS);
+  const [applied, setApplied] = useState<StockFilterDraft>(DEFAULT_STOCK_FILTERS);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [referenceError, setReferenceError] = useState('');
 
-  const load = useCallback(async () => {
+  const filteredBalances = useMemo(
+    () => filterProblematicBalances(balances, applied.onlyProblematic),
+    [applied.onlyProblematic, balances],
+  );
+  const paged = useMemo(
+    () => paginateBalances(filteredBalances, page, limit),
+    [filteredBalances, limit, page],
+  );
+
+  const loadReferences = useCallback(async () => {
+    const [nextManagements, nextServices, nextUnits, nextPersons, nextItems] =
+      await Promise.all([
+        apiClient.managements(),
+        apiClient.services(),
+        apiClient.units(),
+        fetchAllPages((pagination) =>
+          apiClient.responsiblePersons({ ...pagination }),
+        ),
+        fetchAllPages((pagination) => apiClient.inventoryItems(pagination)),
+      ]);
+    setManagements(nextManagements);
+    setServices(nextServices);
+    setUnits(nextUnits);
+    setPersons(nextPersons);
+    setItems(nextItems);
+  }, []);
+
+  const loadBalances = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const [balanceResponse, personsResponse, itemsResponse] =
-        await Promise.all([
-          apiClient.stockBalances({
-            ...filters,
-            responsiblePersonId: filters.responsiblePersonId || undefined,
-            page: pagination.page,
-            limit: pagination.limit,
-          }),
-          apiClient.responsiblePersons({ limit: 100 }),
-          apiClient.inventoryItems({ limit: 100 }),
-        ]);
-      setBalances(balanceResponse.items);
-      setPagination(balanceResponse.pagination);
-      setPersons(personsResponse.items);
-      setItems(itemsResponse.items);
+      const query = stockQueryFromFilters(applied);
+      const nextBalances = await fetchAllPages((pagination) =>
+        apiClient.stockBalances({ ...query, ...pagination }),
+      );
+      setBalances(nextBalances);
     } catch (reason) {
       setError(getErrorMessage(reason));
+    } finally {
+      setLoading(false);
     }
-  }, [filters, pagination.page, pagination.limit]);
+  }, [applied]);
+
+  const refresh = useCallback(async () => {
+    setError('');
+    setReferenceError('');
+    try {
+      await Promise.all([loadReferences(), loadBalances()]);
+    } catch (reason) {
+      setReferenceError(getErrorMessage(reason));
+    }
+  }, [loadBalances, loadReferences]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    setReferenceError('');
+    void loadReferences().catch((reason: unknown) =>
+      setReferenceError(getErrorMessage(reason)),
+    );
+  }, [loadReferences]);
+
+  useEffect(() => {
+    void loadBalances();
+  }, [loadBalances]);
 
   useEffect(() => {
     function handleToolbar(event: Event) {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'stock') return;
-
-      if (detail.action === 'focus-filter') {
-        focusFirstField();
-      }
-
-      if (detail.action === 'refresh') {
-        void load();
-      }
+      if (detail.action === 'focus-filter') focusFirstField();
+      if (detail.action === 'refresh') void refresh();
     }
-
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [load]);
+  }, [refresh]);
 
   return (
-    <section className="grid gap-3">
+    <section className="grid min-w-0 gap-4">
       <PageHeader
-        title="Залишки"
-        description="Поточні залишки майна за МВО."
         action={
-          canWriteStock ? (
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={() => setManualOpen(true)}
-          >
-            Додати надходження вручну
-          </button>
-          ) : undefined
+          <Button icon="refresh" variant="outline" type="button" onClick={() => void refresh()}>
+            Оновити
+          </Button>
         }
+        description="Поточні облікові залишки майна за МВО та номенклатурою."
+        icon="database"
+        title="Залишки"
       />
-      <div className="erp-toolbar p-2">
-        <div className="grid gap-2 md:grid-cols-3">
-          <input
-            className="input"
-            placeholder="Пошук"
-            value={filters.search}
-            onChange={(event) =>
-              setFilters((current) => ({
-                ...current,
-                search: event.target.value,
-              }))
-            }
-          />
-          <Select
-            value={filters.responsiblePersonId}
-            onChange={(responsiblePersonId) =>
-              setFilters((current) => ({ ...current, responsiblePersonId }))
-            }
-          >
-            <option value="">Усі МВО</option>
-            {persons.map((person) => (
-              <option key={person.id} value={person.id}>
-                {fullName(person)}
-              </option>
-            ))}
-          </Select>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              checked={filters.onlyPositive}
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  onlyPositive: event.target.checked,
-                }))
-              }
-            />
-            Лише позитивні залишки
-          </label>
-        </div>
-      </div>
-      {error ? <ErrorMessage message={error} /> : null}
-      <SimpleTable
-        headers={['МВО', 'Код', 'Найменування', 'Од.', 'Залишок', 'Дії']}
-        rows={balances.map((balance) => [
-          balance.responsiblePerson.fullName,
-          balance.inventoryItem.externalCode,
-          balance.inventoryItem.name,
-          balance.inventoryItem.unitOfMeasure ?? '-',
-          balance.quantity,
-          'Переглянути історію',
-        ])}
+      <StockSummaryCards balances={filteredBalances} />
+      <StockFilterBar
+        filters={draft}
+        items={items}
+        loading={loading}
+        managements={managements}
+        persons={persons}
+        services={services}
+        units={units}
+        onApply={() => {
+          setPage(1);
+          setApplied(draft);
+        }}
+        onChange={setDraft}
+        onRefresh={() => void refresh()}
+        onReset={() => {
+          setDraft(DEFAULT_STOCK_FILTERS);
+          setApplied(DEFAULT_STOCK_FILTERS);
+          setPage(1);
+        }}
       />
-      <PaginationControls
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        total={pagination.total}
-        onPage={(page) => setPagination((current) => ({ ...current, page }))}
+      {error ? <ErrorState message={error} /> : null}
+      {referenceError ? <ErrorState message={referenceError} /> : null}
+      <StockBalancesTable balances={paged.items} loading={loading} />
+      <Pagination
+        limit={paged.pagination.limit}
+        page={paged.pagination.page}
+        total={paged.pagination.total}
+        totalPages={paged.pagination.totalPages}
+        onLimitChange={(nextLimit) => {
+          setLimit(nextLimit);
+          setPage(1);
+        }}
+        onPage={setPage}
       />
-      {manualOpen ? (
-        <ManualReceiptForm
-          persons={persons}
-          items={items}
-          onClose={() => setManualOpen(false)}
-          onSaved={() => {
-            setManualOpen(false);
-            void load();
-          }}
-        />
-      ) : null}
     </section>
   );
 }
-
-export function ManualReceiptForm({
-  persons,
-  items,
-  onClose,
-  onSaved,
-}: {
-  persons: ResponsiblePerson[];
-  items: InventoryItem[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState({
-    responsiblePersonId: '',
-    inventoryItemId: '',
-    quantity: '',
-    occurredAt: new Date().toISOString().slice(0, 10),
-    sourceDocument: '',
-    comment: '',
-  });
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      await apiClient.manualReceipt({
-        ...form,
-        sourceDocument: form.sourceDocument || undefined,
-        comment: form.comment || undefined,
-      });
-      onSaved();
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal title="Додати надходження вручну" onClose={onClose}>
-      <form className="grid gap-3" onSubmit={submit}>
-        {error ? <ErrorMessage message={error} /> : null}
-        <Field label="МВО">
-          <Select
-            required
-            value={form.responsiblePersonId}
-            onChange={(responsiblePersonId) =>
-              setForm((current) => ({ ...current, responsiblePersonId }))
-            }
-          >
-            <option value="">Оберіть МВО</option>
-            {persons.map((person) => (
-              <option key={person.id} value={person.id}>
-                {fullName(person)}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Номенклатура">
-          <Select
-            required
-            value={form.inventoryItemId}
-            onChange={(inventoryItemId) =>
-              setForm((current) => ({ ...current, inventoryItemId }))
-            }
-          >
-            <option value="">Оберіть позицію</option>
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.externalCode} — {item.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Кількість">
-            <input
-              required
-              className="input"
-              value={form.quantity}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  quantity: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="Дата">
-            <input
-              required
-              type="date"
-              className="input"
-              value={form.occurredAt}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  occurredAt: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="Документ">
-            <input
-              className="input"
-              value={form.sourceDocument}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  sourceDocument: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="Коментар">
-            <input
-              className="input"
-              value={form.comment}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  comment: event.target.value,
-                }))
-              }
-            />
-          </Field>
-        </div>
-        <FormActions saving={saving} onClose={onClose} />
-      </form>
-    </Modal>
-  );
-}
-
-

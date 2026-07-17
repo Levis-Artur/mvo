@@ -1,9 +1,14 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+
 import { useAuth } from '@/app/ui/auth-context';
 import { ErrorMessage, LoadingMessage, PageHeader, PaginationControls, Select, Toast } from '@/components/common';
 import { fullName } from '@/components/common/formatters';
-import { canChangeStockDocuments } from './stock-document-rules';
+import {
+  canChangeStockDocuments,
+  parseStockDocumentQuickAction,
+} from './stock-document-rules';
 import { CancelDocumentModal } from './cancel-document-modal';
 import { PostDocumentModal } from './post-document-modal';
 import { StockDocumentDetailsModal } from './stock-document-details-modal';
@@ -20,6 +25,16 @@ export function StockDocumentsView() {
 function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const controller = useStockDocumentsController(user);
   const writable = canChangeStockDocuments(user);
+  const quickActionHandled = useRef(false);
+
+  useEffect(() => {
+    if (quickActionHandled.current || !writable) return;
+    const action = parseStockDocumentQuickAction(window.location.search);
+    if (!action) return;
+    quickActionHandled.current = true;
+    controller.openCreate(action.type);
+  }, [controller, writable]);
+
   return <section className="grid gap-3">
     <PageHeader title="Передачі" description="Документи передачі майна між МВО та видачі зовнішнім одержувачам." action={
       <div className="flex flex-wrap gap-2">

@@ -7,5 +7,8 @@ export const inventoryService = {
   stockBalances: apiClient.stockBalances,
   stockTransactions: apiClient.stockTransactions,
   responsiblePersons: apiClient.responsiblePersons,
+  managements: apiClient.managements,
+  services: apiClient.services,
+  units: apiClient.units,
   manualReceipt: apiClient.manualReceipt,
 };

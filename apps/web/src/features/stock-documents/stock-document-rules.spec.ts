@@ -13,6 +13,7 @@ import {
   filterRecipientOptions,
   lifecycleActions,
   personOptionLabel,
+  parseStockDocumentQuickAction,
   recipientOptions,
   resolveSourceId,
   validateDocumentInput,
@@ -47,6 +48,19 @@ const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => (
 });
 
 describe('stock document frontend rules', () => {
+  it('opens a quick action with the current MVO as source', () => {
+    expect(
+      parseStockDocumentQuickAction(
+        '?create=TRANSFER&sourceResponsiblePersonId=person-1',
+      ),
+    ).toEqual({ type: 'TRANSFER', sourceResponsiblePersonId: 'person-1' });
+    expect(
+      parseStockDocumentQuickAction(
+        '?create=ISSUE&sourceResponsiblePersonId=person-1',
+      ),
+    ).toEqual({ type: 'ISSUE', sourceResponsiblePersonId: 'person-1' });
+  });
+
   it('MVO бачить дії створення', () => {
     expect(canChangeStockDocuments(mvoUser)).toBe(true);
   });

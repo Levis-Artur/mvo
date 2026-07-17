@@ -4,7 +4,24 @@ import type {
   StockBalance,
   StockDocument,
   StockDocumentInput,
+  StockDocumentType,
 } from '@/lib/types';
+
+export function parseStockDocumentQuickAction(search: string): {
+  type: StockDocumentType;
+  sourceResponsiblePersonId: string;
+} | null {
+  const params = new URLSearchParams(search);
+  const type = params.get('create');
+  const sourceResponsiblePersonId = params.get('sourceResponsiblePersonId');
+  if (
+    (type !== 'TRANSFER' && type !== 'ISSUE') ||
+    !sourceResponsiblePersonId
+  ) {
+    return null;
+  }
+  return { type, sourceResponsiblePersonId };
+}
 
 export function canChangeStockDocuments(user: Pick<AuthUser, 'role'>) {
   return user.role !== 'AUDITOR';

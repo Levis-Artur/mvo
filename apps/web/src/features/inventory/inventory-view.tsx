@@ -1,19 +1,39 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
 import { useAuth } from '@/app/ui/auth-context';
 import { can } from '@/lib/authz';
-import type { InventoryItem } from '@/lib/types';
-import { ErrorMessage, Field, FormActions, LoadingMessage, Modal, PageHeader, PaginationControls, Select, SimpleTable, Toast, getErrorMessage } from '@/components/common';
+import type { InventoryItem, InventoryItemsQuery } from '@/lib/types';
+import { getErrorMessage } from '@/components/common';
+import { PageHeader } from '@/components/layout/page-header';
+import {
+  Button,
+  ErrorState,
+  FilterBar,
+  Pagination,
+  Select,
+  Toast,
+} from '@/components/ui';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
+import { InventoryItemForm } from './inventory-item-form';
+import { InventoryItemDetailsModal } from './inventory-item-details-modal';
+import { InventoryTable } from './inventory-table';
+import {
+  EMPTY_INVENTORY_FILTERS,
+  inventoryQueryFromFilters,
+  type InventoryFilterDraft,
+} from './inventory-model';
+
+const INITIAL_QUERY: InventoryItemsQuery = { page: 1, limit: 20 };
 
 export function NomenclatureView() {
   const { user } = useAuth();
-  const canWriteNomenclature = can(user, 'write', 'nomenclature');
+  const canWrite = can(user, 'write', 'nomenclature');
+  const canDelete = canShowDestructiveActions(user?.role);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -21,34 +41,23 @@ export function NomenclatureView() {
     total: 0,
     totalPages: 0,
   });
-  const [filters, setFilters] = useState({
-    search: '',
-    reviewStatus: '',
-    isActive: '',
-  });
+  const [query, setQuery] = useState<InventoryItemsQuery>(INITIAL_QUERY);
+  const [draft, setDraft] = useState<InventoryFilterDraft>(
+    EMPTY_INVENTORY_FILTERS,
+  );
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [detailsItem, setDetailsItem] = useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
   const [toast, setToast] = useState('');
-  const canDelete = canShowDestructiveActions(user?.role);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await apiClient.inventoryItems({
-        search: filters.search,
-        reviewStatus:
-          filters.reviewStatus === ''
-            ? undefined
-            : (filters.reviewStatus as 'VERIFIED' | 'NEEDS_REVIEW'),
-        isActive:
-          filters.isActive === '' ? undefined : filters.isActive === 'true',
-        page: pagination.page,
-        limit: pagination.limit,
-      });
+      const response = await apiClient.inventoryItems(query);
       setItems(response.items);
       setPagination(response.pagination);
     } catch (reason) {
@@ -56,7 +65,7 @@ export function NomenclatureView() {
     } finally {
       setLoading(false);
     }
-  }, [filters, pagination.page, pagination.limit]);
+  }, [query]);
 
   useEffect(() => {
     void load();
@@ -66,124 +75,134 @@ export function NomenclatureView() {
     function handleToolbar(event: Event) {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'nomenclature') return;
-
-      if (detail.action === 'create' && canWriteNomenclature) {
+      if (detail.action === 'create' && canWrite) {
+        setEditingItem(null);
         setFormOpen(true);
       }
-
-      if (detail.action === 'refresh') {
-        void load();
-      }
+      if (detail.action === 'refresh') void load();
     }
-
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [canWriteNomenclature, load]);
+  }, [canWrite, load]);
+
+  function openEdit(item: InventoryItem) {
+    setDetailsItem(null);
+    setEditingItem(item);
+    setFormOpen(true);
+  }
+
+  async function toggleArchive(item: InventoryItem) {
+    setError('');
+    try {
+      await apiClient.updateInventoryItem(item.id, { isActive: !item.isActive });
+      await load();
+      setToast(item.isActive ? 'Номенклатуру архівовано.' : 'Номенклатуру відновлено.');
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    }
+  }
 
   return (
-    <section className="grid gap-3">
+    <section className="grid min-w-0 gap-4">
       <PageHeader
-        title="Номенклатура"
-        description="Централізований довідник позицій майна."
         action={
-          canWriteNomenclature ? (
-          <button
-            className="btn btn-primary"
-            type="button"
-            onClick={() => setFormOpen(true)}
-          >
-            Додати позицію
-          </button>
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            <Button icon="refresh" variant="outline" type="button" onClick={() => void load()}>
+              Оновити
+            </Button>
+            {canWrite ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  setEditingItem(null);
+                  setFormOpen(true);
+                }}
+              >
+                Додати позицію
+              </Button>
+            ) : null}
+          </div>
         }
+        description="Централізований довідник позицій майна та їх обліковий стан."
+        icon="box"
+        title="Номенклатура"
       />
-      <div className="erp-toolbar p-2">
-        <div className="grid gap-2 md:grid-cols-3">
-          <input
-            className="input"
-            placeholder="Пошук за кодом або назвою"
-            value={filters.search}
+
+      <FilterBar
+        loading={loading}
+        search={draft.search}
+        onApply={() =>
+          setQuery(inventoryQueryFromFilters(draft, 1, pagination.limit))
+        }
+        onRefresh={() => void load()}
+        onReset={() => {
+          setDraft(EMPTY_INVENTORY_FILTERS);
+          setQuery({ page: 1, limit: pagination.limit });
+        }}
+        onSearchChange={(search) => setDraft((current) => ({ ...current, search }))}
+      >
+        <label className="filter-bar__field">
+          <span>Статус перевірки</span>
+          <Select
+            value={draft.reviewStatus}
             onChange={(event) =>
-              setFilters((current) => ({
+              setDraft((current) => ({
                 ...current,
-                search: event.target.value,
+                reviewStatus: event.target.value as InventoryFilterDraft['reviewStatus'],
               }))
             }
-          />
-          <Select
-            value={filters.reviewStatus}
-            onChange={(reviewStatus) =>
-              setFilters((current) => ({ ...current, reviewStatus }))
-            }
           >
-            <option value="">Усі статуси перевірки</option>
+            <option value="">Усі статуси</option>
             <option value="NEEDS_REVIEW">Потребують перевірки</option>
             <option value="VERIFIED">Перевірені</option>
           </Select>
+        </label>
+        <label className="filter-bar__field">
+          <span>Активність</span>
           <Select
-            value={filters.isActive}
-            onChange={(isActive) =>
-              setFilters((current) => ({ ...current, isActive }))
+            value={draft.isActive}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                isActive: event.target.value as InventoryFilterDraft['isActive'],
+              }))
             }
           >
             <option value="">Усі записи</option>
             <option value="true">Активні</option>
-            <option value="false">Неактивні</option>
+            <option value="false">Архівні</option>
           </Select>
-        </div>
-      </div>
-      {error ? <ErrorMessage message={error} /> : null}
-      {loading ? <LoadingMessage /> : null}
-      {!loading ? (
-        <SimpleTable
-          headers={[
-            'Код',
-            'Найменування',
-            'Од.',
-            'Категорія',
-            'Перевірка',
-            'МВО',
-            'Залишок',
-            'Дії',
-          ]}
-          rows={items.map((item) => [
-            item.externalCode,
-            item.name,
-            item.unitOfMeasure ?? '-',
-            item.category ?? '-',
-            item.reviewStatus === 'NEEDS_REVIEW'
-              ? 'Потребує перевірки'
-              : 'Перевірено',
-            String(item.responsiblePersonsCount ?? 0),
-            item.totalQuantity ?? '0',
-            <div key={`${item.id}-actions`} className="flex flex-wrap gap-2">
-              {canWriteNomenclature ? (
-                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => {
-                  setEditingItem(item);
-                  setFormOpen(true);
-                }}>Редагувати</button>
-              ) : null}
-              {canWriteNomenclature && item.isActive ? (
-                <button className="btn btn-ghost !min-h-0 !w-fit !p-0" type="button" onClick={() => {
-                  void apiClient.updateInventoryItem(item.id, { isActive: false })
-                    .then(load)
-                    .then(() => setToast('Номенклатуру архівовано.'))
-                    .catch((reason: unknown) => setError(getErrorMessage(reason)));
-                }}>Архівувати</button>
-              ) : null}
-              {canDelete ? (
-                <button className="btn btn-danger !min-h-0 !w-fit !p-0" type="button" onClick={() => setDeletingItem(item)}>Видалити</button>
-              ) : null}
-            </div>,
-          ])}
+        </label>
+      </FilterBar>
+
+      {error ? <ErrorState message={error} /> : null}
+      <InventoryTable
+        canDelete={canDelete}
+        canEdit={canWrite}
+        items={items}
+        loading={loading}
+        onDelete={setDeletingItem}
+        onEdit={openEdit}
+        onToggleArchive={(item) => void toggleArchive(item)}
+        onView={setDetailsItem}
+      />
+      <Pagination
+        limit={pagination.limit}
+        page={pagination.page}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        onLimitChange={(limit) => setQuery((current) => ({ ...current, limit, page: 1 }))}
+        onPage={(page) => setQuery((current) => ({ ...current, page }))}
+      />
+
+      {detailsItem ? (
+        <InventoryItemDetailsModal
+          canEdit={canWrite}
+          item={detailsItem}
+          onClose={() => setDetailsItem(null)}
+          onEdit={() => openEdit(detailsItem)}
         />
       ) : null}
-      <PaginationControls
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        total={pagination.total}
-        onPage={(page) => setPagination((current) => ({ ...current, page }))}
-      />
       {formOpen ? (
         <InventoryItemForm
           item={editingItem}
@@ -195,157 +214,17 @@ export function NomenclatureView() {
         />
       ) : null}
       {deletingItem ? (
-        <DestructiveActionModal entityType={ADMIN_ENTITY_TYPES.inventoryItem} entityId={deletingItem.id} onClose={() => setDeletingItem(null)} onDeleted={async () => {
-          await load();
-          setToast('Номенклатуру видалено.');
-        }} />
+        <DestructiveActionModal
+          entityId={deletingItem.id}
+          entityType={ADMIN_ENTITY_TYPES.inventoryItem}
+          onClose={() => setDeletingItem(null)}
+          onDeleted={async () => {
+            await load();
+            setToast('Номенклатуру видалено.');
+          }}
+        />
       ) : null}
       {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
     </section>
   );
 }
-
-export function InventoryItemForm({
-  item,
-  onClose,
-  onSaved,
-}: {
-  item?: InventoryItem | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [form, setForm] = useState({
-    externalCode: item?.externalCode ?? '',
-    name: item?.name ?? '',
-    unitOfMeasure: item?.unitOfMeasure ?? '',
-    category: item?.category ?? '',
-    description: item?.description ?? '',
-    reviewStatus: item?.reviewStatus ?? ('VERIFIED' as 'VERIFIED' | 'NEEDS_REVIEW'),
-    isActive: item?.isActive ?? true,
-  });
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    try {
-      const payload = {
-        ...form,
-        unitOfMeasure: form.unitOfMeasure || null,
-        category: form.category || null,
-        description: form.description || null,
-      };
-      if (item) {
-        await apiClient.updateInventoryItem(item.id, payload);
-      } else {
-        await apiClient.createInventoryItem(payload);
-      }
-      onSaved();
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal title="Додати номенклатуру" onClose={onClose}>
-      <form className="grid gap-3" onSubmit={submit}>
-        {error ? <ErrorMessage message={error} /> : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Зовнішній код">
-            <input
-              required
-              className="input"
-              value={form.externalCode}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  externalCode: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="Найменування">
-            <input
-              required
-              className="input"
-              value={form.name}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, name: event.target.value }))
-              }
-            />
-          </Field>
-          <Field label="Одиниця виміру">
-            <input
-              className="input"
-              value={form.unitOfMeasure}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  unitOfMeasure: event.target.value,
-                }))
-              }
-            />
-          </Field>
-          <Field label="Категорія">
-            <input
-              className="input"
-              value={form.category}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  category: event.target.value,
-                }))
-              }
-            />
-          </Field>
-        </div>
-        <Field label="Опис">
-          <textarea
-            className="input min-h-24"
-            value={form.description}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                description: event.target.value,
-              }))
-            }
-          />
-        </Field>
-        <Field label="Статус перевірки">
-          <Select
-            value={form.reviewStatus}
-            onChange={(reviewStatus) =>
-              setForm((current) => ({
-                ...current,
-                reviewStatus: reviewStatus as 'VERIFIED' | 'NEEDS_REVIEW',
-              }))
-            }
-          >
-            <option value="VERIFIED">Перевірено</option>
-            <option value="NEEDS_REVIEW">Потребує перевірки</option>
-          </Select>
-        </Field>
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                isActive: event.target.checked,
-              }))
-            }
-          />
-          Активний запис
-        </label>
-        <FormActions saving={saving} onClose={onClose} />
-      </form>
-    </Modal>
-  );
-}
-
-
