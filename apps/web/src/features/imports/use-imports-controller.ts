@@ -1,100 +1,127 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { importsService as apiClient } from './imports.service';
 import { useAuth } from '@/app/ui/auth-context';
-import { can } from '@/lib/authz';
-import type { ImportBatch, ImportRow, ResponsiblePerson } from '@/lib/types';
 import { getErrorMessage } from '@/components/common';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import { can } from '@/lib/authz';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
+import type { ImportBatch, ImportRow, ResponsiblePerson } from '@/lib/types';
 import { executeImportCommit } from './commit-import';
+import { importsService as apiClient } from './imports.service';
 
+export type ImportRowFilters = {
+  search: string;
+  status: string;
+  page: number;
+  limit: number;
+};
+
+const DEFAULT_ROW_FILTERS: ImportRowFilters = {
+  search: '',
+  status: '',
+  page: 1,
+  limit: 20,
+};
 
 export function useImportsController(initialImportId?: string) {
   const { user } = useAuth();
+  const router = useRouter();
   const canWriteImports = can(user, 'write', 'imports');
   const isOwner = user?.role === 'OWNER';
-  const router = useRouter();
   const [imports, setImports] = useState<ImportBatch[]>([]);
+  const [listPagination, setListPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [selected, setSelected] = useState<ImportBatch | null>(null);
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
-  const [rowFilters, setRowFilters] = useState({
-    search: '',
-    status: '',
-    page: 1,
-    limit: 20,
-  });
-  const [rowPagination, setRowPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 0,
-  });
-  const [mappings, setMappings] = useState<
-    Record<string, { responsiblePersonId: string; save: boolean }>
-  >({});
+  const [rowFilters, setRowFilters] = useState(DEFAULT_ROW_FILTERS);
+  const [rowPagination, setRowPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [mappings, setMappings] = useState<Record<string, { responsiblePersonId: string; save: boolean }>>({});
+  const [listLoading, setListLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(Boolean(initialImportId));
+  const [rowsLoading, setRowsLoading] = useState(Boolean(initialImportId));
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [commitLoading, setCommitLoading] = useState(false);
   const [commitError, setCommitError] = useState('');
-  const [commitSuccess, setCommitSuccess] = useState('');
+  const [toast, setToast] = useState('');
 
-  const load = useCallback(async () => {
+  const loadList = useCallback(async (page = 1, limit = 20) => {
+    setListLoading(true);
+    setError('');
     try {
-      const [response, personsResponse] = await Promise.all([
-        apiClient.imports({ limit: 50 }),
-        apiClient.responsiblePersons({ isActive: true, limit: 100 }),
-      ]);
+      const response = await apiClient.imports({ page, limit: Math.min(limit, 100) });
       setImports(response.items);
-      setPersons(personsResponse.items);
+      setListPagination(response.pagination);
     } catch (reason) {
       setError(getErrorMessage(reason));
+    } finally {
+      setListLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loadPersons = useCallback(async () => {
+    const result = await fetchAllPages((pagination) =>
+      apiClient.responsiblePersons({ isActive: true, ...pagination }),
+    );
+    setPersons(result);
+  }, []);
 
-  const loadImport = useCallback(
-    async (id: string) => {
-      const [batch, response] = await Promise.all([
-        apiClient.getImportBatch(id),
-        apiClient.getImportRows(id, {
-          search: rowFilters.search,
-          status: rowFilters.status || undefined,
-          page: rowFilters.page,
-          limit: rowFilters.limit,
-        }),
-      ]);
-      setSelected(batch);
+  const loadRows = useCallback(async (id: string, filters: ImportRowFilters) => {
+    setRowsLoading(true);
+    setActionError('');
+    try {
+      const response = await apiClient.getImportRows(id, {
+        search: filters.search,
+        status: filters.status || undefined,
+        page: filters.page,
+        limit: Math.min(filters.limit, 100),
+      });
       setRows(response.items);
       setRowPagination(response.pagination);
-    },
-    [rowFilters],
-  );
+    } catch (reason) {
+      setActionError(getErrorMessage(reason));
+    } finally {
+      setRowsLoading(false);
+    }
+  }, []);
+
+  const loadImport = useCallback(async (id: string, filters = DEFAULT_ROW_FILTERS) => {
+    setDetailLoading(true);
+    setError('');
+    try {
+      const [batch] = await Promise.all([
+        apiClient.getImportBatch(id),
+        loadRows(id, filters),
+      ]);
+      setSelected(batch);
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [loadRows]);
 
   useEffect(() => {
-    if (initialImportId) {
-      loadImport(initialImportId).catch((reason: unknown) =>
-        setError(getErrorMessage(reason)),
-      );
-    }
-  }, [initialImportId, loadImport]);
+    void loadList();
+    void loadPersons().catch((reason: unknown) => setError(getErrorMessage(reason)));
+  }, [loadList, loadPersons]);
 
-  async function openImport(importBatch: ImportBatch) {
-    router.push(`/imports/${importBatch.id}`);
-    await loadImport(importBatch.id);
-  }
+  useEffect(() => {
+    if (initialImportId) void loadImport(initialImportId, DEFAULT_ROW_FILTERS);
+  }, [initialImportId, loadImport]);
 
   const reloadSelected = useCallback(async () => {
     if (!selected) return;
-    await loadImport(selected.id);
-    await load();
-  }, [load, loadImport, selected]);
+    await Promise.all([
+      loadImport(selected.id, rowFilters),
+      loadList(listPagination.page, listPagination.limit),
+    ]);
+  }, [listPagination.limit, listPagination.page, loadImport, loadList, rowFilters, selected]);
 
   useEffect(() => {
     if (window.sessionStorage.getItem('mvo:open-import-upload') === '1') {
@@ -107,20 +134,34 @@ export function useImportsController(initialImportId?: string) {
     function handleToolbar(event: Event) {
       const detail = getToolbarDetail(event);
       if (detail?.view !== 'imports') return;
-
-      if (detail.action === 'new-import') {
-        setUploadOpen(true);
-      }
-
+      if (detail.action === 'new-import') setUploadOpen(true);
       if (detail.action === 'refresh') {
-        void load();
+        void loadList(listPagination.page, listPagination.limit);
         void reloadSelected();
       }
     }
-
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
     return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
-  }, [load, reloadSelected]);
+  }, [listPagination.limit, listPagination.page, loadList, reloadSelected]);
+
+  async function runAction(action: () => Promise<unknown>, success: string) {
+    setActionLoading(true);
+    setActionError('');
+    try {
+      await action();
+      await reloadSelected();
+      setToast(success);
+    } catch (reason) {
+      setActionError(getErrorMessage(reason));
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function openImport(batch: ImportBatch) {
+    router.push(`/imports/${batch.id}`);
+    await loadImport(batch.id, DEFAULT_ROW_FILTERS);
+  }
 
   async function saveMappings() {
     if (!selected) return;
@@ -131,18 +172,12 @@ export function useImportsController(initialImportId?: string) {
         responsiblePersonId: value.responsiblePersonId,
         saveExternalAccountingName: value.save,
       }));
-
-    if (payload.length === 0) return;
-
-    await apiClient.updateImportMappings(selected.id, { mappings: payload });
+    if (!payload.length) return;
+    await runAction(
+      () => apiClient.updateImportMappings(selected.id, { mappings: payload }),
+      'Зіставлення збережено',
+    );
     setMappings({});
-    await reloadSelected();
-  }
-
-  async function validateSelected() {
-    if (!selected) return;
-    await apiClient.validateImport(selected.id);
-    await reloadSelected();
   }
 
   async function commitSelected() {
@@ -154,84 +189,37 @@ export function useImportsController(initialImportId?: string) {
       getErrorMessage,
       onSuccess: async (batch) => {
         setSelected(batch);
-        await loadImport(selected.id);
-        await load();
+        await Promise.all([
+          loadImport(batch.id, rowFilters),
+          loadList(listPagination.page, listPagination.limit),
+        ]);
+        window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
         router.refresh();
         setConfirmOpen(false);
-        setCommitSuccess('Імпорт успішно проведено');
+        setToast('Імпорт успішно проведено');
       },
     });
   }
 
-  async function cancelSelected() {
-    if (!selected) return;
-    await apiClient.cancelImport(selected.id);
-    await reloadSelected();
-  }
-
-  const missingCounterparties = Array.from(
-    new Set(
-      rows
-        .filter(
-          (row) =>
-            !row.responsiblePerson &&
-            row.status !== 'SKIPPED' &&
-            row.counterpartyRaw,
-        )
-        .map((row) => row.counterpartyRaw),
-    ),
-  );
-
-  const canCommit =
-    selected?.status === 'VALIDATED' &&
-    (selected.preview?.errorRows ?? 1) === 0;
-
-  async function refreshRowsWithFilters(nextFilters = rowFilters) {
-    if (!selected) return;
-    const response = await apiClient.getImportRows(selected.id, {
-      search: nextFilters.search,
-      status: nextFilters.status || undefined,
-      page: nextFilters.page,
-      limit: nextFilters.limit,
-    });
-    setRows(response.items);
-    setRowPagination(response.pagination);
-  }
+  const missingCounterparties = useMemo(() => Array.from(new Set(
+    rows
+      .filter((row) => !row.responsiblePerson && row.status !== 'SKIPPED' && row.counterpartyRaw)
+      .map((row) => row.counterpartyRaw),
+  )), [rows]);
 
   return {
-    canWriteImports,
-    isOwner,
-    router,
-    imports,
-    selected,
-    setSelected,
-    rows,
-    persons,
-    rowFilters,
-    setRowFilters,
-    rowPagination,
-    mappings,
-    setMappings,
-    error,
-    uploadOpen,
-    setUploadOpen,
-    confirmOpen,
-    setConfirmOpen,
-    commitLoading,
-    commitError,
-    commitSuccess,
-    setCommitSuccess,
-    load,
-    loadImport,
-    openImport,
-    reloadSelected,
-    saveMappings,
-    validateSelected,
-    commitSelected,
-    cancelSelected,
+    canWriteImports, isOwner, router,
+    imports, listPagination, selected, setSelected, rows, persons,
+    rowFilters, setRowFilters, rowPagination, mappings, setMappings,
+    listLoading, detailLoading, rowsLoading, actionLoading,
+    error, actionError, uploadOpen, setUploadOpen, confirmOpen, setConfirmOpen,
+    commitLoading, commitError, setCommitError, toast, setToast,
+    loadList, loadImport, loadRows, openImport, reloadSelected, saveMappings, commitSelected,
+    validateSelected: () => selected && runAction(() => apiClient.validateImport(selected.id), 'Імпорт повторно перевірено'),
+    cancelSelected: () => selected && runAction(() => apiClient.cancelImport(selected.id), 'Імпорт скасовано'),
+    rollbackSelected: () => selected && runAction(() => apiClient.rollbackImport(selected.id), 'Імпорт відкочено'),
     missingCounterparties,
-    canCommit,
-    refreshRowsWithFilters,
+    canCommit: selected?.status === 'VALIDATED' && (selected.preview?.errorRows ?? 1) === 0,
   };
 }
-

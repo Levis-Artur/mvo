@@ -117,7 +117,12 @@ export function StockView() {
       if (detail.action === 'refresh') void refresh();
     }
     window.addEventListener(TOOLBAR_EVENT, handleToolbar);
-    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+    const handleImportRefresh = () => void refresh();
+    window.addEventListener('mvo:refresh-stock', handleImportRefresh);
+    return () => {
+      window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+      window.removeEventListener('mvo:refresh-stock', handleImportRefresh);
+    };
   }, [refresh]);
 
   return (

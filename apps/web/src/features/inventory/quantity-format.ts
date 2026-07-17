@@ -1,12 +1,7 @@
-type DecimalParts = {
-  negative: boolean;
-  integer: string;
-  fraction: string;
-};
+type DecimalParts = { negative: boolean; integer: string; fraction: string };
 
 function parseDecimal(value: string): DecimalParts {
-  const normalized = value.trim();
-  const match = /^(-)?(\d+)(?:\.(\d+))?$/.exec(normalized);
+  const match = /^(-)?(\d+)(?:\.(\d+))?$/.exec(value.trim());
   if (!match) return { negative: false, integer: '0', fraction: '' };
   return {
     negative: Boolean(match[1]),
@@ -36,8 +31,7 @@ export function addQuantities(values: string[]) {
   const parts = values.map(parseDecimal);
   const scale = Math.max(0, ...parts.map((item) => item.fraction.length));
   const total = parts.reduce((sum, item) => {
-    const digits = `${item.integer}${item.fraction.padEnd(scale, '0')}`;
-    const amount = BigInt(digits || '0');
+    const amount = BigInt(`${item.integer}${item.fraction.padEnd(scale, '0')}` || '0');
     return sum + (item.negative ? -amount : amount);
   }, BigInt(0));
   const negative = total < BigInt(0);

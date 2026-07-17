@@ -1,20 +1,12 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-import { importsService as apiClient } from './imports.service';
+import { type FormEvent, useState } from 'react';
 import type { ImportBatch, ImportType } from '@/lib/types';
-import {
-  ErrorMessage,
-  Field,
-  FormActions,
-  Modal,
-  Select,
-  getErrorMessage,
-} from '@/components/common';
-export function ImportUploadModal({
-  onClose,
-  onSaved,
-}: {
+import { Button, ErrorState, FormField, Modal, Select } from '@/components/ui';
+import { getErrorMessage } from '@/components/common';
+import { importsService as apiClient } from './imports.service';
+
+export function ImportUploadModal({ onClose, onSaved }: {
   onClose: () => void;
   onSaved: (batch: ImportBatch) => void;
 }) {
@@ -38,35 +30,27 @@ export function ImportUploadModal({
   }
 
   return (
-    <Modal title="Новий імпорт" onClose={onClose}>
-      <form className="grid gap-3" onSubmit={submit}>
-        {error ? <ErrorMessage message={error} /> : null}
-        <Field label="Режим">
-          <Select
-            value={importType}
-            onChange={(value) => setImportType(value as ImportType)}
-          >
+    <Modal closeOnEscape={!saving} footer={<>
+      <Button disabled={saving} variant="outline" type="button" onClick={onClose}>Скасувати</Button>
+      <Button disabled={saving || !file} form="import-upload-form" type="submit">{saving ? 'Завантаження…' : 'Завантажити'}</Button>
+    </>} onClose={onClose} title="Новий імпорт">
+      <form className="grid gap-4" id="import-upload-form" onSubmit={submit}>
+        {error ? <ErrorState message={error} /> : null}
+        <FormField label="Режим" required>
+          <Select value={importType} onChange={(event) => setImportType(event.target.value as ImportType)}>
             <option value="INITIAL_BALANCE">Початкові залишки</option>
             <option value="RECEIPT">Нові надходження</option>
           </Select>
-        </Field>
-        <p className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm text-[var(--text-secondary)]">
+        </FormField>
+        <p className="rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3 text-sm text-[var(--color-text-secondary)]">
           {importType === 'INITIAL_BALANCE'
-            ? 'Буде використано колонку «Кількість кін.»'
+            ? 'Буде використано колонку «Кількість кін.».'
             : 'Буде використано колонку «Кількість Дт». Колонка «Кількість кін.» використовується лише для звірки.'}
         </p>
-        <input
-          required
-          className="input"
-          type="file"
-          accept=".csv,.tsv"
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
-        <FormActions saving={saving} onClose={onClose} />
+        <FormField label="CSV або TSV файл" required>
+          <input accept=".csv,.tsv" className="input" required type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
+        </FormField>
       </form>
     </Modal>
   );
 }
-
-
-

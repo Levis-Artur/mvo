@@ -6,40 +6,23 @@ export function importTypeLabel(type: ImportType) {
 }
 
 export function fullName(person: ResponsiblePerson) {
-  return [person.lastName, person.firstName, person.middleName]
-    .filter(Boolean)
-    .join(' ');
+  return [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
 }
 
-export function responsiblePersonShortName(
-  person: Pick<
-    ResponsiblePerson,
-    'lastName' | 'firstName' | 'middleName' | 'personnelNumber'
-  >,
-) {
-  return `${[person.lastName, person.firstName, person.middleName]
-    .filter(Boolean)
-    .join(' ')} В· ${person.personnelNumber}`;
+export function responsiblePersonShortName(person: Pick<ResponsiblePerson, 'lastName' | 'firstName' | 'middleName' | 'personnelNumber'>) {
+  return `${[person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ')} · ${person.personnelNumber}`;
 }
 
 export function formatDateTime(value?: string | null) {
-  if (!value) {
-    return 'Немає даних';
-  }
-
-  return new Intl.DateTimeFormat('uk-UA', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  if (!value) return 'Немає даних';
+  return new Intl.DateTimeFormat('uk-UA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
 export function isUserLocked(user: UserSummary) {
   return user.lockedUntil ? new Date(user.lockedUntil) > new Date() : false;
 }
 
-export function normalizePersonForm(
-  form: CreateResponsiblePersonDto,
-): CreateResponsiblePersonDto {
+export function normalizePersonForm(form: CreateResponsiblePersonDto): CreateResponsiblePersonDto {
   return {
     ...form,
     middleName: form.middleName || null,
@@ -53,17 +36,9 @@ export function normalizePersonForm(
 }
 
 export function getErrorMessage(reason: unknown) {
-  if (reason instanceof ApiError) {
-    return reason.message;
-  }
-
-  if (reason instanceof Error) {
-    return reason.message;
-  }
-
+  if (reason instanceof ApiError) return reason.message;
+  if (reason instanceof Error) return reason.message;
   return 'Сталася невідома помилка';
 }
 
 export { ApiError };
-
-
