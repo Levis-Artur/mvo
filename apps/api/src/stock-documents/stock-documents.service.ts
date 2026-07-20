@@ -962,12 +962,15 @@ export class StockDocumentsService {
 
     const seen = new Set<string>();
     const lines = dto.lines.map((line) => {
-      if (seen.has(line.inventoryItemId)) {
+      const sourceKey = usesOwnerCustody
+        ? `${line.inventoryItemId}:${line.accountingOwnerResponsiblePersonId ?? ''}`
+        : line.inventoryItemId;
+      if (seen.has(sourceKey)) {
         throw new BadRequestException(
-          'Номенклатура не може дублюватися в документі',
+          'Одне джерело майна не може дублюватися в документі',
         );
       }
-      seen.add(line.inventoryItemId);
+      seen.add(sourceKey);
       const quantity = new Prisma.Decimal(line.quantity);
       if (quantity.lte(0)) {
         throw new BadRequestException(

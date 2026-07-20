@@ -118,13 +118,14 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       loadingTargets={controller.loadingTargets}
       persons={controller.persons}
       saving={controller.saving}
+      sourcesError={controller.sourcesError}
       targetsError={controller.targetsError}
       transferTargets={controller.transferTargets}
       type={controller.formType}
       user={user}
       onClose={() => controller.setFormType(null)}
       onRemoveAttachment={controller.removeAttachment}
-      onSourceChange={(id) => void controller.loadSources(id)}
+      onSourceChange={controller.loadSources}
       onSubmit={controller.save}
     /> : null}
     {controller.selected && !controller.confirming && !controller.formType ? <StockDocumentDetailsModal

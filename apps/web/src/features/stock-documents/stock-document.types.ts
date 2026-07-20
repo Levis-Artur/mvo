@@ -32,8 +32,9 @@ export type StockDocumentFormProps = {
   loadingTargets: boolean;
   saving: boolean;
   error: string;
+  sourcesError: string;
   targetsError: string;
-  onSourceChange: (id: string) => void;
+  onSourceChange: (id: string) => Promise<void> | void;
   onSubmit: (input: StockDocumentInput, files: File[]) => Promise<void>;
   onRemoveAttachment: (attachmentId: string) => Promise<void>;
   onClose: () => void;

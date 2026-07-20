@@ -9,6 +9,7 @@ import type {
   TransferTarget,
 } from '@/lib/types';
 import type { StatusTone } from '@/components/ui';
+import type { DocumentFormLine } from './stock-document.types';
 
 export function parseStockDocumentQuickAction(search: string): {
   type: StockDocumentType;
@@ -62,26 +63,15 @@ function personSearchText(person: TransferTarget) {
     .filter(Boolean).join(' ');
 }
 
-export function availableSourceOptions(sources: AvailableStockSource[], selectedItemIds: string[]) {
-  return sources.filter((source) =>
-    Number(source.availableQuantity) > 0 && !selectedItemIds.includes(source.inventoryItem.id),
-  );
-}
-
-export function canAddDocumentLine(
-  sources: AvailableStockSource[], selectedItemIds: string[], sourceReady: boolean, loading: boolean,
-) {
-  return sourceReady && !loading && availableSourceOptions(sources, selectedItemIds).length > 0;
-}
-
 export function documentLineError(
-  line: StockDocumentInput['lines'][number],
+  line: StockDocumentInput['lines'][number] & Partial<Pick<DocumentFormLine, 'sourceBalanceId'>>,
   sources: AvailableStockSource[],
 ) {
   const source = sources.find((item) =>
     item.inventoryItem.id === line.inventoryItemId &&
     item.sourceKind === line.sourceKind &&
     item.accountingOwner.id === line.accountingOwnerResponsiblePersonId &&
+    (!line.sourceBalanceId || item.sourceBalanceId === line.sourceBalanceId) &&
     (line.sourceKind === 'DIRECT' || item.sourceBalanceId === line.sourceCustodyBalanceId),
   );
   const quantity = Number(line.quantity);
@@ -97,10 +87,13 @@ export function validateDocumentInput(input: StockDocumentInput, sources: Availa
   if (input.type === 'ISSUE' && !input.recipientName?.trim()) return 'Вкажіть одержувача';
   if (input.type === 'ISSUE' && !input.basis?.trim()) return 'Вкажіть мету або підставу видачі';
   if (!input.lines.length) return 'Додайте хоча б одну позицію';
-  const ids = new Set<string>();
+  const sourceKeys = new Set<string>();
   for (const line of input.lines) {
-    if (ids.has(line.inventoryItemId)) return 'Номенклатуру не можна дублювати';
-    ids.add(line.inventoryItemId);
+    const sourceKey = line.sourceKind === 'ASSIGNED' && line.sourceCustodyBalanceId
+      ? `${line.sourceKind}:${line.sourceCustodyBalanceId}`
+      : `${line.sourceKind}:${line.accountingOwnerResponsiblePersonId}:${line.inventoryItemId}`;
+    if (sourceKeys.has(sourceKey)) return 'Одне джерело майна не можна додавати двічі';
+    sourceKeys.add(sourceKey);
     const error = documentLineError(line, sources);
     if (error) return error;
   }

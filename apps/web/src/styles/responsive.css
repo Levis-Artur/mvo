@@ -23,6 +23,10 @@
   .ui-pagination__actions { display: grid; grid-template-columns: 1fr 1fr; }
   .ui-pagination__limit { grid-column: 1 / -1; justify-content: space-between; }
   .ui-modal__footer, .form-actions { flex-direction: column-reverse; }
+  .stock-source-picker__filters { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .stock-source-picker__filters .form-field { grid-template-columns: minmax(0, 1fr); }
+  .stock-source-picker__filters .form-field__hint,
+  .stock-source-picker__filters .form-field__error { grid-column: 1; }
   .organization-node > summary, .organization-people > li { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 700px) {

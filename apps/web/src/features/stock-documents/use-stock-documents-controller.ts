@@ -60,6 +60,7 @@ export function useStockDocumentsController(user: AuthUser) {
   const [error, setError] = useState('');
   const [personsError, setPersonsError] = useState('');
   const [targetsError, setTargetsError] = useState('');
+  const [sourcesError, setSourcesError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState('');
 
@@ -125,7 +126,7 @@ export function useStockDocumentsController(user: AuthUser) {
   }, [appliedFilters.search, documents]);
 
   async function loadSources(id: string) {
-    setAvailableSources([]); setActionError('');
+    setAvailableSources([]); setSourcesError('');
     if (!id) return;
     setLoadingSources(true);
     try {
@@ -165,7 +166,7 @@ export function useStockDocumentsController(user: AuthUser) {
         ]);
       }
     } catch (reason) {
-      setActionError(`Не вдалося завантажити майно, доступне фактичному утримувачу: ${getErrorMessage(reason)}`);
+      setSourcesError(`Не вдалося завантажити майно, доступне фактичному утримувачу: ${getErrorMessage(reason)}`);
     } finally {
       setLoadingSources(false);
     }
@@ -281,7 +282,7 @@ export function useStockDocumentsController(user: AuthUser) {
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
     selected, setSelected, formType, setFormType, formSourceId, initialSourceBalanceId, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
-    actionLoading, error, personsError, targetsError, actionError, toast, setToast,
+    actionLoading, error, personsError, targetsError, sourcesError, actionError, toast, setToast,
     load, loadReferences, loadTargets, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,
     openConfirmation, closeConfirmation,
   };

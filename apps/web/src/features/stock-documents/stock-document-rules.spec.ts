@@ -7,8 +7,6 @@ import type {
   TransferTarget,
 } from '@/lib/types';
 import {
-  availableSourceOptions,
-  canAddDocumentLine,
   canChangeStockDocuments,
   documentActionState,
   documentDirection,
@@ -95,10 +93,6 @@ describe('stock document frontend rules', () => {
   });
 
   it('не змішує DIRECT і ASSIGNED та дозволяє передати assigned item далі', () => {
-    const direct = source('item-1', '2');
-    const assigned = source('item-2', '3', 'ASSIGNED');
-    expect(availableSourceOptions([direct, assigned], ['item-1'])).toEqual([assigned]);
-    expect(canAddDocumentLine([assigned], [], true, false)).toBe(true);
     expect(validateDocumentInput(input({ lines: [line('ASSIGNED')] }), [source('item-1', '3', 'ASSIGNED')])).toBe('');
   });
 

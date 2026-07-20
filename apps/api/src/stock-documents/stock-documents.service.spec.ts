@@ -332,6 +332,55 @@ describe('StockDocumentsService', () => {
     });
   });
 
+  it('keeps DIRECT and ASSIGNED sources of one item separate by accounting owner', async () => {
+    const { service, prisma } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    prisma.stockDocument.create.mockResolvedValue(value);
+
+    await expect(service.create({
+      ...transferDto,
+      type: StockDocumentType.ASSIGNMENT,
+      lines: [
+        {
+          inventoryItemId: itemId,
+          quantity: '1',
+          sourceKind: StockSourceKind.DIRECT,
+          accountingOwnerResponsiblePersonId: sourceId,
+        },
+        {
+          inventoryItemId: itemId,
+          quantity: '1',
+          sourceKind: StockSourceKind.ASSIGNED,
+          accountingOwnerResponsiblePersonId: accountingOwnerId,
+          sourceCustodianResponsiblePersonId: sourceId,
+          sourceCustodyBalanceId: custodyBalanceId,
+        },
+      ],
+    }, owner, {})).resolves.toBeDefined();
+
+    expect(prisma.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          lines: { create: expect.arrayContaining([
+            expect.objectContaining({
+              sourceKind: StockSourceKind.DIRECT,
+              accountingOwnerResponsiblePersonId: sourceId,
+            }),
+            expect.objectContaining({
+              sourceKind: StockSourceKind.ASSIGNED,
+              accountingOwnerResponsiblePersonId: accountingOwnerId,
+              sourceCustodyBalanceId: custodyBalanceId,
+            }),
+          ]) },
+        }),
+      }),
+    );
+  });
+
   it('posts DIRECT to CUSTODY without increasing recipient StockBalance', async () => {
     const { service, prisma, tx, stock } = createService();
     const value = document(

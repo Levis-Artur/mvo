@@ -21,14 +21,21 @@ import {
   resolveSourceId,
   validateDocumentInput,
 } from './stock-document-rules';
-import { sourceToLine, StockDocumentLines } from './stock-document-lines';
+import { StockDocumentLines } from './stock-document-lines';
 import { StockDocumentAttachments } from './stock-document-attachments';
+import { StockSourcePickerModal } from './stock-source-picker-modal';
+import {
+  addSelectedStockSource,
+  documentLineSourceKey,
+  sourceSupportsDocument,
+  stockSourceKey,
+} from './stock-source-picker-model';
 import type { DocumentFormLine, StockDocumentFormProps } from './stock-document.types';
 
 export function StockDocumentForm(props: StockDocumentFormProps) {
   const {
     user, type, document, initialSourceId, initialSourceBalanceId, persons, transferTargets, availableSources,
-    loadingSources, loadingTargets, saving, error, targetsError,
+    loadingSources, loadingTargets, saving, error, sourcesError, targetsError,
     onSourceChange, onSubmit, onRemoveAttachment, onClose,
   } = props;
   const initialSource = resolveSourceId(
@@ -63,6 +70,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     }) ?? [],
   );
   const [files, setFiles] = useState<File[]>([]);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   useEffect(() => {
     const uploaded = document?.attachments ?? [];
     if (!uploaded.length) return;
@@ -74,11 +82,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   }, [document?.attachments]);
   const [validationError, setValidationError] = useState('');
   const [recipientSearch, setRecipientSearch] = useState('');
-  useEffect(() => {
-    if (document || lines.length || !initialSourceBalanceId) return;
-    const source = availableSources.find((item) => item.sourceBalanceId === initialSourceBalanceId);
-    if (source) setLines([sourceToLine(source)]);
-  }, [availableSources, document, initialSourceBalanceId, lines.length]);
   const recipients = useMemo(
     () => filterRecipientOptions(transferTargets, sourceId, recipientSearch),
     [recipientSearch, sourceId, transferTargets],
@@ -115,8 +118,30 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   }
 
   function changeSource(id: string) {
-    setSourceId(id); setDestinationId(''); setLines([]); onSourceChange(id);
+    setSourceId(id); setDestinationId(''); setLines([]); void onSourceChange(id);
   }
+
+  const eligibleSources = availableSources.filter((availableSource) =>
+    sourceSupportsDocument(availableSource, type),
+  );
+  const selectedSourceKeys = lines.map(documentLineSourceKey);
+
+  if (sourcePickerOpen) return <StockSourcePickerModal
+    error={sourcesError}
+    initialSourceBalanceId={initialSourceBalanceId}
+    loading={loadingSources}
+    selectedSourceKeys={selectedSourceKeys}
+    sources={availableSources}
+    type={type}
+    onClose={() => setSourcePickerOpen(false)}
+    onConfirm={(selectedSource) => {
+      if (!selectedSourceKeys.includes(stockSourceKey(selectedSource))) {
+        setLines((current) => addSelectedStockSource(current, selectedSource));
+      }
+      setSourcePickerOpen(false);
+    }}
+    onRefresh={() => onSourceChange(sourceId)}
+  />;
 
   const title = `${document ? 'Редагування' : 'Створення'}: ${type === 'ASSIGNMENT' ? 'передача' : 'видача'}`;
   return <Modal
@@ -164,7 +189,14 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         {type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status">Передача не зараховує майно на власний баланс одержувача. Майно буде закріплено за ним як за фактичним утримувачем.</div> : null}
         {type === 'ISSUE' ? <div className="ui-alert" data-tone="warning" role="status">Після проведення кількість буде остаточно списана з обліку.</div> : null}
         {loadingSources ? <LoadingState label="Завантаження доступного майна…" /> : null}
-        <StockDocumentLines sources={availableSources.filter((source) => type === 'ASSIGNMENT' ? source.canAssign : source.canIssue)} disabled={!sourceId} lines={lines} loading={loadingSources} onChange={setLines} />
+        <StockDocumentLines
+          disabled={!sourceId}
+          lines={lines}
+          loading={loadingSources}
+          sources={eligibleSources}
+          onAddRequest={() => setSourcePickerOpen(true)}
+          onChange={setLines}
+        />
         {type === 'ISSUE' ? <StockDocumentAttachments
           attachments={document?.attachments ?? []}
           disabled={saving}
@@ -172,7 +204,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
           onFilesChange={setFiles}
           onRemoveAttachment={onRemoveAttachment}
         /> : null}
-        {validationError || error ? <ErrorState message={validationError || error} /> : null}
+        {validationError || error || sourcesError ? <ErrorState message={validationError || error || sourcesError} /> : null}
       </div>
     </form>
   </Modal>;
