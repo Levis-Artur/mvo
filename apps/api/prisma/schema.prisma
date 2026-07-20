@@ -42,11 +42,28 @@ enum StockTransactionType {
   TRANSFER_REVERSAL_OUT
   TRANSFER_REVERSAL_IN
   ISSUE_REVERSAL
+  ASSIGNMENT_OUT_DIRECT
+  ASSIGNMENT_OUT_CUSTODY
+  ASSIGNMENT_IN_CUSTODY
+  ISSUE_FROM_DIRECT
+  ISSUE_FROM_CUSTODY
+  ASSIGNMENT_REVERSAL
 }
 
 enum StockDocumentType {
   TRANSFER
+  ASSIGNMENT
   ISSUE
+}
+
+enum StockSourceKind {
+  DIRECT
+  ASSIGNED
+}
+
+enum StockAccountingModel {
+  LEGACY_BALANCE
+  OWNER_CUSTODY
 }
 
 enum StockDocumentStatus {
@@ -65,6 +82,7 @@ enum UserRole {
   AUDITOR
   DPP_ADMIN
   MVO
+  ACCOUNTANT
 }
 
 enum SecurityEventType {
@@ -161,6 +179,13 @@ model ResponsiblePerson {
   user                   User?
   sourceStockDocuments   StockDocument[]    @relation("StockDocumentSource")
   destinationStockDocuments StockDocument[] @relation("StockDocumentDestination")
+  accountingOwnedCustodyBalances CustodyBalance[] @relation("CustodyBalanceAccountingOwner")
+  custodialBalances              CustodyBalance[] @relation("CustodyBalanceCustodian")
+  accountingOwnedDocumentLines   StockDocumentLine[] @relation("StockDocumentLineAccountingOwner")
+  sourceCustodianDocumentLines   StockDocumentLine[] @relation("StockDocumentLineSourceCustodian")
+  accountingOwnedTransactions    StockTransaction[] @relation("StockTransactionAccountingOwner")
+  sourceCustodianTransactions    StockTransaction[] @relation("StockTransactionSourceCustodian")
+  destinationCustodianTransactions StockTransaction[] @relation("StockTransactionDestinationCustodian")
 
   @@index([managementId])
   @@index([serviceId])
@@ -197,6 +222,7 @@ model User {
   createdStockDocuments   StockDocument[]  @relation("StockDocumentCreatedBy")
   postedStockDocuments    StockDocument[]  @relation("StockDocumentPostedBy")
   cancelledStockDocuments StockDocument[]  @relation("StockDocumentCancelledBy")
+  uploadedStockDocumentAttachments StockDocumentAttachment[]
 
   @@index([role])
   @@index([isActive])
@@ -258,6 +284,7 @@ model InventoryItem {
   stockTransactions StockTransaction[]
   importRows        ImportRow[]
   stockDocumentLines StockDocumentLine[]
+  custodyBalances    CustodyBalance[]
 
   @@index([name])
   @@index([reviewStatus])
@@ -279,6 +306,27 @@ model StockBalance {
   @@index([inventoryItemId])
 }
 
+model CustodyBalance {
+  id                                    String            @id @default(uuid()) @db.Uuid
+  inventoryItemId                       String            @db.Uuid
+  accountingOwnerResponsiblePersonId    String            @db.Uuid
+  custodianResponsiblePersonId           String            @db.Uuid
+  quantity                              Decimal           @default(0) @db.Decimal(18, 4)
+  createdAt                             DateTime          @default(now())
+  updatedAt                             DateTime          @updatedAt
+  inventoryItem                         InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  accountingOwnerResponsiblePerson      ResponsiblePerson @relation("CustodyBalanceAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
+  custodianResponsiblePerson             ResponsiblePerson @relation("CustodyBalanceCustodian", fields: [custodianResponsiblePersonId], references: [id], onDelete: Restrict)
+  sourceDocumentLines                    StockDocumentLine[]
+
+  @@unique([inventoryItemId, accountingOwnerResponsiblePersonId, custodianResponsiblePersonId])
+  @@index([inventoryItemId])
+  @@index([accountingOwnerResponsiblePersonId])
+  @@index([custodianResponsiblePersonId])
+  @@index([accountingOwnerResponsiblePersonId, inventoryItemId])
+  @@index([custodianResponsiblePersonId, inventoryItemId])
+}
+
 model StockTransaction {
   id                  String               @id @default(uuid()) @db.Uuid
   type                StockTransactionType
@@ -294,6 +342,12 @@ model StockTransaction {
   importRowId         String?              @unique @db.Uuid
   documentId          String?              @db.Uuid
   documentLineId      String?              @db.Uuid
+  accountingModel     StockAccountingModel?
+  bucketKind          StockSourceKind?
+  accountingOwnerResponsiblePersonId String? @db.Uuid
+  sourceCustodianResponsiblePersonId String? @db.Uuid
+  destinationCustodianResponsiblePersonId String? @db.Uuid
+  reversalOfTransactionId String?          @unique @db.Uuid
   createdAt           DateTime             @default(now())
   responsiblePerson   ResponsiblePerson    @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
   inventoryItem       InventoryItem        @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
@@ -301,6 +355,11 @@ model StockTransaction {
   importRow           ImportRow?           @relation(fields: [importRowId], references: [id], onDelete: Restrict)
   document            StockDocument?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
   documentLine        StockDocumentLine?   @relation(fields: [documentLineId], references: [id], onDelete: Restrict)
+  accountingOwnerResponsiblePerson ResponsiblePerson? @relation("StockTransactionAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
+  sourceCustodianResponsiblePerson ResponsiblePerson? @relation("StockTransactionSourceCustodian", fields: [sourceCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
+  destinationCustodianResponsiblePerson ResponsiblePerson? @relation("StockTransactionDestinationCustodian", fields: [destinationCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
+  reversalOfTransaction StockTransaction? @relation("StockTransactionReversal", fields: [reversalOfTransactionId], references: [id], onDelete: Restrict)
+  reversedByTransaction StockTransaction? @relation("StockTransactionReversal")
 
   @@index([responsiblePersonId])
   @@index([inventoryItemId])
@@ -309,6 +368,11 @@ model StockTransaction {
   @@index([importBatchId])
   @@index([documentId])
   @@index([documentLineId])
+  @@index([accountingOwnerResponsiblePersonId])
+  @@index([sourceCustodianResponsiblePersonId])
+  @@index([destinationCustodianResponsiblePersonId])
+  @@index([accountingModel])
+  @@index([bucketKind])
 }
 
 model StockDocument {
@@ -316,6 +380,7 @@ model StockDocument {
   documentNumber                 String              @unique
   documentDate                   DateTime
   type                           StockDocumentType
+  accountingModel                StockAccountingModel?
   status                         StockDocumentStatus @default(DRAFT)
   sourceResponsiblePersonId      String              @db.Uuid
   destinationResponsiblePersonId String?             @db.Uuid
@@ -337,6 +402,7 @@ model StockDocument {
   cancelledByUser                User?               @relation("StockDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
   lines                          StockDocumentLine[]
   transactions                   StockTransaction[]
+  attachments                    StockDocumentAttachment[]
 
   @@index([type])
   @@index([status])
@@ -344,22 +410,51 @@ model StockDocument {
   @@index([sourceResponsiblePersonId])
   @@index([destinationResponsiblePersonId])
   @@index([createdByUserId])
+  @@index([accountingModel])
 }
 
 model StockDocumentLine {
   id              String             @id @default(uuid()) @db.Uuid
   documentId      String             @db.Uuid
   inventoryItemId String             @db.Uuid
+  sourceKind      StockSourceKind?
+  accountingOwnerResponsiblePersonId String? @db.Uuid
+  sourceCustodianResponsiblePersonId String? @db.Uuid
+  sourceCustodyBalanceId String?      @db.Uuid
   quantity        Decimal            @db.Decimal(18, 4)
   note            String?
   createdAt       DateTime           @default(now())
   document        StockDocument      @relation(fields: [documentId], references: [id], onDelete: Cascade)
   inventoryItem   InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  accountingOwnerResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
+  sourceCustodianResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineSourceCustodian", fields: [sourceCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
+  sourceCustodyBalance CustodyBalance? @relation(fields: [sourceCustodyBalanceId], references: [id], onDelete: Restrict)
   transactions    StockTransaction[]
 
-  @@unique([documentId, inventoryItemId])
   @@index([documentId])
   @@index([inventoryItemId])
+  @@index([accountingOwnerResponsiblePersonId])
+  @@index([sourceCustodianResponsiblePersonId])
+  @@index([sourceCustodyBalanceId])
+}
+
+model StockDocumentAttachment {
+  id               String        @id @default(uuid()) @db.Uuid
+  documentId       String        @db.Uuid
+  originalFileName String
+  storedFileName   String        @unique
+  mimeType         String
+  sizeBytes        Int
+  sha256           String
+  storagePath      String
+  uploadedByUserId String        @db.Uuid
+  createdAt        DateTime      @default(now())
+  document         StockDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  uploadedByUser   User          @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([documentId])
+  @@index([uploadedByUserId])
+  @@index([sha256])
 }
 
 model ImportBatch {

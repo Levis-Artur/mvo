@@ -3,13 +3,14 @@ import { UserRole } from '@prisma/client';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
+import { STOCK_READ_ROLES } from '../auth/access-policy';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { ManualReceiptDto } from './dto/manual-receipt.dto';
 import { StockService } from './stock.service';
 
 @Controller()
-@Roles(UserRole.OWNER, UserRole.AUDITOR, UserRole.DPP_ADMIN, UserRole.MVO)
+@Roles(...STOCK_READ_ROLES)
 export class StockController {
   constructor(private readonly stockService: StockService) {}
 

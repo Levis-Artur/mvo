@@ -11,6 +11,7 @@ import { UserRole } from '@prisma/client';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
+import { REFERENCE_DATA_READ_ROLES } from '../auth/access-policy';
 import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
 import { ListResponsiblePersonsQueryDto } from './dto/list-responsible-persons-query.dto';
 import { UpdateResponsiblePersonDto } from './dto/update-responsible-person.dto';
@@ -20,7 +21,7 @@ import { ListStockTransactionsQueryDto } from '../stock/dto/list-stock-transacti
 import { StockService } from '../stock/stock.service';
 
 @Controller('responsible-persons')
-@Roles(UserRole.OWNER, UserRole.AUDITOR, UserRole.DPP_ADMIN, UserRole.MVO)
+@Roles(...REFERENCE_DATA_READ_ROLES)
 export class ResponsiblePersonsController {
   constructor(
     private readonly responsiblePersonsService: ResponsiblePersonsService,

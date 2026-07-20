@@ -1,4 +1,8 @@
-import { StockDocumentStatus, StockDocumentType } from '@prisma/client';
+import {
+  StockDocumentStatus,
+  StockDocumentType,
+  StockSourceKind,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -19,6 +23,26 @@ export class StockDocumentLineDto {
 
   @IsString()
   quantity!: string;
+
+  /**
+   * Nullable for legacy TRANSFER/ISSUE payloads. OWNER_CUSTODY documents must
+   * provide these fields; the domain service enforces their cross-field rules.
+   */
+  @IsOptional()
+  @IsEnum(StockSourceKind)
+  sourceKind?: StockSourceKind;
+
+  @IsOptional()
+  @IsUUID()
+  accountingOwnerResponsiblePersonId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  sourceCustodianResponsiblePersonId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  sourceCustodyBalanceId?: string;
 
   @IsOptional()
   @IsString()

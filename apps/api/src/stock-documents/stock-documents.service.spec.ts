@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   StockDocumentStatus,
   StockDocumentType,
+  StockSourceKind,
   StockTransactionType,
   UserRole,
   Prisma,
@@ -107,6 +108,32 @@ const transferDto = {
 };
 
 describe('StockDocumentsService', () => {
+  it('does not route ASSIGNMENT through the legacy TRANSFER or ISSUE logic', async () => {
+    const { service, prisma, stock } = createService();
+
+    await expect(
+      service.create(
+        {
+          ...transferDto,
+          type: StockDocumentType.ASSIGNMENT,
+          lines: [
+            {
+              inventoryItemId: itemId,
+              quantity: '2',
+              sourceKind: StockSourceKind.DIRECT,
+              accountingOwnerResponsiblePersonId: sourceId,
+            },
+          ],
+        },
+        owner,
+        {},
+      ),
+    ).rejects.toThrow('custody-сервісу');
+    expect(prisma.stockDocument.create).not.toHaveBeenCalled();
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
   it('posts a transfer with matching out and in transactions', async () => {
     const { service, prisma, tx, stock } = createService();
     tx.stockDocument.findUnique.mockResolvedValue(document());

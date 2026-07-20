@@ -12,6 +12,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { validateEnvironment } from '../config/env';
+import {
+  IMPORT_READ_ROLES,
+  IMPORT_WRITE_ROLES,
+} from '../auth/access-policy';
+import { Roles } from '../auth/roles.decorator';
 import { ImportUploadDto } from './dto/import-upload.dto';
 import { ListImportRowsQueryDto } from './dto/list-import-rows-query.dto';
 import { ListImportsQueryDto } from './dto/list-imports-query.dto';
@@ -19,10 +24,12 @@ import { UpdateImportMappingsDto } from './dto/update-import-mappings.dto';
 import { ImportsService } from './imports.service';
 
 @Controller('imports')
+@Roles(...IMPORT_READ_ROLES)
 export class ImportsController {
   constructor(private readonly importsService: ImportsService) {}
 
   @Post('upload')
+  @Roles(...IMPORT_WRITE_ROLES)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
@@ -56,21 +63,25 @@ export class ImportsController {
   }
 
   @Patch(':id/mappings')
+  @Roles(...IMPORT_WRITE_ROLES)
   mappings(@Param('id') id: string, @Body() dto: UpdateImportMappingsDto) {
     return this.importsService.updateMappings(id, dto);
   }
 
   @Post(':id/validate')
+  @Roles(...IMPORT_WRITE_ROLES)
   validate(@Param('id') id: string) {
     return this.importsService.validate(id);
   }
 
   @Post(':id/commit')
+  @Roles(...IMPORT_WRITE_ROLES)
   commit(@Param('id') id: string) {
     return this.importsService.commit(id);
   }
 
   @Post(':id/cancel')
+  @Roles(...IMPORT_WRITE_ROLES)
   cancel(@Param('id') id: string) {
     return this.importsService.cancel(id);
   }

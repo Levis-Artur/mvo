@@ -11,13 +11,14 @@ import { UserRole } from '@prisma/client';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
+import { REFERENCE_DATA_READ_ROLES } from '../auth/access-policy';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { ListInventoryItemsQueryDto } from './dto/list-inventory-items-query.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
 import { InventoryItemsService } from './inventory-items.service';
 
 @Controller('inventory-items')
-@Roles(UserRole.OWNER, UserRole.AUDITOR, UserRole.DPP_ADMIN, UserRole.MVO)
+@Roles(...REFERENCE_DATA_READ_ROLES)
 export class InventoryItemsController {
   constructor(private readonly inventoryItemsService: InventoryItemsService) {}
 

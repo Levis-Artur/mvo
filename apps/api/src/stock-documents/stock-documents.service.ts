@@ -309,6 +309,12 @@ export class StockDocumentsService {
   }
 
   private validateDto(dto: CreateStockDocumentDto, actor: CurrentUser) {
+    if (dto.type === StockDocumentType.ASSIGNMENT) {
+      throw new BadRequestException(
+        'Проведення передачі за новою моделлю буде доступне після підключення custody-сервісу.',
+      );
+    }
+
     this.assertMvoOwnSource(actor, dto.sourceResponsiblePersonId);
     if (dto.type === StockDocumentType.TRANSFER) {
       if (!dto.destinationResponsiblePersonId) {

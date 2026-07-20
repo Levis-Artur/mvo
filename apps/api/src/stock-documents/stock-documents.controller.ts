@@ -9,7 +9,10 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import {
+  STOCK_DOCUMENT_READ_ROLES,
+  STOCK_DOCUMENT_WRITE_ROLES,
+} from '../auth/access-policy';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
@@ -22,7 +25,7 @@ import {
 import { StockDocumentsService } from './stock-documents.service';
 
 @Controller('stock-documents')
-@Roles(UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.AUDITOR, UserRole.MVO)
+@Roles(...STOCK_DOCUMENT_READ_ROLES)
 export class StockDocumentsController {
   constructor(private readonly service: StockDocumentsService) {}
 
@@ -40,6 +43,7 @@ export class StockDocumentsController {
   }
 
   @Post()
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
   create(
     @Body() dto: CreateStockDocumentDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -49,6 +53,7 @@ export class StockDocumentsController {
   }
 
   @Patch(':id')
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
   update(
     @Param('id') id: string,
     @Body() dto: UpdateStockDocumentDto,
@@ -59,6 +64,7 @@ export class StockDocumentsController {
   }
 
   @Delete(':id')
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
   remove(
     @Param('id') id: string,
     @CurrentUserParam() actor: CurrentUser,
@@ -68,6 +74,7 @@ export class StockDocumentsController {
   }
 
   @Post(':id/post')
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
   post(
     @Param('id') id: string,
     @CurrentUserParam() actor: CurrentUser,
@@ -77,6 +84,7 @@ export class StockDocumentsController {
   }
 
   @Post(':id/cancel')
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
   cancel(
     @Param('id') id: string,
     @CurrentUserParam() actor: CurrentUser,
