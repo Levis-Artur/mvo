@@ -16,6 +16,9 @@ import type {
   InventoryItemAccountingCard,
   InventoryItemsQuery,
   Management,
+  MyPropertyExportSection,
+  MyPropertyQuery,
+  MyPropertyResponse,
   PaginatedResponse,
   ResponsiblePerson,
   ResponsiblePersonAccountingCard,
@@ -195,6 +198,36 @@ function mutation<TBody>(
   };
 }
 
+export type DownloadedFile = {
+  blob: Blob;
+  filename: string;
+};
+
+async function downloadRequest(
+  path: string,
+  query?: Record<string, QueryValue>,
+): Promise<DownloadedFile> {
+  const response = await fetch(buildUrl(path, query), {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await createApiError(response, 'Не вдалося завантажити файл');
+  }
+  return {
+    blob: await response.blob(),
+    filename: responseFilename(response.headers.get('content-disposition')) ?? 'download.csv',
+  };
+}
+
+function responseFilename(contentDisposition: string | null) {
+  if (!contentDisposition) return null;
+  const encoded = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try { return decodeURIComponent(encoded); } catch { return encoded; }
+  }
+  return contentDisposition.match(/filename="([^"]+)"/i)?.[1] ?? null;
+}
+
 export const apiClient = {
   login: (body: { username: string; password: string }) =>
     request<{ user: AuthUser }>('/auth/login', mutation('POST', body)),
@@ -332,6 +365,10 @@ export const apiClient = {
     request<PaginatedResponse<StockBalance>>('/stock-balances', {}, query),
   availableStockToMe: () =>
     request<AvailableStockSource[]>('/stock/available-to-me'),
+  myProperty: (query: MyPropertyQuery) =>
+    request<MyPropertyResponse>('/stock/my-property', {}, query),
+  exportMyPropertyCsv: (query: { search?: string; section: MyPropertyExportSection }) =>
+    downloadRequest('/stock/my-property/export.csv', query),
   stockTransactions: (query: StockTransactionsQuery) =>
     request<PaginatedResponse<StockTransaction>>(
       '/stock-transactions',

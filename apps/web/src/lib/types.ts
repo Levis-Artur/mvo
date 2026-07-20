@@ -297,6 +297,59 @@ export type AvailableStockSource = {
   canIssue: boolean;
 };
 
+export type MyPropertySection = 'DIRECT' | 'ASSIGNED_OUT' | 'ASSIGNED_TO_ME';
+export type MyPropertyExportSection = 'ALL' | MyPropertySection;
+export type MyPropertySortBy =
+  | 'code'
+  | 'name'
+  | 'quantity'
+  | 'accountingOwner'
+  | 'currentCustodian';
+export type SortOrder = 'asc' | 'desc';
+
+export type MyPropertyPerson = PersonReference & {
+  management: string | null;
+  service: string | null;
+  unit: string | null;
+};
+
+export type MyPropertyItem = {
+  section: MyPropertySection;
+  sourceKind: StockSourceKind;
+  sourceBalanceId: string;
+  inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
+  accountingOwner: MyPropertyPerson;
+  currentCustodian: MyPropertyPerson;
+  quantity: string;
+  canAssign: boolean;
+  canIssue: boolean;
+  updatedAt: string;
+};
+
+export type MyPropertySummary = {
+  directCount: number;
+  assignedOutCount: number;
+  assignedToMeCount: number;
+  directQuantity: string;
+  assignedOutQuantity: string;
+  assignedToMeQuantity: string;
+  totalOwnedAccountingQuantity: string;
+  totalPhysicallyHeldQuantity: string;
+};
+
+export type MyPropertyResponse = PaginatedResponse<MyPropertyItem> & {
+  summary: MyPropertySummary;
+};
+
+export type MyPropertyQuery = {
+  search?: string;
+  section: MyPropertySection;
+  page: number;
+  limit: number;
+  sortBy: MyPropertySortBy;
+  sortOrder: SortOrder;
+};
+
 export type CustodyBalanceView = {
   id: string;
   inventoryItem: InventoryItem;

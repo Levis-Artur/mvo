@@ -1,29 +1,63 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/app/ui/auth-context';
 import { getErrorMessage } from '@/components/common';
 import { PageHeader } from '@/components/layout/page-header';
-import { Button, Card, DataTable, ErrorState, LoadingState, StatusBadge } from '@/components/ui';
+import {
+  Button,
+  Card,
+  DataTable,
+  ErrorState,
+  Input,
+  Pagination,
+  Select,
+  StatusBadge,
+  Toast,
+} from '@/components/ui';
+import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import { mvoStockActionLinks } from '@/features/inventory/stock-model';
-import { MY_STOCK_SECTION_LABELS, myStockSources, type MyStockSection } from '@/features/inventory/custody-model';
-import type { AvailableStockSource, ResponsiblePersonAccountingCard } from '@/lib/types';
-import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
+import type {
+  MyPropertyItem,
+  MyPropertyResponse,
+  MyPropertySection,
+  MyPropertySortBy,
+  SortOrder,
+} from '@/lib/types';
+import { MyStockExportModal } from './my-stock-export-modal';
+import {
+  DEFAULT_MY_PROPERTY_SORT,
+  downloadFileInBrowser,
+  exportSection,
+  MY_PROPERTY_SECTION_LABELS,
+  MY_PROPERTY_SORT_LABELS,
+  normalizedPropertySearch,
+  propertyActionLinks,
+} from './my-stock-model';
 import { responsiblePersonsService } from './responsible-persons.service';
 
-const tabs = (Object.entries(MY_STOCK_SECTION_LABELS) as [MyStockSection, string][])
+const tabs = (Object.entries(MY_PROPERTY_SECTION_LABELS) as [MyPropertySection, string][])
   .map(([id, label]) => ({ id, label }));
 
 export function MyStockView() {
   const { user } = useAuth();
   const personId = user?.responsiblePersonId ?? '';
-  const links = mvoStockActionLinks(personId);
-  const [card, setCard] = useState<ResponsiblePersonAccountingCard | null>(null);
-  const [available, setAvailable] = useState<AvailableStockSource[]>([]);
-  const [tab, setTab] = useState<MyStockSection>('direct');
+  const actionLinks = mvoStockActionLinks(personId);
+  const [data, setData] = useState<MyPropertyResponse | null>(null);
+  const [section, setSection] = useState<MyPropertySection>('DIRECT');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<MyPropertySortBy>(DEFAULT_MY_PROPERTY_SORT.sortBy);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(DEFAULT_MY_PROPERTY_SORT.sortOrder);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState('');
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
     if (!personId) {
@@ -31,23 +65,34 @@ export function MyStockView() {
       setError('До користувача не прив’язано картку МВО.');
       return;
     }
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError('');
     try {
-      const [nextCard, nextAvailable] = await Promise.all([
-        responsiblePersonsService.responsiblePersonAccountingCard(personId),
-        responsiblePersonsService.availableStockToMe(),
-      ]);
-      setCard(nextCard);
-      setAvailable(nextAvailable);
+      const response = await responsiblePersonsService.myProperty({
+        search: search || undefined,
+        section,
+        page,
+        limit: Math.min(limit, 100),
+        sortBy,
+        sortOrder,
+      });
+      if (sequence === requestSequence.current) setData(response);
     } catch (reason) {
-      setError(getErrorMessage(reason));
+      if (sequence === requestSequence.current) setError(getErrorMessage(reason));
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [personId]);
+  }, [limit, page, personId, search, section, sortBy, sortOrder]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearch(normalizedPropertySearch(searchDraft));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft]);
   useEffect(() => {
     function refresh(event: Event) {
       const detail = getToolbarDetail(event);
@@ -61,49 +106,150 @@ export function MyStockView() {
     };
   }, [load]);
 
-  const rows = useMemo(() => card ? myStockRows(card, available, tab) : [], [available, card, tab]);
+  async function exportCsv(scope: 'ALL' | 'CURRENT') {
+    if (exporting) return;
+    setExporting(true);
+    setToast('');
+    try {
+      const file = await responsiblePersonsService.exportMyPropertyCsv({
+        search: normalizedPropertySearch(searchDraft) || undefined,
+        section: exportSection(scope, section),
+      });
+      downloadFileInBrowser(file);
+      setExportOpen(false);
+    } catch (reason) {
+      setToast(`Не вдалося експортувати CSV: ${getErrorMessage(reason)}`);
+    } finally {
+      setExporting(false);
+    }
+  }
 
+  const summary = data?.summary;
   return <section className="grid min-w-0 gap-4">
     <PageHeader
-      action={personId ? <div className="flex flex-wrap gap-2"><a className="btn btn-primary" href={links.transfer}>Передати</a><a className="btn btn-outline" href={links.issue}>Видати</a><Button disabled={loading} icon="refresh" variant="outline" type="button" onClick={() => void load()}>Оновити</Button></div> : undefined}
+      action={personId ? <div className="flex flex-wrap gap-2">
+        <a className="btn btn-primary" href={actionLinks.transfer}>Передати</a>
+        <a className="btn btn-outline" href={actionLinks.issue}>Видати</a>
+      </div> : undefined}
       description="Прямий залишок і майно, закріплене за фактичними утримувачами."
       icon="box"
       title="Моє майно"
     />
-    {loading ? <LoadingState label="Завантаження облікової картки…" /> : null}
-    {error ? <ErrorState message={error} /> : null}
-    {card ? <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="Разом під моїм обліком" value={card.totalOwnedAccountingQuantity} />
-        <Metric label="Фактично утримую" value={card.totalPhysicallyHeldQuantity} />
-        <Metric label="Закріплень за іншими" value={String(card.assignedToOthers.length)} />
-        <Metric label="Закріплень за мною" value={String(card.assignedToMe.length)} />
+
+    <form className="my-stock-toolbar" onSubmit={(event) => {
+      event.preventDefault();
+      setPage(1);
+      setSearch(normalizedPropertySearch(searchDraft));
+    }}>
+      <label className="my-stock-toolbar__search">
+        <span>Пошук майна</span>
+        <Input
+          placeholder="Код, назва, обліковий власник або утримувач"
+          type="search"
+          value={searchDraft}
+          onChange={(event) => setSearchDraft(event.target.value)}
+        />
+      </label>
+      <div className="my-stock-toolbar__actions">
+        <Button disabled={loading && !searchDraft} variant="outline" type="button" onClick={() => {
+          setSearchDraft('');
+          setSearch('');
+          setPage(1);
+        }}>Очистити</Button>
+        <Button disabled={exporting || !personId} variant="outline" type="button" onClick={() => setExportOpen(true)}>
+          {exporting ? 'Формування CSV…' : 'Експортувати CSV'}
+        </Button>
+        <Button disabled={loading} icon="refresh" variant="outline" type="button" onClick={() => void load()}>
+          Оновити
+        </Button>
       </div>
-      <nav aria-label="Склад майна" className="flex flex-wrap gap-2">{tabs.map((item) => <Button aria-current={tab === item.id ? 'page' : undefined} key={item.id} variant={tab === item.id ? 'primary' : 'outline'} type="button" onClick={() => setTab(item.id)}>{item.label}</Button>)}</nav>
-      <DataTable
-        ariaLabel={tabs.find((item) => item.id === tab)?.label ?? 'Моє майно'}
-        columns={[{ label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' }, { label: 'Обліковий власник' }, { label: 'Фактичний утримувач' }, { label: 'Тип' }, { label: 'Кількість', numeric: true }, { label: 'Доступно для передачі' }, { label: 'Доступно для видачі' }, { label: 'Дії', actions: true }]}
-        emptyMessage="У цьому розділі майна немає."
-        rows={rows}
-      />
-    </> : null}
+    </form>
+
+    {error ? <ErrorState message={error} /> : null}
+    {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Metric label="Разом під моїм обліком" value={summary.totalOwnedAccountingQuantity} />
+      <Metric label="Фактично утримую" value={summary.totalPhysicallyHeldQuantity} />
+      <Metric label="Закріплень за іншими" value={String(summary.assignedOutCount)} />
+      <Metric label="Закріплень за мною" value={String(summary.assignedToMeCount)} />
+    </div> : null}
+
+    <nav aria-label="Склад майна" className="flex flex-wrap gap-2">
+      {tabs.map((item) => <Button
+        aria-current={section === item.id ? 'page' : undefined}
+        key={item.id}
+        variant={section === item.id ? 'primary' : 'outline'}
+        type="button"
+        onClick={() => { setSection(item.id); setPage(1); }}
+      >{item.label}</Button>)}
+    </nav>
+
+    <div className="my-stock-sort-bar">
+      <strong>Знайдено записів: {data?.pagination.total ?? 0}</strong>
+      <label><span>Сортувати за</span><Select value={sortBy} onChange={(event) => {
+        setSortBy(event.target.value as MyPropertySortBy); setPage(1);
+      }}>{Object.entries(MY_PROPERTY_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
+      <label><span>Порядок</span><Select value={sortOrder} onChange={(event) => {
+        setSortOrder(event.target.value as SortOrder); setPage(1);
+      }}><option value="asc">За зростанням</option><option value="desc">За спаданням</option></Select></label>
+    </div>
+
+    <DataTable
+      ariaLabel={MY_PROPERTY_SECTION_LABELS[section]}
+      columns={[
+        { label: 'Код' }, { label: 'Назва', className: 'my-stock-table__name' }, { label: 'Одиниця' },
+        { label: 'Обліковий власник', className: 'my-stock-table__person' },
+        { label: 'Фактичний утримувач', className: 'my-stock-table__person' },
+        { label: 'Тип' }, { label: 'Кількість', numeric: true },
+        { label: 'Доступно для передачі' }, { label: 'Доступно для видачі' },
+        { label: 'Оновлено' }, { label: 'Дії', actions: true },
+      ]}
+      emptyMessage={search
+        ? 'За вказаним запитом майно не знайдено'
+        : 'У цьому розділі майна немає.'}
+      loading={loading}
+      rows={(data?.items ?? []).map(myStockRow)}
+      tableClassName="my-stock-table"
+    />
+    <Pagination
+      limit={data?.pagination.limit ?? limit}
+      page={data?.pagination.page ?? page}
+      total={data?.pagination.total ?? 0}
+      totalPages={data?.pagination.totalPages ?? 0}
+      onLimitChange={(nextLimit) => { setLimit(Math.min(nextLimit, 100)); setPage(1); }}
+      onPage={setPage}
+    />
+
+    {exportOpen ? <MyStockExportModal
+      currentSection={section}
+      loading={exporting}
+      search={normalizedPropertySearch(searchDraft)}
+      onClose={() => { if (!exporting) setExportOpen(false); }}
+      onExport={(scope) => void exportCsv(scope)}
+    /> : null}
+    {toast ? <Toast message={toast} tone="error" onClose={() => setToast('')} /> : null}
   </section>;
 }
 
-function myStockRows(card: ResponsiblePersonAccountingCard, available: AvailableStockSource[], tab: MyStockSection) {
-  const sources = myStockSources(card, available, tab);
-  return sources.map((source) => [
-    source.inventoryItem.externalCode,
-    source.inventoryItem.name,
-    source.inventoryItem.unitOfMeasure ?? '—',
-    source.accountingOwner.fullName,
-    source.currentCustodian.fullName,
-    <StatusBadge key="kind" tone={source.sourceKind === 'DIRECT' ? 'success' : 'info'}>{source.sourceKind}</StatusBadge>,
-    formatQuantity(source.availableQuantity),
-    source.canAssign ? 'Так' : 'Ні',
-    source.canIssue ? 'Так' : 'Ні',
-    source.canAssign || source.canIssue ? <div className="flex flex-wrap justify-end gap-1" key="actions">{source.canAssign ? <a className="btn btn-ghost" href={`/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=${encodeURIComponent(source.currentCustodian.id)}&sourceBalanceId=${encodeURIComponent(source.sourceBalanceId)}`}>Передати</a> : null}{source.canIssue ? <a className="btn btn-ghost" href={`/transfers?create=ISSUE&sourceResponsiblePersonId=${encodeURIComponent(source.currentCustodian.id)}&sourceBalanceId=${encodeURIComponent(source.sourceBalanceId)}`}>Видати</a> : null}</div> : 'Лише перегляд',
-  ]);
+function myStockRow(item: MyPropertyItem) {
+  const links = propertyActionLinks(item);
+  return [
+    item.inventoryItem.externalCode,
+    item.inventoryItem.name,
+    item.inventoryItem.unitOfMeasure ?? '—',
+    `${item.accountingOwner.personnelNumber} — ${item.accountingOwner.fullName}`,
+    `${item.currentCustodian.personnelNumber} — ${item.currentCustodian.fullName}`,
+    <StatusBadge key="kind" tone={item.sourceKind === 'DIRECT' ? 'success' : 'info'}>
+      {item.sourceKind === 'DIRECT' ? 'Прямий залишок' : 'Закріплене майно'}
+    </StatusBadge>,
+    formatQuantity(item.quantity),
+    item.canAssign ? 'Так' : 'Ні',
+    item.canIssue ? 'Так' : 'Ні',
+    new Date(item.updatedAt).toLocaleString('uk-UA'),
+    item.canAssign || item.canIssue ? <div className="flex flex-wrap justify-end gap-1" key="actions">
+      {item.canAssign ? <a className="btn btn-ghost" href={links.transfer}>Передати</a> : null}
+      {item.canIssue ? <a className="btn btn-ghost" href={links.issue}>Видати</a> : null}
+    </div> : 'Лише перегляд',
+  ];
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

@@ -141,6 +141,43 @@ describe('owner/custody API URLs', () => {
     );
   });
 
+  it('sends scoped search, section, sorting and safe pagination to my-property', async () => {
+    await apiClient.myProperty({
+      search: 'клавіатура',
+      section: 'ASSIGNED_TO_ME',
+      page: 2,
+      limit: 100,
+      sortBy: 'accountingOwner',
+      sortOrder: 'desc',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/stock/my-property?search=%D0%BA%D0%BB%D0%B0%D0%B2%D1%96%D0%B0%D1%82%D1%83%D1%80%D0%B0&section=ASSIGNED_TO_ME&page=2&limit=100&sortBy=accountingOwner&sortOrder=desc',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('downloads authorized CSV as a Blob and reads its filename', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(new Response('\uFEFF"Категорія"\r\n', {
+      status: 200,
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="mvo-property-002-2026-07-20.csv"',
+      },
+    }));
+
+    const result = await apiClient.exportMyPropertyCsv({
+      search: 'майно',
+      section: 'ALL',
+    });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/stock/my-property/export.csv?search=%D0%BC%D0%B0%D0%B9%D0%BD%D0%BE&section=ALL',
+      { credentials: 'include' },
+    );
+    expect(result.filename).toBe('mvo-property-002-2026-07-20.csv');
+    expect(await result.blob.text()).toContain('Категорія');
+  });
+
   it('loads transfer targets from the dedicated scoped endpoint', async () => {
     await apiClient.transferTargets({ page: 1, limit: 100, isActive: true });
     expect(fetch).toHaveBeenCalledWith(

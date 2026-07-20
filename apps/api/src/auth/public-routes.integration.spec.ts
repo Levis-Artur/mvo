@@ -114,4 +114,10 @@ describe('public routes', () => {
     expect(response.status).toBe(401);
     expect(authenticateSession).not.toHaveBeenCalled();
   });
+
+  it('rejects my-property CSV export without a session', async () => {
+    const response = await fetch(`${baseUrl}/api/stock/my-property/export.csv`);
+
+    expect(response.status).toBe(401);
+  });
 });

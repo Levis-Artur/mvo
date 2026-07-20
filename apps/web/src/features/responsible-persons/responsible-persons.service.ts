@@ -8,6 +8,8 @@ export const responsiblePersonsService = {
   responsiblePerson: apiClient.responsiblePerson,
   responsiblePersonAccountingCard: apiClient.responsiblePersonAccountingCard,
   availableStockToMe: apiClient.availableStockToMe,
+  myProperty: apiClient.myProperty,
+  exportMyPropertyCsv: apiClient.exportMyPropertyCsv,
   createResponsiblePerson: apiClient.createResponsiblePerson,
   updateResponsiblePerson: apiClient.updateResponsiblePerson,
   createUser: apiClient.createUser,

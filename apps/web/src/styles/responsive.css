@@ -27,6 +27,11 @@
   .stock-source-picker__filters .form-field { grid-template-columns: minmax(0, 1fr); }
   .stock-source-picker__filters .form-field__hint,
   .stock-source-picker__filters .form-field__error { grid-column: 1; }
+  .my-stock-toolbar { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .my-stock-toolbar__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
+  .my-stock-toolbar__actions .btn:last-child { grid-column: 1 / -1; }
+  .my-stock-sort-bar { align-items: stretch; flex-direction: column; }
+  .my-stock-sort-bar > strong, .my-stock-sort-bar label { width: 100%; margin-right: 0; }
   .organization-node > summary, .organization-people > li { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 700px) {

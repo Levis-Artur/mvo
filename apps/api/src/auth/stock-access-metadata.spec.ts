@@ -15,6 +15,12 @@ describe('stock route role metadata', () => {
     expect(roles(StockController.prototype.availableToMe)).toEqual([
       UserRole.MVO,
     ]);
+    expect(roles(StockController.prototype.myProperty)).toEqual(
+      expect.arrayContaining([UserRole.MVO, UserRole.OWNER, UserRole.AUDITOR]),
+    );
+    expect(roles(StockController.prototype.exportMyProperty)).toEqual(
+      expect.arrayContaining([UserRole.MVO, UserRole.ACCOUNTANT, UserRole.DPP_ADMIN]),
+    );
   });
 
   it('allows transfer-targets without opening the administrative registry', () => {
