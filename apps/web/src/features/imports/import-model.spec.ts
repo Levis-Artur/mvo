@@ -41,4 +41,8 @@ describe('import presentation model', () => {
     expect(importRoleAccess('DPP_ADMIN').canDelete).toBe(false);
     expect(importRoleAccess('MVO').canDelete).toBe(false);
   });
+
+  it('дозволяє ACCOUNTANT працювати з імпортами без destructive actions', () => {
+    expect(importRoleAccess('ACCOUNTANT')).toEqual({ canWrite: true, canDelete: false });
+  });
 });

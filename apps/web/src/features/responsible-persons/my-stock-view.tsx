@@ -2,46 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/app/ui/auth-context';
-import type { InventoryItem, StockBalance } from '@/lib/types';
-import { inventoryService as apiClient } from '@/features/inventory/inventory.service';
 import { getErrorMessage } from '@/components/common';
 import { PageHeader } from '@/components/layout/page-header';
-import { ErrorState, Pagination } from '@/components/ui';
-import { fetchAllPages } from '@/lib/fetch-all-pages';
+import { Button, Card, DataTable, ErrorState, LoadingState, StatusBadge } from '@/components/ui';
+import { formatQuantity } from '@/features/inventory/quantity-format';
+import { mvoStockActionLinks } from '@/features/inventory/stock-model';
+import { MY_STOCK_SECTION_LABELS, myStockSources, type MyStockSection } from '@/features/inventory/custody-model';
+import type { AvailableStockSource, ResponsiblePersonAccountingCard } from '@/lib/types';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
-import { StockBalancesTable } from '@/features/inventory/stock-balances-table';
-import { StockFilterBar } from '@/features/inventory/stock-filter-bar';
-import { StockSummaryCards } from '@/features/inventory/stock-summary-cards';
-import {
-  DEFAULT_STOCK_FILTERS,
-  filterProblematicBalances,
-  mvoStockActionLinks,
-  paginateBalances,
-  stockQueryFromFilters,
-  type StockFilterDraft,
-} from '@/features/inventory/stock-model';
+import { responsiblePersonsService } from './responsible-persons.service';
+
+const tabs = (Object.entries(MY_STOCK_SECTION_LABELS) as [MyStockSection, string][])
+  .map(([id, label]) => ({ id, label }));
 
 export function MyStockView() {
   const { user } = useAuth();
   const personId = user?.responsiblePersonId ?? '';
   const links = mvoStockActionLinks(personId);
-  const [balances, setBalances] = useState<StockBalance[]>([]);
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [draft, setDraft] = useState<StockFilterDraft>(DEFAULT_STOCK_FILTERS);
-  const [applied, setApplied] = useState<StockFilterDraft>(DEFAULT_STOCK_FILTERS);
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20);
+  const [card, setCard] = useState<ResponsiblePersonAccountingCard | null>(null);
+  const [available, setAvailable] = useState<AvailableStockSource[]>([]);
+  const [tab, setTab] = useState<MyStockSection>('direct');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const filtered = useMemo(
-    () => filterProblematicBalances(balances, applied.onlyProblematic),
-    [applied.onlyProblematic, balances],
-  );
-  const paged = useMemo(
-    () => paginateBalances(filtered, page, limit),
-    [filtered, limit, page],
-  );
 
   const load = useCallback(async () => {
     if (!personId) {
@@ -52,89 +34,78 @@ export function MyStockView() {
     setLoading(true);
     setError('');
     try {
-      const query = stockQueryFromFilters(applied, personId);
-      const [nextBalances, nextItems] = await Promise.all([
-        fetchAllPages((pagination) =>
-          apiClient.stockBalances({ ...query, ...pagination }),
-        ),
-        fetchAllPages((pagination) => apiClient.inventoryItems(pagination)),
+      const [nextCard, nextAvailable] = await Promise.all([
+        responsiblePersonsService.responsiblePersonAccountingCard(personId),
+        responsiblePersonsService.availableStockToMe(),
       ]);
-      setBalances(nextBalances);
-      setItems(nextItems);
+      setCard(nextCard);
+      setAvailable(nextAvailable);
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
       setLoading(false);
     }
-  }, [applied, personId]);
+  }, [personId]);
 
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    function handleToolbar(event: Event) {
+    function refresh(event: Event) {
       const detail = getToolbarDetail(event);
-      if (detail?.view === 'my-stock' && detail.action === 'refresh') void load();
+      if (!detail || (detail.view === 'my-stock' && detail.action === 'refresh')) void load();
     }
-    window.addEventListener(TOOLBAR_EVENT, handleToolbar);
-    return () => window.removeEventListener(TOOLBAR_EVENT, handleToolbar);
+    window.addEventListener(TOOLBAR_EVENT, refresh);
+    window.addEventListener('mvo:refresh-accounting-cards', refresh);
+    return () => {
+      window.removeEventListener(TOOLBAR_EVENT, refresh);
+      window.removeEventListener('mvo:refresh-accounting-cards', refresh);
+    };
   }, [load]);
 
-  return (
-    <section className="grid min-w-0 gap-4">
-      <PageHeader
-        action={
-          personId ? (
-            <div className="flex flex-wrap gap-2">
-              <a className="btn btn-primary" href={links.transfer}>Передати</a>
-              <a className="btn btn-outline" href={links.issue}>Видати</a>
-            </div>
-          ) : undefined
-        }
-        description="Власні облікові залишки за прив’язаною карткою МВО."
-        icon="box"
-        title="Моє майно"
+  const rows = useMemo(() => card ? myStockRows(card, available, tab) : [], [available, card, tab]);
+
+  return <section className="grid min-w-0 gap-4">
+    <PageHeader
+      action={personId ? <div className="flex flex-wrap gap-2"><a className="btn btn-primary" href={links.transfer}>Передати</a><a className="btn btn-outline" href={links.issue}>Видати</a><Button disabled={loading} icon="refresh" variant="outline" type="button" onClick={() => void load()}>Оновити</Button></div> : undefined}
+      description="Прямий залишок і майно, закріплене за фактичними утримувачами."
+      icon="box"
+      title="Моє майно"
+    />
+    {loading ? <LoadingState label="Завантаження облікової картки…" /> : null}
+    {error ? <ErrorState message={error} /> : null}
+    {card ? <>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Metric label="Разом під моїм обліком" value={card.totalOwnedAccountingQuantity} />
+        <Metric label="Фактично утримую" value={card.totalPhysicallyHeldQuantity} />
+        <Metric label="Закріплень за іншими" value={String(card.assignedToOthers.length)} />
+        <Metric label="Закріплень за мною" value={String(card.assignedToMe.length)} />
+      </div>
+      <nav aria-label="Склад майна" className="flex flex-wrap gap-2">{tabs.map((item) => <Button aria-current={tab === item.id ? 'page' : undefined} key={item.id} variant={tab === item.id ? 'primary' : 'outline'} type="button" onClick={() => setTab(item.id)}>{item.label}</Button>)}</nav>
+      <DataTable
+        ariaLabel={tabs.find((item) => item.id === tab)?.label ?? 'Моє майно'}
+        columns={[{ label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' }, { label: 'Обліковий власник' }, { label: 'Фактичний утримувач' }, { label: 'Тип' }, { label: 'Кількість', numeric: true }, { label: 'Доступно для передачі' }, { label: 'Доступно для видачі' }, { label: 'Дії', actions: true }]}
+        emptyMessage="У цьому розділі майна немає."
+        rows={rows}
       />
-      {personId ? <StockSummaryCards balances={filtered} /> : null}
-      {personId ? (
-        <StockFilterBar
-          hideResponsiblePerson
-          filters={draft}
-          items={items}
-          loading={loading}
-          managements={[]}
-          persons={[]}
-          services={[]}
-          units={[]}
-          onApply={() => {
-            setApplied(draft);
-            setPage(1);
-          }}
-          onChange={setDraft}
-          onRefresh={() => void load()}
-          onReset={() => {
-            setDraft(DEFAULT_STOCK_FILTERS);
-            setApplied(DEFAULT_STOCK_FILTERS);
-            setPage(1);
-          }}
-        />
-      ) : null}
-      {error ? <ErrorState message={error} /> : null}
-      {personId ? <StockBalancesTable balances={paged.items} loading={loading} /> : null}
-      {personId ? (
-        <Pagination
-          limit={paged.pagination.limit}
-          page={paged.pagination.page}
-          total={paged.pagination.total}
-          totalPages={paged.pagination.totalPages}
-          onLimitChange={(nextLimit) => {
-            setLimit(nextLimit);
-            setPage(1);
-          }}
-          onPage={setPage}
-        />
-      ) : null}
-    </section>
-  );
+    </> : null}
+  </section>;
+}
+
+function myStockRows(card: ResponsiblePersonAccountingCard, available: AvailableStockSource[], tab: MyStockSection) {
+  const sources = myStockSources(card, available, tab);
+  return sources.map((source) => [
+    source.inventoryItem.externalCode,
+    source.inventoryItem.name,
+    source.inventoryItem.unitOfMeasure ?? '—',
+    source.accountingOwner.fullName,
+    source.currentCustodian.fullName,
+    <StatusBadge key="kind" tone={source.sourceKind === 'DIRECT' ? 'success' : 'info'}>{source.sourceKind}</StatusBadge>,
+    formatQuantity(source.availableQuantity),
+    source.canAssign ? 'Так' : 'Ні',
+    source.canIssue ? 'Так' : 'Ні',
+    source.canAssign || source.canIssue ? <div className="flex flex-wrap justify-end gap-1" key="actions">{source.canAssign ? <a className="btn btn-ghost" href={`/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=${encodeURIComponent(source.currentCustodian.id)}&sourceBalanceId=${encodeURIComponent(source.sourceBalanceId)}`}>Передати</a> : null}{source.canIssue ? <a className="btn btn-ghost" href={`/transfers?create=ISSUE&sourceResponsiblePersonId=${encodeURIComponent(source.currentCustodian.id)}&sourceBalanceId=${encodeURIComponent(source.sourceBalanceId)}`}>Видати</a> : null}</div> : 'Лише перегляд',
+  ]);
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <Card title={label}><p className="text-xl font-bold tabular-nums">{formatQuantity(value)}</p></Card>;
 }

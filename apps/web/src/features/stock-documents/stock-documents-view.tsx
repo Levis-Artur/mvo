@@ -38,14 +38,14 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     quickActionHandled.current = true;
     const action = parseStockDocumentQuickAction(window.location.search);
     if (!action) return;
-    controller.openCreate(action.type, action.sourceResponsiblePersonId);
+    controller.openCreate(action.type, action.sourceResponsiblePersonId, action.sourceBalanceId);
   }, [controller, writable]);
 
   return <section className="grid min-w-0 gap-4">
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
         {writable ? <>
-          <Button icon="transfer" type="button" onClick={() => controller.openCreate('TRANSFER')}>Нова передача</Button>
+          <Button icon="transfer" type="button" onClick={() => controller.openCreate('ASSIGNMENT')}>Нова передача</Button>
           <Button variant="outline" type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button>
         </> : null}
         <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button>
@@ -74,7 +74,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onSearchChange={(search) => controller.setDraftFilters((current) => ({ ...current, search }))}
     >
       <FilterField label="Тип"><Select value={controller.draftFilters.type} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, type: event.target.value as typeof current.type }))}>
-        <option value="">Усі типи</option><option value="TRANSFER">Передача</option><option value="ISSUE">Видача</option>
+        <option value="">Усі типи</option><option value="ASSIGNMENT">Передача</option><option value="ISSUE">Видача</option><option value="TRANSFER">Legacy transfer</option>
       </Select></FilterField>
       <FilterField label="Статус"><Select value={controller.draftFilters.status} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, status: event.target.value as typeof current.status }))}>
         <option value="">Усі статуси</option><option value="DRAFT">DRAFT</option><option value="POSTED">POSTED</option><option value="CANCELLED">CANCELLED</option>
@@ -108,11 +108,12 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onPage={controller.setPage}
     />
     {controller.formType ? <StockDocumentForm
-      balances={controller.balances}
+      availableSources={controller.availableSources}
       document={controller.editing}
       error={controller.actionError}
       initialSourceId={controller.formSourceId}
-      loadingBalances={controller.loadingBalances}
+      initialSourceBalanceId={controller.initialSourceBalanceId}
+      loadingSources={controller.loadingSources}
       loadingTargets={controller.loadingTargets}
       persons={controller.persons}
       saving={controller.saving}
@@ -121,7 +122,8 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       type={controller.formType}
       user={user}
       onClose={() => controller.setFormType(null)}
-      onSourceChange={(id) => void controller.loadBalances(id)}
+      onRemoveAttachment={controller.removeAttachment}
+      onSourceChange={(id) => void controller.loadSources(id)}
       onSubmit={controller.save}
     /> : null}
     {controller.selected && !controller.confirming && !controller.formType ? <StockDocumentDetailsModal

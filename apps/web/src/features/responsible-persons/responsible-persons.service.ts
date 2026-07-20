@@ -6,6 +6,8 @@ export const responsiblePersonsService = {
   units: apiClient.units,
   responsiblePersons: apiClient.responsiblePersons,
   responsiblePerson: apiClient.responsiblePerson,
+  responsiblePersonAccountingCard: apiClient.responsiblePersonAccountingCard,
+  availableStockToMe: apiClient.availableStockToMe,
   createResponsiblePerson: apiClient.createResponsiblePerson,
   updateResponsiblePerson: apiClient.updateResponsiblePerson,
   createUser: apiClient.createUser,

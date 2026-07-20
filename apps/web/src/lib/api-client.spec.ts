@@ -120,3 +120,41 @@ describe('destructive administration URLs', () => {
     );
   });
 });
+
+describe('owner/custody API URLs', () => {
+  beforeEach(() => {
+    jest.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('loads available DIRECT and ASSIGNED sources from available-to-me', async () => {
+    await apiClient.availableStockToMe();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/stock/available-to-me',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
+  it('loads inventory and responsible-person accounting cards', async () => {
+    await apiClient.inventoryItemAccountingCard('item-1');
+    await apiClient.responsiblePersonAccountingCard('person-1');
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/inventory-items/item-1/accounting-card', expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/responsible-persons/person-1/accounting-card', expect.any(Object));
+  });
+
+  it('uses authorized attachment endpoints without serializing the file as JSON', async () => {
+    const file = new File(['scan'], 'накладна.pdf', { type: 'application/pdf' });
+    await apiClient.uploadStockDocumentAttachment('document-1', file);
+    const options = (fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect((options.body as FormData).get('file')).toBe(file);
+    expect(options.headers).toBeUndefined();
+    expect(apiClient.stockDocumentAttachmentDownloadUrl('document-1', 'attachment-1'))
+      .toBe('/api/stock-documents/document-1/attachments/attachment-1/download');
+  });
+});

@@ -17,16 +17,16 @@ export function StockBalancesTable({
         { label: 'Код' },
         { label: 'Найменування' },
         { label: 'Одиниця' },
-        { label: 'Доступний залишок', numeric: true },
-        { label: 'Зарезервовано', numeric: true },
-        { label: 'Загальна кількість', numeric: true },
+        { label: 'Безпосередньо у МВО', numeric: true },
+        { label: 'Закріплено за іншими', numeric: true },
+        { label: 'Разом під обліком', numeric: true },
         { label: 'Остання операція' },
         { label: 'Оновлено' },
       ]}
       emptyMessage="Залишків за вказаними фільтрами не знайдено."
       loading={loading}
       rows={balances.map((balance) => {
-        const quantity = formatQuantity(balance.quantity);
+        const directQuantity = formatQuantity(balance.directQuantity);
         return [
           <span key="person">
             <strong className="block">{balance.responsiblePerson.fullName}</strong>
@@ -41,14 +41,12 @@ export function StockBalancesTable({
           balance.inventoryItem.unitOfMeasure ?? '—',
           <StatusBadge
             key="available"
-            tone={isPositiveQuantity(balance.quantity) ? 'success' : 'warning'}
+            tone={isPositiveQuantity(balance.directQuantity) ? 'success' : 'warning'}
           >
-            {quantity}
+            {directQuantity}
           </StatusBadge>,
-          <span key="reserved" title="Резервування не ведеться поточною моделлю даних">
-            —
-          </span>,
-          quantity,
+          formatQuantity(balance.assignedToOthersQuantity),
+          formatQuantity(balance.totalAccountedQuantity),
           <span key="operation" title="Тип останньої операції не повертається API залишків">
             Зміна залишку
           </span>,

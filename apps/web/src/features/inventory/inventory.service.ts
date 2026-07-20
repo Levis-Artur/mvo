@@ -2,6 +2,7 @@ import { apiClient } from '@/lib/api-client';
 
 export const inventoryService = {
   inventoryItems: apiClient.inventoryItems,
+  inventoryItemAccountingCard: apiClient.inventoryItemAccountingCard,
   createInventoryItem: apiClient.createInventoryItem,
   updateInventoryItem: apiClient.updateInventoryItem,
   stockBalances: apiClient.stockBalances,

@@ -7,6 +7,8 @@ import {
   lifecycleActions,
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
+import { formatFileSize } from './stock-document-attachments-model';
+import { stockDocumentsService } from './stock-documents.service';
 
 export function StockDocumentDetailsModal({ document, user, loading, error, onEdit, onPost, onCancel, onDelete, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
@@ -32,6 +34,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
+      {document.type === 'TRANSFER' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара логіка</strong><span>Legacy transfer доступний лише для перегляду. Нові передачі створюються як закріплення без зміни облікового власника.</span></div> : null}
       <Card title="Загальні дані">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Дата">{formatDateTime(document.documentDate)}</Detail>
@@ -50,14 +53,20 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
       <DataTable
         ariaLabel="Рядки документа"
         columns={[
-          { label: 'Код' }, { label: 'Номенклатура' }, { label: 'Одиниця' },
+          { label: 'Код' }, { label: 'Номенклатура' }, { label: 'Джерело' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ]}
         rows={document.lines.map((line) => [
           line.inventoryItem.externalCode, line.inventoryItem.name,
+          line.sourceKind ? <StatusBadge key="source" tone={line.sourceKind === 'DIRECT' ? 'success' : 'info'}>{line.sourceKind}</StatusBadge> : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ])}
       />
+      {document.attachments.length ? <Card title="Вкладення">
+        <div className="grid gap-2">
+          {document.attachments.map((attachment) => <a className="break-all font-semibold text-[var(--color-primary)] underline" href={stockDocumentsService.attachmentDownloadUrl(document.id, attachment.id)} key={attachment.id}>{attachment.originalFileName} · {formatFileSize(attachment.sizeBytes)}</a>)}
+        </div>
+      </Card> : null}
       <div className="flex justify-end gap-6 font-semibold">
         <span>Позицій: {document.totalPositions}</span>
         <span>Загальна кількість: {formatQuantity(document.totalQuantity)}</span>

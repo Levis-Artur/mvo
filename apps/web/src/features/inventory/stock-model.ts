@@ -27,7 +27,10 @@ export function stockQueryFromFilters(
     responsiblePersonId:
       forcedResponsiblePersonId || filters.responsiblePersonId || undefined,
     inventoryItemId: filters.inventoryItemId || undefined,
-    onlyPositive: filters.onlyProblematic ? false : Boolean(filters.onlyPositive),
+    // Backend legacy `onlyPositive` currently checks only the direct bucket.
+    // Fetch all owner rows and apply positivity to totalAccountedQuantity below,
+    // so a fully assigned position is not hidden.
+    onlyPositive: false,
   };
 }
 
@@ -36,8 +39,21 @@ export function filterProblematicBalances(
   onlyProblematic?: boolean,
 ) {
   return onlyProblematic
-    ? balances.filter((balance) => !isPositiveQuantity(balance.quantity))
+    ? balances.filter((balance) => !isPositiveQuantity(balance.totalAccountedQuantity ?? balance.quantity))
     : balances;
+}
+
+export function filterVisibleBalances(
+  balances: StockBalance[],
+  filters: Pick<StockFilterDraft, 'onlyPositive' | 'onlyProblematic'>,
+) {
+  if (filters.onlyProblematic) return filterProblematicBalances(balances, true);
+  if (filters.onlyPositive) {
+    return balances.filter((balance) =>
+      isPositiveQuantity(balance.totalAccountedQuantity ?? balance.quantity),
+    );
+  }
+  return balances;
 }
 
 export function paginateBalances(
@@ -73,7 +89,7 @@ export function stockSummary(balances: StockBalance[]) {
       positive.map((balance) => balance.responsiblePerson.id),
     ).size,
     positions: new Set(balances.map((balance) => balance.inventoryItem.id)).size,
-    totalQuantity: addQuantities(balances.map((balance) => balance.quantity)),
+    totalQuantity: addQuantities(balances.map((balance) => balance.totalAccountedQuantity ?? balance.quantity)),
     problematic: balances.length - positive.length,
     updatedAt,
   };
@@ -92,7 +108,7 @@ export function stockScope(
 export function mvoStockActionLinks(responsiblePersonId: string) {
   const source = encodeURIComponent(responsiblePersonId);
   return {
-    transfer: `/transfers?create=TRANSFER&sourceResponsiblePersonId=${source}`,
+    transfer: `/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=${source}`,
     issue: `/transfers?create=ISSUE&sourceResponsiblePersonId=${source}`,
   };
 }

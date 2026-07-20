@@ -77,6 +77,7 @@ const UNIMPLEMENTED_TITLE = 'Функція ще не реалізована';
 export const roleLabels: Record<UserRole, string> = {
   OWNER: 'Власник',
   AUDITOR: 'Аудитор',
+  ACCOUNTANT: 'Бухгалтер',
   DPP_ADMIN: 'Адміністратор ДПП',
   MVO: 'Матеріально відповідальна особа',
 };
@@ -109,6 +110,15 @@ const permissions: Record<
     imports: ['read'],
     transactions: ['read'],
     reports: ['read'],
+    profile: ['read', 'write'],
+    stockDocuments: ['read'],
+  },
+  ACCOUNTANT: {
+    responsiblePersons: ['read'],
+    nomenclature: ['read'],
+    stock: ['read'],
+    imports: ['read', 'write'],
+    transactions: ['read'],
     profile: ['read', 'write'],
     stockDocuments: ['read'],
   },
@@ -162,6 +172,15 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
       disabled: true,
       title: UNIMPLEMENTED_TITLE,
     }),
+  ],
+  ACCOUNTANT: [
+    nav('МВО', '/persons', 'persons', 'responsiblePersons'),
+    nav('Номенклатура', '/nomenclature', 'nomenclature', 'nomenclature'),
+    nav('Залишки', '/stock', 'stock', 'stock'),
+    nav('Імпорт', '/imports', 'imports', 'imports'),
+    nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Профіль', '/profile', 'profile', 'profile'),
   ],
   DPP_ADMIN: [
     nav('Головна', '/', 'home', 'dashboard'),
@@ -389,7 +408,7 @@ export function getAssignableUserRoles(
     return ['OWNER'] satisfies UserRole[];
   }
 
-  return ['AUDITOR', 'DPP_ADMIN', 'MVO'] satisfies UserRole[];
+  return ['AUDITOR', 'ACCOUNTANT', 'DPP_ADMIN', 'MVO'] satisfies UserRole[];
 }
 
 export function requiresResponsiblePerson(role: UserRole) {

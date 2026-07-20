@@ -22,11 +22,25 @@ const labels: Record<StockTransactionType, string> = {
   MANUAL_RECEIPT: 'Ручне надходження',
   ADJUSTMENT_INCREASE: 'Коригування: збільшення',
   ADJUSTMENT_DECREASE: 'Коригування: зменшення',
+  TRANSFER_OUT: 'Legacy transfer: вибуття',
+  TRANSFER_IN: 'Legacy transfer: надходження',
+  ISSUE: 'Legacy видача',
+  DOCUMENT_REVERSAL: 'Legacy reversal',
+  ASSIGNMENT_OUT_DIRECT: 'Передача з прямого залишку',
+  ASSIGNMENT_OUT_CUSTODY: 'Передача із закріпленого майна',
+  ASSIGNMENT_IN_DIRECT: 'Повернення у прямий залишок',
+  ASSIGNMENT_IN_CUSTODY: 'Закріплення за утримувачем',
+  ISSUE_FROM_DIRECT: 'Видача з прямого залишку',
+  ISSUE_FROM_CUSTODY: 'Видача із закріпленого майна',
+  ASSIGNMENT_REVERSAL: 'Скасування передачі',
+  ISSUE_REVERSAL: 'Скасування видачі',
 };
 
 export const transactionTypeLabel = (type: StockTransactionType) => labels[type];
 export const transactionDirection = (type: StockTransactionType) =>
-  type === 'ADJUSTMENT_DECREASE' ? 'Зменшення' : 'Збільшення';
+  ['ADJUSTMENT_DECREASE', 'TRANSFER_OUT', 'ISSUE', 'ASSIGNMENT_OUT_DIRECT',
+    'ASSIGNMENT_OUT_CUSTODY', 'ISSUE_FROM_DIRECT', 'ISSUE_FROM_CUSTODY']
+    .includes(type) ? 'Зменшення' : 'Збільшення';
 export const transactionSource = (item: StockTransaction) =>
   item.sourceDocument || (item.importBatchId ? `Імпорт ${item.importBatchId}` : 'Системна операція');
 

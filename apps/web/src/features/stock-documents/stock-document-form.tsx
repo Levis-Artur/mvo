@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
@@ -21,14 +21,15 @@ import {
   resolveSourceId,
   validateDocumentInput,
 } from './stock-document-rules';
-import { StockDocumentLines } from './stock-document-lines';
+import { sourceToLine, StockDocumentLines } from './stock-document-lines';
+import { StockDocumentAttachments } from './stock-document-attachments';
 import type { DocumentFormLine, StockDocumentFormProps } from './stock-document.types';
 
 export function StockDocumentForm(props: StockDocumentFormProps) {
   const {
-    user, type, document, initialSourceId, persons, transferTargets, balances,
-    loadingBalances, loadingTargets, saving, error, targetsError,
-    onSourceChange, onSubmit, onClose,
+    user, type, document, initialSourceId, initialSourceBalanceId, persons, transferTargets, availableSources,
+    loadingSources, loadingTargets, saving, error, targetsError,
+    onSourceChange, onSubmit, onRemoveAttachment, onClose,
   } = props;
   const initialSource = resolveSourceId(
     user,
@@ -43,10 +44,41 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const [basis, setBasis] = useState(document?.basis ?? '');
   const [note, setNote] = useState(document?.note ?? '');
   const [lines, setLines] = useState<DocumentFormLine[]>(
-    document?.lines.map((line) => ({ inventoryItemId: line.inventoryItemId, quantity: line.quantity, note: line.note ?? '' })) ?? [],
+    document?.lines.map((line) => {
+      const source = availableSources.find((item) =>
+        item.inventoryItem.id === line.inventoryItemId &&
+        item.sourceKind === line.sourceKind &&
+        item.accountingOwner.id === line.accountingOwnerResponsiblePersonId,
+      );
+      return {
+        inventoryItemId: line.inventoryItemId,
+        sourceKind: line.sourceKind ?? 'DIRECT',
+        sourceBalanceId: source?.sourceBalanceId ?? line.sourceCustodyBalanceId ?? '',
+        accountingOwnerResponsiblePersonId: line.accountingOwnerResponsiblePersonId ?? initialSource,
+        sourceCustodianResponsiblePersonId: line.sourceCustodianResponsiblePersonId ?? undefined,
+        sourceCustodyBalanceId: line.sourceCustodyBalanceId ?? undefined,
+        quantity: line.quantity,
+        note: line.note ?? '',
+      };
+    }) ?? [],
   );
+  const [files, setFiles] = useState<File[]>([]);
+  useEffect(() => {
+    const uploaded = document?.attachments ?? [];
+    if (!uploaded.length) return;
+    setFiles((current) => current.filter((file) =>
+      !uploaded.some((attachment) =>
+        attachment.originalFileName === file.name && attachment.sizeBytes === file.size,
+      ),
+    ));
+  }, [document?.attachments]);
   const [validationError, setValidationError] = useState('');
   const [recipientSearch, setRecipientSearch] = useState('');
+  useEffect(() => {
+    if (document || lines.length || !initialSourceBalanceId) return;
+    const source = availableSources.find((item) => item.sourceBalanceId === initialSourceBalanceId);
+    if (source) setLines([sourceToLine(source)]);
+  }, [availableSources, document, initialSourceBalanceId, lines.length]);
   const recipients = useMemo(
     () => filterRecipientOptions(transferTargets, sourceId, recipientSearch),
     [recipientSearch, sourceId, transferTargets],
@@ -66,22 +98,30 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
       recipientUnit: recipientMode === 'EXTERNAL' ? recipientUnit.trim() || undefined : undefined,
       basis: basis.trim() || undefined,
       note: note.trim() || undefined,
-      lines: lines.map((line) => ({ ...line, note: line.note.trim() || undefined })),
+      lines: lines.map((line) => ({
+        inventoryItemId: line.inventoryItemId,
+        sourceKind: line.sourceKind,
+        accountingOwnerResponsiblePersonId: line.accountingOwnerResponsiblePersonId,
+        sourceCustodianResponsiblePersonId: line.sourceCustodianResponsiblePersonId,
+        sourceCustodyBalanceId: line.sourceCustodyBalanceId,
+        quantity: line.quantity,
+        note: line.note.trim() || undefined,
+      })),
     };
-    const message = validateDocumentInput(input, balances);
+    const message = validateDocumentInput(input, availableSources);
     if (message) { setValidationError(message); return; }
     setValidationError('');
-    await onSubmit(input);
+    await onSubmit(input, files);
   }
 
   function changeSource(id: string) {
     setSourceId(id); setDestinationId(''); setLines([]); onSourceChange(id);
   }
 
-  const title = `${document ? 'Редагування' : 'Створення'}: ${type === 'TRANSFER' ? 'передача' : 'видача'}`;
+  const title = `${document ? 'Редагування' : 'Створення'}: ${type === 'ASSIGNMENT' ? 'передача' : 'видача'}`;
   return <Modal
     closeOnEscape={!saving}
-    footer={<><Button disabled={saving} variant="outline" type="button" onClick={onClose}>Закрити</Button><Button disabled={saving || loadingBalances} form="stock-document-form" type="submit">{saving ? 'Збереження…' : 'Зберегти чернетку'}</Button></>}
+    footer={<><Button disabled={saving} variant="outline" type="button" onClick={onClose}>Закрити</Button><Button disabled={saving || loadingSources} form="stock-document-form" type="submit">{saving ? (files.length ? 'Завантаження вкладень…' : 'Збереження…') : 'Зберегти чернетку'}</Button></>}
     onClose={onClose}
     size="large"
     title={title}
@@ -116,13 +156,22 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             <FormField label="Одержувач" required><Input required value={recipientName} onChange={(event) => setRecipientName(event.target.value)} /></FormField>
             <FormField label="Підрозділ"><Input value={recipientUnit} onChange={(event) => setRecipientUnit(event.target.value)} /></FormField>
           </>}
-          <FormField label="Підстава"><Input value={basis} onChange={(event) => setBasis(event.target.value)} /></FormField>
+          <FormField label={type === 'ISSUE' ? 'Мета або підстава' : 'Підстава'} required={type === 'ISSUE'}><Input required={type === 'ISSUE'} value={basis} onChange={(event) => setBasis(event.target.value)} /></FormField>
           <FormField label="Примітка"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></FormField>
         </div>
       </Card>
       <div className="grid min-w-0 content-start gap-3">
-        {loadingBalances ? <LoadingState label="Завантаження залишків відправника…" /> : null}
-        <StockDocumentLines balances={balances} disabled={!sourceId} lines={lines} loading={loadingBalances} onChange={setLines} />
+        {type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status">Передача не зараховує майно на власний баланс одержувача. Майно буде закріплено за ним як за фактичним утримувачем.</div> : null}
+        {type === 'ISSUE' ? <div className="ui-alert" data-tone="warning" role="status">Після проведення кількість буде остаточно списана з обліку.</div> : null}
+        {loadingSources ? <LoadingState label="Завантаження доступного майна…" /> : null}
+        <StockDocumentLines sources={availableSources.filter((source) => type === 'ASSIGNMENT' ? source.canAssign : source.canIssue)} disabled={!sourceId} lines={lines} loading={loadingSources} onChange={setLines} />
+        {type === 'ISSUE' ? <StockDocumentAttachments
+          attachments={document?.attachments ?? []}
+          disabled={saving}
+          files={files}
+          onFilesChange={setFiles}
+          onRemoveAttachment={onRemoveAttachment}
+        /> : null}
         {validationError || error ? <ErrorState message={validationError || error} /> : null}
       </div>
     </form>

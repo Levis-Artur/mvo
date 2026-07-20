@@ -11,4 +11,11 @@ export const stockDocumentsService = {
   persons: apiClient.responsiblePersons,
   transferTargets: apiClient.responsiblePersons,
   balances: apiClient.stockBalances,
+  person: apiClient.responsiblePerson,
+  personAccountingCard: apiClient.responsiblePersonAccountingCard,
+  availableToMe: apiClient.availableStockToMe,
+  attachments: apiClient.stockDocumentAttachments,
+  uploadAttachment: apiClient.uploadStockDocumentAttachment,
+  removeAttachment: apiClient.deleteStockDocumentAttachment,
+  attachmentDownloadUrl: apiClient.stockDocumentAttachmentDownloadUrl,
 };

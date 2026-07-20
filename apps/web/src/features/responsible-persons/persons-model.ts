@@ -54,7 +54,7 @@ export function usersByResponsiblePerson(users: UserSummary[]) {
 
 export function personRoleAccess(role?: UserRole) {
   return {
-    readOnly: role === 'AUDITOR',
+    readOnly: role === 'AUDITOR' || role === 'ACCOUNTANT',
     canWrite: role === 'OWNER' || role === 'DPP_ADMIN',
     canDelete: role === 'OWNER',
     canCreateAccount: role === 'OWNER' || role === 'DPP_ADMIN',

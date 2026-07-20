@@ -38,9 +38,21 @@ describe('AppShell presentation model', () => {
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
       '/transactions', '/transfers',
     ]);
+    expect(paths('ACCOUNTANT')).toEqual([
+      '/persons', '/nomenclature', '/stock', '/imports', '/transactions',
+      '/transfers', '/profile',
+    ]);
     expect(paths('MVO')).toEqual([
       '/my-card', '/my-stock', '/my-transactions', '/transfers', '/profile',
     ]);
+  });
+
+  it('ACCOUNTANT може проводити імпорти, але не бачить дій передачі чи адміністрування', () => {
+    const accountant = user('ACCOUNTANT');
+    expect(can(accountant, 'write', 'imports')).toBe(true);
+    expect(can(accountant, 'read', 'stockDocuments')).toBe(true);
+    expect(can(accountant, 'write', 'stockDocuments')).toBe(false);
+    expect(can(accountant, 'read', 'users')).toBe(false);
   });
 
   it('зберігає AUDITOR у read-only режимі та не відкриває користувачів для MVO', () => {

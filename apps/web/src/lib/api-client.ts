@@ -11,16 +11,20 @@ import type {
   ImportBatch,
   ImportRow,
   ImportType,
+  AvailableStockSource,
   InventoryItem,
+  InventoryItemAccountingCard,
   InventoryItemsQuery,
   Management,
   PaginatedResponse,
   ResponsiblePerson,
+  ResponsiblePersonAccountingCard,
   ResponsiblePersonsQuery,
   Service,
   StockBalance,
   StockBalancesQuery,
   StockDocument,
+  StockDocumentAttachment,
   StockDocumentInput,
   StockDocumentsQuery,
   StockTransaction,
@@ -296,6 +300,10 @@ export const apiClient = {
     ),
   responsiblePerson: (id: string) =>
     request<ResponsiblePerson>(`/responsible-persons/${id}`),
+  responsiblePersonAccountingCard: (id: string) =>
+    request<ResponsiblePersonAccountingCard>(
+      `/responsible-persons/${id}/accounting-card`,
+    ),
   createResponsiblePerson: (body: CreateResponsiblePersonDto) =>
     request<ResponsiblePerson>('/responsible-persons', mutation('POST', body)),
   updateResponsiblePerson: (id: string, body: UpdateResponsiblePersonDto) =>
@@ -306,6 +314,8 @@ export const apiClient = {
 
   inventoryItems: (query: InventoryItemsQuery) =>
     request<PaginatedResponse<InventoryItem>>('/inventory-items', {}, query),
+  inventoryItemAccountingCard: (id: string) =>
+    request<InventoryItemAccountingCard>(`/inventory-items/${id}/accounting-card`),
   createInventoryItem: (body: CreateInventoryItemDto) =>
     request<InventoryItem>('/inventory-items', mutation('POST', body)),
   updateInventoryItem: (id: string, body: UpdateInventoryItemDto) =>
@@ -313,6 +323,8 @@ export const apiClient = {
 
   stockBalances: (query: StockBalancesQuery) =>
     request<PaginatedResponse<StockBalance>>('/stock-balances', {}, query),
+  availableStockToMe: () =>
+    request<AvailableStockSource[]>('/stock/available-to-me'),
   stockTransactions: (query: StockTransactionsQuery) =>
     request<PaginatedResponse<StockTransaction>>(
       '/stock-transactions',
@@ -339,6 +351,23 @@ export const apiClient = {
     request<StockDocument>(`/stock-documents/${id}/cancel`, {
       method: 'POST',
     }),
+  stockDocumentAttachments: (id: string) =>
+    request<StockDocumentAttachment[]>(`/stock-documents/${id}/attachments`),
+  uploadStockDocumentAttachment: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.set('file', file);
+    return uploadRequest<StockDocumentAttachment>(
+      `/stock-documents/${id}/attachments`,
+      formData,
+    );
+  },
+  deleteStockDocumentAttachment: (documentId: string, attachmentId: string) =>
+    request<{ success: boolean }>(
+      `/stock-documents/${documentId}/attachments/${attachmentId}`,
+      { method: 'DELETE' },
+    ),
+  stockDocumentAttachmentDownloadUrl: (documentId: string, attachmentId: string) =>
+    buildUrl(`/stock-documents/${documentId}/attachments/${attachmentId}/download`),
   manualReceipt: (body: {
     responsiblePersonId: string;
     inventoryItemId: string;

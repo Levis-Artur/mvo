@@ -1,6 +1,6 @@
 export type EntityStatus = boolean;
 
-export type UserRole = 'OWNER' | 'AUDITOR' | 'DPP_ADMIN' | 'MVO';
+export type UserRole = 'OWNER' | 'AUDITOR' | 'ACCOUNTANT' | 'DPP_ADMIN' | 'MVO';
 
 export type AuthUser = {
   id: string;
@@ -147,7 +147,19 @@ export type StockTransactionType =
   | 'RECEIPT'
   | 'MANUAL_RECEIPT'
   | 'ADJUSTMENT_INCREASE'
-  | 'ADJUSTMENT_DECREASE';
+  | 'ADJUSTMENT_DECREASE'
+  | 'TRANSFER_OUT'
+  | 'TRANSFER_IN'
+  | 'ISSUE'
+  | 'DOCUMENT_REVERSAL'
+  | 'ASSIGNMENT_OUT_DIRECT'
+  | 'ASSIGNMENT_OUT_CUSTODY'
+  | 'ASSIGNMENT_IN_DIRECT'
+  | 'ASSIGNMENT_IN_CUSTODY'
+  | 'ISSUE_FROM_DIRECT'
+  | 'ISSUE_FROM_CUSTODY'
+  | 'ASSIGNMENT_REVERSAL'
+  | 'ISSUE_REVERSAL';
 
 export type InventoryItem = {
   id: string;
@@ -168,6 +180,9 @@ export type InventoryItem = {
 export type StockBalance = {
   id: string;
   quantity: string;
+  directQuantity: string;
+  assignedToOthersQuantity: string;
+  totalAccountedQuantity: string;
   updatedAt: string;
   responsiblePerson: {
     id: string;
@@ -180,14 +195,37 @@ export type StockBalance = {
   >;
 };
 
-export type StockDocumentType = 'TRANSFER' | 'ISSUE';
+export type PersonReference = {
+  id: string;
+  fullName: string;
+  personnelNumber: string;
+};
+
+export type StockSourceKind = 'DIRECT' | 'ASSIGNED';
+export type StockDocumentType = 'TRANSFER' | 'ASSIGNMENT' | 'ISSUE';
 export type StockDocumentStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
+
+export type StockDocumentAttachment = {
+  id: string;
+  documentId: string;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedByUserId: string;
+  uploadedByUser?: Pick<AuthUser, 'id' | 'username'>;
+  createdAt: string;
+};
 
 export type StockDocumentLine = {
   id: string;
   inventoryItemId: string;
   quantity: string;
   note: string | null;
+  sourceKind: StockSourceKind | null;
+  accountingOwnerResponsiblePersonId: string | null;
+  sourceCustodianResponsiblePersonId: string | null;
+  sourceCustodyBalanceId: string | null;
   inventoryItem: InventoryItem;
 };
 
@@ -213,6 +251,7 @@ export type StockDocument = {
   postedByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
   cancelledByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
   lines: StockDocumentLine[];
+  attachments: StockDocumentAttachment[];
   totalPositions: number;
   totalQuantity: string;
 };
@@ -230,8 +269,80 @@ export type StockDocumentInput = {
   lines: {
     inventoryItemId: string;
     quantity: string;
+    sourceKind?: StockSourceKind;
+    accountingOwnerResponsiblePersonId?: string;
+    sourceCustodianResponsiblePersonId?: string;
+    sourceCustodyBalanceId?: string;
     note?: string;
   }[];
+};
+
+export type AvailableStockSource = {
+  sourceKind: StockSourceKind;
+  inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
+  accountingOwner: PersonReference;
+  currentCustodian: PersonReference;
+  availableQuantity: string;
+  sourceBalanceId: string;
+  canAssign: boolean;
+  canIssue: boolean;
+};
+
+export type CustodyBalanceView = {
+  id: string;
+  inventoryItem: InventoryItem;
+  accountingOwner: PersonReference;
+  custodian: PersonReference;
+  quantity: string;
+  updatedAt: string;
+};
+
+export type AccountingCardDocument = {
+  id: string;
+  documentNumber: string;
+  documentDate: string;
+  type: StockDocumentType;
+  status: StockDocumentStatus;
+  sourceResponsiblePerson: PersonReference;
+  destinationResponsiblePerson: PersonReference | null;
+  lines: {
+    id: string;
+    inventoryItem?: InventoryItem;
+    inventoryItemId?: string;
+    quantity: string;
+    accountingOwnerResponsiblePersonId?: string | null;
+  }[];
+};
+
+export type ResponsiblePersonAccountingCard = {
+  directBalances: { id: string; inventoryItem: InventoryItem; quantity: string }[];
+  assignedToOthers: CustodyBalanceView[];
+  assignedToMe: CustodyBalanceView[];
+  totalOwnedAccountingQuantity: string;
+  totalPhysicallyHeldQuantity: string;
+  recentAssignments: AccountingCardDocument[];
+  recentIssues: AccountingCardDocument[];
+};
+
+export type InventoryItemAccountingCard = {
+  inventoryItem: InventoryItem;
+  totals: {
+    directQuantity: string;
+    assignedQuantity: string;
+    totalAccountedQuantity: string;
+  };
+  directBalances: { responsiblePerson: PersonReference; quantity: string }[];
+  custodyBalances: {
+    accountingOwner: PersonReference;
+    custodian: PersonReference;
+    quantity: string;
+  }[];
+  recentDocuments: AccountingCardDocument[];
+  recentTransactions: (StockTransaction & {
+    accountingOwner: PersonReference | null;
+    sourceCustodian: PersonReference | null;
+    destinationCustodian: PersonReference | null;
+  })[];
 };
 
 export type StockDocumentsQuery = {
@@ -255,6 +366,13 @@ export type StockTransaction = {
   sourceDocument: string | null;
   comment: string | null;
   importBatchId: string | null;
+  documentId?: string | null;
+  documentLineId?: string | null;
+  accountingModel?: 'LEGACY_BALANCE' | 'OWNER_CUSTODY' | null;
+  bucketKind?: StockSourceKind | null;
+  accountingOwnerResponsiblePersonId?: string | null;
+  sourceCustodianResponsiblePersonId?: string | null;
+  destinationCustodianResponsiblePersonId?: string | null;
   createdAt: string;
   responsiblePerson: {
     id: string;

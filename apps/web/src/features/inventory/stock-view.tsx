@@ -24,7 +24,7 @@ import { StockFilterBar } from './stock-filter-bar';
 import { StockSummaryCards } from './stock-summary-cards';
 import {
   DEFAULT_STOCK_FILTERS,
-  filterProblematicBalances,
+  filterVisibleBalances,
   paginateBalances,
   stockQueryFromFilters,
   type StockFilterDraft,
@@ -46,8 +46,8 @@ export function StockView() {
   const [referenceError, setReferenceError] = useState('');
 
   const filteredBalances = useMemo(
-    () => filterProblematicBalances(balances, applied.onlyProblematic),
-    [applied.onlyProblematic, balances],
+    () => filterVisibleBalances(balances, applied),
+    [applied, balances],
   );
   const paged = useMemo(
     () => paginateBalances(filteredBalances, page, limit),
