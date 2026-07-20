@@ -6,6 +6,7 @@ import type {
   StockDocumentInput,
   StockDocumentStatus,
   StockDocumentType,
+  TransferTarget,
 } from '@/lib/types';
 import type { StatusTone } from '@/components/ui';
 
@@ -33,29 +34,31 @@ export function resolveSourceId(
   return user.role === 'MVO' ? (user.responsiblePersonId ?? '') : selectedSourceId;
 }
 
-export function recipientOptions(persons: ResponsiblePerson[], sourceId: string) {
+export function recipientOptions(persons: TransferTarget[], sourceId: string) {
   return persons
-    .filter((person) => person.id !== sourceId && person.isActive)
+    .filter((person) => person.id !== sourceId)
     .sort((left, right) =>
       left.personnelNumber.localeCompare(right.personnelNumber, 'uk-UA', { numeric: true }) ||
       personSearchText(left).localeCompare(personSearchText(right), 'uk-UA'),
     );
 }
 
-export function personOptionLabel(person: ResponsiblePerson) {
-  const name = [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
+export function personOptionLabel(person: ResponsiblePerson | TransferTarget) {
+  const name = 'fullName' in person
+    ? person.fullName
+    : [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
   return `${person.personnelNumber} — ${name} — ${person.management?.name ?? 'Без управління'}`;
 }
 
-export function filterRecipientOptions(persons: ResponsiblePerson[], sourceId: string, search: string) {
+export function filterRecipientOptions(persons: TransferTarget[], sourceId: string, search: string) {
   const needle = search.trim().toLocaleLowerCase('uk-UA');
   const options = recipientOptions(persons, sourceId);
   if (!needle) return options;
   return options.filter((person) => personSearchText(person).toLocaleLowerCase('uk-UA').includes(needle));
 }
 
-function personSearchText(person: ResponsiblePerson) {
-  return [person.personnelNumber, person.lastName, person.firstName, person.middleName, person.management?.name]
+function personSearchText(person: TransferTarget) {
+  return [person.personnelNumber, person.fullName, person.management?.name]
     .filter(Boolean).join(' ');
 }
 

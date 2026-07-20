@@ -3,6 +3,7 @@ import {
   ImportRowStatus,
   ImportStatus,
   ImportType,
+  UserRole,
 } from '@prisma/client';
 import { ImportsService } from './imports.service';
 
@@ -22,6 +23,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     inventoryItem: {
       upsert: jest.fn(),
     },
+    securityEvent: { create: jest.fn() },
   };
   const prisma = {
     importBatch: {
@@ -51,6 +53,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     stockTransaction: {
       findFirst: jest.fn(),
     },
+    securityEvent: { create: jest.fn() },
     $transaction: jest.fn((callback: (client: typeof tx) => Promise<unknown>) =>
       callback(tx),
     ),
@@ -255,7 +258,19 @@ describe('ImportsService', () => {
     });
     prisma.importRow.findMany.mockResolvedValue(commitRows);
 
-    await expect(service.commit('batch')).resolves.toEqual(
+    await expect(
+      service.commit('batch', {
+        actor: {
+          id: '11111111-1111-4111-8111-111111111111',
+          username: 'accountant',
+          role: UserRole.ACCOUNTANT,
+          isActive: true,
+          mustChangePassword: false,
+          responsiblePersonId: null,
+        },
+        context: { requestId: 'request-import-1' },
+      }),
+    ).resolves.toEqual(
       expect.objectContaining({ importedRows: 2 }),
     );
     expect(tx.inventoryItem.upsert).toHaveBeenCalledTimes(1);
@@ -263,12 +278,29 @@ describe('ImportsService', () => {
       expect.objectContaining({ where: { externalCode: '002' } }),
     );
     expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledTimes(2);
+    expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        accountingModel: 'OWNER_CUSTODY',
+        bucketKind: 'DIRECT',
+        accountingOwnerResponsiblePersonId: 'person',
+        sourceCustodianResponsiblePersonId: 'person',
+      }),
+    );
     expect(tx.importRow.update).toHaveBeenCalledTimes(2);
     expect(tx.importBatch.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: ImportStatus.COMPLETED,
           importedRows: 2,
+        }),
+      }),
+    );
+    expect(tx.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestId: 'request-import-1',
+          success: true,
         }),
       }),
     );

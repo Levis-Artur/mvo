@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   StockAccountingModel,
@@ -23,6 +27,13 @@ const destinationId = '33333333-3333-3333-3333-333333333333';
 const itemId = '44444444-4444-4444-4444-444444444444';
 const accountingOwnerId = '55555555-5555-5555-5555-555555555555';
 const custodyBalanceId = '66666666-6666-6666-6666-666666666666';
+const mvo = {
+  ...owner,
+  id: '77777777-7777-4777-8777-777777777777',
+  username: 'mvo',
+  role: UserRole.MVO,
+  responsiblePersonId: sourceId,
+};
 
 function document(
   type: StockDocumentType = StockDocumentType.TRANSFER,
@@ -226,6 +237,52 @@ function preparePostedResult(
 }
 
 describe('StockDocumentsService', () => {
+  it('scopes the MVO document list by current user and responsible person', async () => {
+    const { service, prisma } = createService();
+    prisma.stockDocument.findMany.mockResolvedValue([]);
+    prisma.stockDocument.count.mockResolvedValue(0);
+
+    await service.list(
+      {
+        page: 1,
+        limit: 20,
+        sourceResponsiblePersonId: destinationId,
+      },
+      mvo,
+    );
+
+    expect(prisma.stockDocument.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          sourceResponsiblePersonId: destinationId,
+          OR: [
+            { createdByUserId: mvo.id },
+            { sourceResponsiblePersonId: sourceId },
+            { destinationResponsiblePersonId: sourceId },
+            {
+              lines: {
+                some: { accountingOwnerResponsiblePersonId: sourceId },
+              },
+            },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('hides an unrelated document from MVO even when its id is known', async () => {
+    const { service, prisma } = createService();
+    prisma.stockDocument.findUnique.mockResolvedValue(document());
+
+    await expect(
+      service.findOne('document-id', {
+        ...mvo,
+        id: '88888888-8888-4888-8888-888888888888',
+        responsiblePersonId: '99999999-9999-4999-8999-999999999999',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('creates and edits an ASSIGNMENT draft with explicit source metadata', async () => {
     const { service, prisma, tx } = createService();
     const value = document(
@@ -687,22 +744,29 @@ describe('StockDocumentsService', () => {
     expect(tx.stockDocument.update).not.toHaveBeenCalled();
   });
 
-  it('preserves legacy TRANSFER posting behavior', async () => {
+  it('keeps legacy TRANSFER read-only on the backend', async () => {
     const { service, prisma, tx, stock } = createService();
     const value = document();
+    prisma.stockDocument.findUnique.mockResolvedValue(value);
     tx.stockDocument.findUnique.mockResolvedValue(value);
-    preparePostedResult(prisma, value);
 
-    await service.post('document-id', owner, {});
-
-    expect(stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ type: StockTransactionType.TRANSFER_OUT }),
+    await expect(service.create(transferDto, owner, {})).rejects.toThrow(
+      'доступний лише для перегляду',
     );
-    expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({ type: StockTransactionType.TRANSFER_IN }),
+    await expect(
+      service.update('document-id', transferDto, owner, {}),
+    ).rejects.toThrow('доступний лише для перегляду');
+    await expect(service.remove('document-id', owner, {})).rejects.toThrow(
+      'доступний лише для перегляду',
     );
+    await expect(service.post('document-id', owner, {})).rejects.toThrow(
+      'доступний лише для перегляду',
+    );
+    await expect(service.cancel('document-id', owner, {})).rejects.toThrow(
+      'доступний лише для перегляду',
+    );
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
   it.each([UserRole.ACCOUNTANT, UserRole.AUDITOR])(
@@ -719,7 +783,18 @@ describe('StockDocumentsService', () => {
     const { service } = createService();
     await expect(
       service.create(
-        transferDto,
+        {
+          ...transferDto,
+          type: StockDocumentType.ASSIGNMENT,
+          lines: [
+            {
+              inventoryItemId: itemId,
+              quantity: '2',
+              sourceKind: StockSourceKind.DIRECT,
+              accountingOwnerResponsiblePersonId: sourceId,
+            },
+          ],
+        },
         { ...owner, role: UserRole.MVO, responsiblePersonId: destinationId },
         {},
       ),
@@ -729,10 +804,26 @@ describe('StockDocumentsService', () => {
   it('prevents editing a posted document', async () => {
     const { service, prisma } = createService();
     prisma.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.TRANSFER, StockDocumentStatus.POSTED),
+      document(StockDocumentType.ASSIGNMENT, StockDocumentStatus.POSTED),
     );
     await expect(
-      service.update('document-id', transferDto, owner, {}),
+      service.update(
+        'document-id',
+        {
+          ...transferDto,
+          type: StockDocumentType.ASSIGNMENT,
+          lines: [
+            {
+              inventoryItemId: itemId,
+              quantity: '2',
+              sourceKind: StockSourceKind.DIRECT,
+              accountingOwnerResponsiblePersonId: sourceId,
+            },
+          ],
+        },
+        owner,
+        {},
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 

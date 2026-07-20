@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -16,6 +17,17 @@ const responsiblePersonInclude = {
   service: { select: { id: true, name: true } },
   unit: { select: { id: true, name: true } },
 } satisfies Prisma.ResponsiblePersonInclude;
+
+const transferTargetSelect = {
+  id: true,
+  personnelNumber: true,
+  lastName: true,
+  firstName: true,
+  middleName: true,
+  management: { select: { id: true, name: true } },
+  service: { select: { id: true, name: true } },
+  unit: { select: { id: true, name: true } },
+} satisfies Prisma.ResponsiblePersonSelect;
 
 @Injectable()
 export class ResponsiblePersonsService {
@@ -64,6 +76,48 @@ export class ResponsiblePersonsService {
     }
 
     return responsiblePerson;
+  }
+
+  async transferTargets(
+    query: ListResponsiblePersonsQueryDto,
+    user: CurrentUser,
+  ) {
+    if (user.role === UserRole.MVO && !user.responsiblePersonId) {
+      throw new ForbiddenException(
+        'Обліковий запис MVO не пов’язаний із матеріально відповідальною особою',
+      );
+    }
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const where: Prisma.ResponsiblePersonWhereInput = {
+      ...this.buildWhere({ ...query, isActive: true }),
+      id: user.responsiblePersonId
+        ? { not: user.responsiblePersonId }
+        : undefined,
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.responsiblePerson.findMany({
+        where,
+        select: transferTargetSelect,
+        orderBy: [{ personnelNumber: 'asc' }, { lastName: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.responsiblePerson.count({ where }),
+    ]);
+    return {
+      items: items.map((person) => ({
+        id: person.id,
+        personnelNumber: person.personnelNumber,
+        fullName: [person.lastName, person.firstName, person.middleName]
+          .filter(Boolean)
+          .join(' '),
+        management: person.management,
+        service: person.service,
+        unit: person.unit,
+      })),
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async create(dto: CreateResponsiblePersonDto) {

@@ -20,6 +20,15 @@ const assignmentInDirectMigration = readFileSync(
   ),
   'utf8',
 );
+const importAuditMigration = readFileSync(
+  join(
+    prismaDirectory,
+    'migrations',
+    '20260720000300_add_import_action_audit_event',
+    'migration.sql',
+  ),
+  'utf8',
+);
 
 describe('owner/custody Prisma model and migration', () => {
   it('defines a unique Decimal CustodyBalance with indexed relations', () => {
@@ -105,5 +114,15 @@ describe('owner/custody Prisma model and migration', () => {
       "ALTER TYPE \"StockTransactionType\" ADD VALUE 'ASSIGNMENT_IN_DIRECT'",
     );
     expect(assignmentInDirectMigration).not.toMatch(/\b(?:DELETE|UPDATE)\b/i);
+  });
+
+  it('adds import auditing without rewriting existing data', () => {
+    expect(schema).toContain('IMPORT_ACTION');
+    expect(importAuditMigration).toContain(
+      "ALTER TYPE \"SecurityEventType\" ADD VALUE 'IMPORT_ACTION'",
+    );
+    expect(importAuditMigration).not.toMatch(
+      /\b(?:DELETE|UPDATE|DROP|TRUNCATE)\b/i,
+    );
   });
 });

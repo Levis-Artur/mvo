@@ -151,7 +151,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             </FormField>
             {loadingTargets ? <LoadingState label="Завантаження МВО-одержувачів…" /> : null}
             {!loadingTargets && !targetsError && !recipients.length ? <EmptyState message="Активних МВО за вказаним пошуком не знайдено." /> : null}
-            {targetsError ? <ErrorState message={targetsError} /> : null}
+            {targetsError ? <div className="ui-alert" data-tone="warning" role="status">{targetsError}</div> : null}
           </> : <>
             <FormField label="Одержувач" required><Input required value={recipientName} onChange={(event) => setRecipientName(event.target.value)} /></FormField>
             <FormField label="Підрозділ"><Input value={recipientUnit} onChange={(event) => setRecipientUnit(event.target.value)} /></FormField>

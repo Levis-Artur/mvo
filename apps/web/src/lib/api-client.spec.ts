@@ -141,6 +141,14 @@ describe('owner/custody API URLs', () => {
     );
   });
 
+  it('loads transfer targets from the dedicated scoped endpoint', async () => {
+    await apiClient.transferTargets({ page: 1, limit: 100, isActive: true });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/responsible-persons/transfer-targets?page=1&limit=100&isActive=true',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('loads inventory and responsible-person accounting cards', async () => {
     await apiClient.inventoryItemAccountingCard('item-1');
     await apiClient.responsiblePersonAccountingCard('person-1');

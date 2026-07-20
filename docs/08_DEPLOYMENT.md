@@ -58,3 +58,24 @@ GET /api/stock-documents/maintenance/attachment-orphans
 
 Непорожні `metadataWithoutFile` або `filesWithoutMetadata` означають, що
 сховище потребує ручної перевірки. Endpoint нічого не видаляє автоматично.
+
+## Production rollout owner/custody model
+
+1. Створити перевірену пару backup БД + attachments і перевірити вільне місце.
+2. Розгорнути образи без зупинки PostgreSQL, але не направляти користувачів на
+   новий API до завершення міграцій.
+3. Виконати `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`.
+   Міграції additive: legacy `TRANSFER` не перераховується.
+4. Запустити API та перевірити `GET /api/health`, потім web і nginx.
+5. Виконати smoke checks під ролями OWNER, ACCOUNTANT, AUDITOR та MVO:
+   імпорт у DIRECT, перегляд карток, draft ASSIGNMENT/ISSUE, upload/download
+   attachment. Не проводити тестові документи на production без погодження.
+6. Перевірити attachment-orphans, audit events з requestId та формулу
+   `totalAccounted = direct + assigned` на контрольній номенклатурі.
+7. Залишити legacy `TRANSFER` тільки для читання. Нові передачі створюються як
+   `ASSIGNMENT`, хоча в UI називаються «Передача».
+
+Rollback application release виконується поверненням попередніх образів.
+Схему не слід downgrade вручну: нові таблиці/nullable поля сумісні зі старими
+даними. Якщо потрібне повне відновлення, використовується лише узгоджена пара
+SQL та attachments archive через `restore.sh`.

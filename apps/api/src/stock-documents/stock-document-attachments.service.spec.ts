@@ -114,6 +114,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
       id: 'document-id',
       type: StockDocumentType.ISSUE,
       status,
+      createdByUserId: owner.id,
       sourceResponsiblePersonId: sourceId,
       destinationResponsiblePersonId: null,
       lines: [{ accountingOwnerResponsiblePersonId: sourceId }],
@@ -137,6 +138,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
         create: jest.fn(),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
+      securityEvent: { create: jest.fn() },
     };
     const prisma = {
       stockDocument: { findUnique: jest.fn().mockResolvedValue(document) },
@@ -144,6 +146,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
         findFirst: jest.fn().mockResolvedValue(attachment),
         findMany: jest.fn(),
       },
+      securityEvent: { create: jest.fn() },
       $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
         callback(tx),
       ),
@@ -166,21 +169,32 @@ describe('StockDocumentAttachmentsService authorization', () => {
         prisma as never,
         storage as never,
       ),
+      prisma,
       storage,
     };
   }
 
   it('allows linked MVO download and hides internal storage metadata', async () => {
-    const { service } = createService();
-    const result = await service.download('document-id', 'attachment-id', {
-      ...owner,
-      role: UserRole.MVO,
-      responsiblePersonId: sourceId,
-    });
+    const { service, prisma } = createService();
+    const result = await service.download(
+      'document-id',
+      'attachment-id',
+      {
+        ...owner,
+        role: UserRole.MVO,
+        responsiblePersonId: sourceId,
+      },
+      { requestId: 'request-1' },
+    );
 
     expect(result.metadata.originalFileName).toBe('invoice.pdf');
     expect(result.metadata).not.toHaveProperty('storagePath');
     expect(result.metadata).not.toHaveProperty('storedFileName');
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ requestId: 'request-1' }),
+      }),
+    );
   });
 
   it('hides download from an unrelated MVO', async () => {
@@ -188,9 +202,10 @@ describe('StockDocumentAttachmentsService authorization', () => {
     await expect(
       service.download('document-id', 'attachment-id', {
         ...owner,
+        id: '44444444-4444-4444-8444-444444444444',
         role: UserRole.MVO,
         responsiblePersonId: '33333333-3333-4333-8333-333333333333',
-      }),
+      }, {}),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(storage.createDownloadStream).not.toHaveBeenCalled();
   });
@@ -198,7 +213,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
   it('does not delete an attachment after the ISSUE is POSTED', async () => {
     const { service, storage } = createService(StockDocumentStatus.POSTED);
     await expect(
-      service.remove('document-id', 'attachment-id', owner),
+      service.remove('document-id', 'attachment-id', owner, {}),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(storage.stageForDeletion).not.toHaveBeenCalled();
   });

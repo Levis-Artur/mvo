@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  SecurityEventType,
   StockDocumentStatus,
   StockDocumentType,
   UserRole,
@@ -13,6 +14,12 @@ import {
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockDocumentAttachmentStorageService } from './stock-document-attachment-storage.service';
+
+type AuditContext = {
+  requestId?: string;
+  ipAddress?: string;
+  userAgent?: string;
+};
 
 const publicAttachmentSelect = {
   id: true,
@@ -30,6 +37,7 @@ const attachmentDocumentSelect = {
   id: true,
   type: true,
   status: true,
+  createdByUserId: true,
   sourceResponsiblePersonId: true,
   destinationResponsiblePersonId: true,
   lines: { select: { accountingOwnerResponsiblePersonId: true } },
@@ -46,6 +54,7 @@ export class StockDocumentAttachmentsService {
     documentId: string,
     file: Express.Multer.File,
     actor: CurrentUser,
+    context: AuditContext,
   ) {
     const document = await this.findDocument(documentId);
     this.assertWriteAccess(actor, document);
@@ -67,7 +76,7 @@ export class StockDocumentAttachmentsService {
             'Вкладення можна додавати лише до чернетки видачі',
           );
         }
-        return tx.stockDocumentAttachment.create({
+        const attachment = await tx.stockDocumentAttachment.create({
           data: {
             documentId,
             ...stored,
@@ -75,6 +84,15 @@ export class StockDocumentAttachmentsService {
           },
           select: publicAttachmentSelect,
         });
+        await this.audit(
+          tx,
+          actor,
+          documentId,
+          attachment.id,
+          'ATTACHMENT_UPLOAD',
+          context,
+        );
+        return attachment;
       });
     } catch (error) {
       await this.storage.removeAfterMetadataFailure(stored.storagePath);
@@ -96,6 +114,7 @@ export class StockDocumentAttachmentsService {
     documentId: string,
     attachmentId: string,
     actor: CurrentUser,
+    context: AuditContext,
   ) {
     const attachment = await this.prisma.stockDocumentAttachment.findFirst({
       where: { id: attachmentId, documentId },
@@ -104,6 +123,14 @@ export class StockDocumentAttachmentsService {
     if (!attachment) throw new NotFoundException('Вкладення не знайдено');
     this.assertReadAccess(actor, attachment.document);
     await this.storage.assertStoredFilesExist([attachment.storagePath]);
+    await this.audit(
+      this.prisma,
+      actor,
+      documentId,
+      attachmentId,
+      'ATTACHMENT_DOWNLOAD',
+      context,
+    );
     return {
       metadata: {
         id: attachment.id,
@@ -120,6 +147,7 @@ export class StockDocumentAttachmentsService {
     documentId: string,
     attachmentId: string,
     actor: CurrentUser,
+    context: AuditContext,
   ) {
     const attachment = await this.prisma.stockDocumentAttachment.findFirst({
       where: { id: attachmentId, documentId },
@@ -151,6 +179,14 @@ export class StockDocumentAttachmentsService {
         if (deleted.count !== 1) {
           throw new NotFoundException('Вкладення не знайдено');
         }
+        await this.audit(
+          tx,
+          actor,
+          documentId,
+          attachmentId,
+          'ATTACHMENT_DELETE',
+          context,
+        );
       });
     } catch (error) {
       await this.storage.restoreStaged([staged]);
@@ -205,6 +241,7 @@ export class StockDocumentAttachmentsService {
   private assertWriteAccess(
     actor: CurrentUser,
     document: {
+      createdByUserId: string;
       sourceResponsiblePersonId: string;
     },
   ) {
@@ -223,6 +260,7 @@ export class StockDocumentAttachmentsService {
   private assertReadAccess(
     actor: CurrentUser,
     document: {
+      createdByUserId: string;
       sourceResponsiblePersonId: string;
       destinationResponsiblePersonId: string | null;
       lines: { accountingOwnerResponsiblePersonId: string | null }[];
@@ -231,6 +269,7 @@ export class StockDocumentAttachmentsService {
     if (actor.role !== UserRole.MVO) return;
     const responsiblePersonId = actor.responsiblePersonId;
     if (
+      actor.id === document.createdByUserId ||
       responsiblePersonId === document.sourceResponsiblePersonId ||
       responsiblePersonId === document.destinationResponsiblePersonId ||
       document.lines.some(
@@ -241,5 +280,26 @@ export class StockDocumentAttachmentsService {
       return;
     }
     throw new NotFoundException('Документ руху майна не знайдено');
+  }
+
+  private audit(
+    client: Pick<PrismaService, 'securityEvent'> | Prisma.TransactionClient,
+    actor: CurrentUser,
+    documentId: string,
+    attachmentId: string,
+    action: string,
+    context: AuditContext,
+  ) {
+    return client.securityEvent.create({
+      data: {
+        type: SecurityEventType.STOCK_DOCUMENT_ACTION,
+        actorUserId: actor.id,
+        requestId: context.requestId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        success: true,
+        metadata: { documentId, attachmentId, action, result: 'SUCCESS' },
+      },
+    });
   }
 }

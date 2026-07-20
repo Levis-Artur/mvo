@@ -105,6 +105,14 @@ MVO
 
 ---
 
+Accountant
+
+Завантажує, перевіряє та проводить імпорти. Переглядає довідники, залишки,
+картки й документи, але не створює, не проводить і не скасовує передачі чи
+видачі, не керує користувачами та не має destructive administration.
+
+---
+
 # API Security
 
 Кожен endpoint перевіряє:
@@ -230,6 +238,18 @@ Stack Trace не повертається.
 У майбутньому:
 
 - Antivirus Scan
+
+Вкладення `ISSUE` зберігаються під UUID у приватному volume. Backend перевіряє
+дозволений MIME, розширення, magic bytes (де підтримано), розмір, basename та
+SHA-256. `storagePath` і `storedFileName` не повертаються клієнту. Download
+доступний лише через авторизований API після перевірки зв’язку MVO з документом;
+каталог не публікується nginx.
+
+Мутації документів, вкладень та імпортів створюють `SecurityEvent` із actor,
+результатом і `requestId`. Stock movement виконується тільки в транзакції, а
+клієнтські `sourceKind`, owner, custodian, quantity та status повторно
+перевіряються backend. Legacy `TRANSFER` заблокований для create/update/delete,
+post/cancel і залишається read-only.
 
 ---
 

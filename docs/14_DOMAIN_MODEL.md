@@ -124,9 +124,17 @@ Version: 1.0
 
 # Stock
 
-Поточний залишок майна.
+`StockBalance` — прямий залишок майна accounting owner, який фізично перебуває
+у нього. Він не включає чуже майно, закріплене за цим МВО.
 
-Для кожного МВО ведеться окремий залишок.
+`CustodyBalance` — поточна кількість майна одного accounting owner, закріплена
+за іншим custodian. Accounting owner і custodian не можуть збігатися.
+
+- `direct quantity` — `StockBalance.quantity`;
+- `assigned quantity` — сума `CustodyBalance` accounting owner;
+- `assigned to me` — custody, де МВО є custodian; це не його own balance;
+- `total accounted quantity` — direct + assigned to others;
+- `issued quantity` — остаточно вибула й не входить до поточного стану.
 
 ---
 
@@ -158,17 +166,18 @@ Version: 1.0
 
 # Transfer
 
-Документ передачі.
-
-Передає майно між двома МВО.
+У UI — передача майна новому фактичному утримувачу. Нові документи мають тип
+`ASSIGNMENT`; accounting owner не змінюється, а own balance одержувача не
+збільшується. `TRANSFER` — назва legacy-типу старої balance-to-balance моделі;
+такі документи зберігаються як read-only історія.
 
 ---
 
 # Issue
 
-Документ видачі.
-
-Зменшує залишок.
+Остаточне вибуття з `DIRECT` або `ASSIGNED`. Проведення зменшує total accounted
+accounting owner і вимагає фото/скан накладної. Скасування повертає кількість у
+точний source bucket через reversal.
 
 ---
 

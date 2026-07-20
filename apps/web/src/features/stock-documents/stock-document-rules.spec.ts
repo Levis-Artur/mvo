@@ -4,6 +4,7 @@ import type {
   ResponsiblePerson,
   StockDocument,
   StockDocumentInput,
+  TransferTarget,
 } from '@/lib/types';
 import {
   availableSourceOptions,
@@ -30,6 +31,14 @@ const person = (id: string, active = true) => ({
   id, isActive: active, personnelNumber: id, lastName: id, firstName: 'Ім’я', middleName: null,
   management: { id: 'management-1', name: 'Управління забезпечення' },
 }) as ResponsiblePerson;
+const target = (id: string): TransferTarget => ({
+  id,
+  personnelNumber: id,
+  fullName: `${id} Ім’я`,
+  management: { id: 'management-1', name: 'Управління забезпечення' },
+  service: { id: 'service-1', name: 'Служба забезпечення' },
+  unit: null,
+});
 const source = (id: string, quantity: string, kind: 'DIRECT' | 'ASSIGNED' = 'DIRECT'): AvailableStockSource => ({
   sourceKind: kind,
   inventoryItem: { id, externalCode: id, name: id, unitOfMeasure: 'шт' },
@@ -71,10 +80,10 @@ describe('stock document frontend rules', () => {
     expect(resolveSourceId({ role: 'DPP_ADMIN', responsiblePersonId: null }, 'person-4')).toBe('person-4');
   });
 
-  it('виключає відправника і неактивних МВО та шукає за номером, ПІБ і управлінням', () => {
-    expect(recipientOptions([person('001'), person('003'), person('004', false)], '001').map((item) => item.id)).toEqual(['003']);
+  it('виключає відправника та шукає за номером, ПІБ і управлінням', () => {
+    expect(recipientOptions([target('001'), target('003')], '001').map((item) => item.id)).toEqual(['003']);
     expect(personOptionLabel(person('003'))).toBe('003 — 003 Ім’я — Управління забезпечення');
-    const arthur = { ...person('person-2'), personnelNumber: '003', lastName: 'Левіс', firstName: 'Артур', middleName: 'Сергійович' };
+    const arthur = { ...target('person-2'), personnelNumber: '003', fullName: 'Левіс Артур Сергійович' };
     expect(filterRecipientOptions([arthur], 'person-1', '003')).toEqual([arthur]);
     expect(filterRecipientOptions([arthur], 'person-1', 'левіс артур')).toEqual([arthur]);
     expect(filterRecipientOptions([arthur], 'person-1', 'забезпечення')).toEqual([arthur]);

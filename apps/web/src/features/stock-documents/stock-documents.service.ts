@@ -9,7 +9,7 @@ export const stockDocumentsService = {
   post: apiClient.postStockDocument,
   cancel: apiClient.cancelStockDocument,
   persons: apiClient.responsiblePersons,
-  transferTargets: apiClient.responsiblePersons,
+  transferTargets: apiClient.transferTargets,
   balances: apiClient.stockBalances,
   person: apiClient.responsiblePerson,
   personAccountingCard: apiClient.responsiblePersonAccountingCard,

@@ -258,6 +258,52 @@ Transaction
 
 У перспективі планується:
 
+---
+
+# Owner/Custody Accounting Model
+
+Актуальна модель поточного стану використовує два взаємовиключні bucket-и:
+
+- `StockBalance` — прямий залишок МВО як accounting owner;
+- `CustodyBalance` — кількість номенклатури accounting owner, що фізично
+  перебуває в іншого custodian.
+
+`CustodyBalance` має унікальний ключ
+`inventoryItemId + accountingOwnerResponsiblePersonId + custodianResponsiblePersonId`.
+DB check constraints забороняють від’ємну кількість та однакові owner/custodian.
+Нульовий рядок може залишатися як технічний поточний стан, але read models
+повертають активні залишки з `quantity > 0`.
+
+`StockDocumentLine` фіксує `sourceKind` (`DIRECT`/`ASSIGNED`), accounting owner,
+source custodian і за потреби `sourceCustodyBalanceId`. Ці поля nullable для
+legacy-рядків. `StockTransaction` зберігає accounting model, bucket, owner,
+source/destination custodian, document/line та self-relation reversal. Старі
+транзакції з nullable metadata залишаються валідними.
+
+`StockDocumentAttachment` містить лише metadata: оригінальну і збережену назву,
+MIME, розмір, SHA-256, storage path, uploader та час. Бінарний файл зберігається
+в окремому volume, не в PostgreSQL.
+
+Картки МВО й номенклатури обчислюють підсумки з тих самих таблиць:
+
+```text
+totalAccounted = SUM(StockBalance.quantity) + SUM(CustodyBalance.quantity)
+```
+
+`assignedToMe` використовується тільки для фізично утримуваного майна і не
+додається до own/direct balance.
+
+## Additive migrations
+
+- `20260720000100_add_owner_custody_accounting_foundation` — ACCOUNTANT,
+  owner/custody schema, ASSIGNMENT, source metadata, attachments та constraints;
+- `20260720000200_add_assignment_in_direct_transaction` — явний рух повернення
+  custody до direct accounting owner;
+- `20260720000300_add_import_action_audit_event` — окремий тип audit event для
+  імпортних мутацій.
+
+Міграції не перераховують і не видаляють legacy `TRANSFER`.
+
 - партиціонування великих таблиць;
 - архівування історичних даних;
 - read-only replica;

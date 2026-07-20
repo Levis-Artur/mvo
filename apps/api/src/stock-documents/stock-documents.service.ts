@@ -109,6 +109,7 @@ export class StockDocumentsService {
       },
       OR: mvoId
         ? [
+            { createdByUserId: actor.id },
             { sourceResponsiblePersonId: mvoId },
             { destinationResponsiblePersonId: mvoId },
             {
@@ -153,6 +154,7 @@ export class StockDocumentsService {
     context: AuditContext,
   ) {
     this.assertCanWrite(actor);
+    this.assertNotLegacyTransfer(dto.type);
     const normalized = this.validateDto(dto, actor);
     const document = await this.prisma.stockDocument.create({
       data: {
@@ -186,6 +188,8 @@ export class StockDocumentsService {
   ) {
     this.assertCanWrite(actor);
     const current = await this.findRaw(id);
+    this.assertNotLegacyTransfer(current.type);
+    this.assertNotLegacyTransfer(dto.type);
     this.assertDraft(current.status);
     this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
     const normalized = this.validateDto(dto, actor);
@@ -222,6 +226,7 @@ export class StockDocumentsService {
   async remove(id: string, actor: CurrentUser, context: AuditContext) {
     this.assertCanWrite(actor);
     const document = await this.findRaw(id);
+    this.assertNotLegacyTransfer(document.type);
     this.assertDraft(document.status);
     this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
     const attachments = await this.prisma.stockDocumentAttachment.findMany({
@@ -264,21 +269,37 @@ export class StockDocumentsService {
     this.assertCanWrite(actor);
     try {
       const posted = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.stockDocument.findUnique({
+          where: { id },
+          select: {
+            type: true,
+            status: true,
+            sourceResponsiblePersonId: true,
+          },
+        });
+        if (!current) {
+          throw new NotFoundException('Документ руху майна не знайдено');
+        }
+        this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
+        this.assertNotLegacyTransfer(current.type);
+        if (current.status === StockDocumentStatus.POSTED) return false;
+        this.assertDraft(current.status);
+
         const claim = await tx.stockDocument.updateMany({
           where: { id, status: StockDocumentStatus.DRAFT },
           data: { updatedAt: new Date() },
         });
         if (claim.count === 0) {
-          const current = await tx.stockDocument.findUnique({
+          const concurrent = await tx.stockDocument.findUnique({
             where: { id },
             select: { status: true, sourceResponsiblePersonId: true },
           });
-          if (!current) {
+          if (!concurrent) {
             throw new NotFoundException('Документ руху майна не знайдено');
           }
-          this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-          if (current.status === StockDocumentStatus.POSTED) return false;
-          this.assertDraft(current.status);
+          this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
+          if (concurrent.status === StockDocumentStatus.POSTED) return false;
+          this.assertDraft(concurrent.status);
         }
 
         const document = await tx.stockDocument.findUnique({
@@ -359,20 +380,40 @@ export class StockDocumentsService {
     this.assertCanWrite(actor);
     try {
       const cancelled = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.stockDocument.findUnique({
+          where: { id },
+          select: {
+            type: true,
+            status: true,
+            sourceResponsiblePersonId: true,
+          },
+        });
+        if (!current) {
+          throw new NotFoundException('Документ руху майна не знайдено');
+        }
+        this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
+        this.assertNotLegacyTransfer(current.type);
+        if (current.status === StockDocumentStatus.CANCELLED) return false;
+        if (current.status !== StockDocumentStatus.POSTED) {
+          throw new BadRequestException(
+            'Скасувати можна лише проведений документ',
+          );
+        }
+
         const claim = await tx.stockDocument.updateMany({
           where: { id, status: StockDocumentStatus.POSTED },
           data: { updatedAt: new Date() },
         });
         if (claim.count === 0) {
-          const current = await tx.stockDocument.findUnique({
+          const concurrent = await tx.stockDocument.findUnique({
             where: { id },
             select: { status: true, sourceResponsiblePersonId: true },
           });
-          if (!current) {
+          if (!concurrent) {
             throw new NotFoundException('Документ руху майна не знайдено');
           }
-          this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-          if (current.status === StockDocumentStatus.CANCELLED) return false;
+          this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
+          if (concurrent.status === StockDocumentStatus.CANCELLED) return false;
           throw new BadRequestException(
             'Скасувати можна лише проведений документ',
           );
@@ -1042,6 +1083,7 @@ export class StockDocumentsService {
   private assertReadAccess(
     actor: CurrentUser,
     document: {
+      createdByUserId: string;
       sourceResponsiblePersonId: string;
       destinationResponsiblePersonId: string | null;
       lines: { accountingOwnerResponsiblePersonId: string | null }[];
@@ -1050,6 +1092,7 @@ export class StockDocumentsService {
     const responsiblePersonId = actor.responsiblePersonId;
     if (
       actor.role === UserRole.MVO &&
+      actor.id !== document.createdByUserId &&
       responsiblePersonId !== document.sourceResponsiblePersonId &&
       responsiblePersonId !== document.destinationResponsiblePersonId &&
       !document.lines.some(
@@ -1065,6 +1108,14 @@ export class StockDocumentsService {
     if (status !== StockDocumentStatus.DRAFT) {
       throw new BadRequestException(
         'Змінювати або видаляти можна лише чернетку',
+      );
+    }
+  }
+
+  private assertNotLegacyTransfer(type: StockDocumentType) {
+    if (type === StockDocumentType.TRANSFER) {
+      throw new BadRequestException(
+        'Legacy TRANSFER доступний лише для перегляду; створюйте нову передачу як ASSIGNMENT',
       );
     }
   }

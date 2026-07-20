@@ -83,6 +83,15 @@ export type ResponsiblePerson = {
   unit: Pick<Unit, 'id' | 'name'> | null;
 };
 
+export type TransferTarget = {
+  id: string;
+  personnelNumber: string;
+  fullName: string;
+  management: Pick<Management, 'id' | 'name'>;
+  service: Pick<Service, 'id' | 'name'>;
+  unit: Pick<Unit, 'id' | 'name'> | null;
+};
+
 export type Pagination = {
   page: number;
   limit: number;

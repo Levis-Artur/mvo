@@ -5,6 +5,7 @@ import type {
   StockDocument,
   StockDocumentInput,
   StockDocumentType,
+  TransferTarget,
 } from '@/lib/types';
 
 export type DocumentFormLine = {
@@ -25,7 +26,7 @@ export type StockDocumentFormProps = {
   initialSourceId: string;
   initialSourceBalanceId?: string;
   persons: ResponsiblePerson[];
-  transferTargets: ResponsiblePerson[];
+  transferTargets: TransferTarget[];
   availableSources: AvailableStockSource[];
   loadingSources: boolean;
   loadingTargets: boolean;

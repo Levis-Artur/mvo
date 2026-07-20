@@ -14,6 +14,7 @@ import {
   Toast,
 } from '@/components/ui';
 import { canChangeStockDocuments, parseStockDocumentQuickAction } from './stock-document-rules';
+import { canUseGlobalResponsiblePersonFilters } from './stock-document-loading-policy';
 import { CancelDocumentModal } from './cancel-document-modal';
 import { DeleteDocumentModal } from './delete-document-modal';
 import { PostDocumentModal } from './post-document-modal';
@@ -31,6 +32,7 @@ export function StockDocumentsView() {
 function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const controller = useStockDocumentsController(user);
   const writable = canChangeStockDocuments(user);
+  const globalPersonFilters = canUseGlobalResponsiblePersonFilters(user.role);
   const quickActionHandled = useRef(false);
 
   useEffect(() => {
@@ -79,16 +81,15 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       <FilterField label="Статус"><Select value={controller.draftFilters.status} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, status: event.target.value as typeof current.status }))}>
         <option value="">Усі статуси</option><option value="DRAFT">DRAFT</option><option value="POSTED">POSTED</option><option value="CANCELLED">CANCELLED</option>
       </Select></FilterField>
-      <FilterField label="Відправник"><Select value={controller.draftFilters.sourceId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, sourceId: event.target.value }))}>
+      {globalPersonFilters ? <><FilterField label="Відправник"><Select value={controller.draftFilters.sourceId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, sourceId: event.target.value }))}>
         <option value="">Усі відправники</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
       </Select></FilterField>
       <FilterField label="Одержувач-МВО"><Select value={controller.draftFilters.destinationId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, destinationId: event.target.value }))}>
-        <option value="">Усі одержувачі</option>{controller.transferTargets.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
-      </Select></FilterField>
+        <option value="">Усі одержувачі</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
+      </Select></FilterField></> : null}
     </FilterBar>
     {controller.error ? <ErrorState message={controller.error} /> : null}
-    {controller.personsError ? <ErrorState message={controller.personsError} /> : null}
-    {controller.targetsError ? <ErrorState message={controller.targetsError} /> : null}
+    {controller.personsError ? <div className="ui-alert" data-tone="warning" role="status">{controller.personsError}</div> : null}
     <StockDocumentsTable
       documents={controller.documents}
       loading={controller.loading}

@@ -103,6 +103,7 @@ enum SecurityEventType {
   ACCESS_DENIED
   OWNER_DESTRUCTIVE_ACTION
   STOCK_DOCUMENT_ACTION
+  IMPORT_ACTION
 }
 
 model Management {

@@ -10,8 +10,12 @@ import {
   ImportType,
   InventoryItemReviewStatus,
   Prisma,
+  SecurityEventType,
+  StockAccountingModel,
+  StockSourceKind,
   StockTransactionType,
 } from '@prisma/client';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import { ImportParserService, ParsedImportRow } from './import-parser.service';
@@ -23,6 +27,15 @@ import { normalizeImportFilename } from './import-filename.util';
 const importInclude = {
   rows: false,
 } satisfies Prisma.ImportBatchInclude;
+
+type ImportAudit = {
+  actor: CurrentUser;
+  context: {
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  };
+};
 
 @Injectable()
 export class ImportsService {
@@ -36,6 +49,7 @@ export class ImportsService {
     file: Express.Multer.File;
     importType: ImportType;
     maxFileSizeBytes: number;
+    audit?: ImportAudit;
   }) {
     if (!input.file) {
       throw new BadRequestException('Файл не передано');
@@ -63,7 +77,7 @@ export class ImportsService {
     const enrichedRows = await this.enrichRows(parsed.rows, input.importType);
     const counters = this.countRows(enrichedRows);
 
-    return this.prisma.importBatch.create({
+    const batch = await this.prisma.importBatch.create({
       data: {
         type: input.importType,
         status:
@@ -99,6 +113,8 @@ export class ImportsService {
         },
       },
     });
+    await this.audit(this.prisma, batch.id, 'UPLOAD', true, input.audit);
+    return batch;
   }
 
   async findAll(query: ListImportsQueryDto) {
@@ -196,7 +212,11 @@ export class ImportsService {
     };
   }
 
-  async updateMappings(id: string, dto: UpdateImportMappingsDto) {
+  async updateMappings(
+    id: string,
+    dto: UpdateImportMappingsDto,
+    audit?: ImportAudit,
+  ) {
     const batch = await this.findOne(id);
     this.ensureMutable(batch.status);
 
@@ -228,10 +248,12 @@ export class ImportsService {
       }
     }
 
-    return this.validate(id);
+    const result = await this.validate(id);
+    await this.audit(this.prisma, id, 'UPDATE_MAPPINGS', true, audit);
+    return result;
   }
 
-  async validate(id: string) {
+  async validate(id: string, audit?: ImportAudit) {
     const batch = await this.findOne(id);
     this.ensureMutable(batch.status);
     const rows = await this.prisma.importRow.findMany({
@@ -278,7 +300,7 @@ export class ImportsService {
     );
     const counters = this.countRows(updatedRows);
 
-    return this.prisma.importBatch.update({
+    const result = await this.prisma.importBatch.update({
       where: { id },
       data: {
         ...counters,
@@ -289,27 +311,32 @@ export class ImportsService {
         validatedAt: new Date(),
       },
     });
+    await this.audit(this.prisma, id, 'VALIDATE', true, audit);
+    return result;
   }
 
-  async cancel(id: string) {
+  async cancel(id: string, audit?: ImportAudit) {
     const batch = await this.findOne(id);
 
     if (batch.status === ImportStatus.COMPLETED) {
       throw new BadRequestException('Проведений імпорт не можна скасувати');
     }
 
-    return this.prisma.importBatch.update({
+    const result = await this.prisma.importBatch.update({
       where: { id },
       data: { status: ImportStatus.CANCELLED },
     });
+    await this.audit(this.prisma, id, 'CANCEL', true, audit);
+    return result;
   }
 
-  async commit(id: string) {
-    await this.runSerializable(async () => {
-      let importedRows = 0;
+  async commit(id: string, audit?: ImportAudit) {
+    try {
+      await this.runSerializable(async () => {
+        let importedRows = 0;
 
-      return this.prisma.$transaction(
-        async (tx) => {
+        return this.prisma.$transaction(
+          async (tx) => {
           const batch = await tx.importBatch.findUnique({
             where: { id },
           });
@@ -425,6 +452,12 @@ export class ImportsService {
                     : 'Імпорт надходжень',
                 importBatchId: id,
                 importRowId: row.id,
+                accountingModel: StockAccountingModel.OWNER_CUSTODY,
+                bucketKind: StockSourceKind.DIRECT,
+                accountingOwnerResponsiblePersonId:
+                  row.responsiblePersonId!,
+                sourceCustodianResponsiblePersonId:
+                  row.responsiblePersonId!,
               });
 
             await tx.importRow.update({
@@ -446,12 +479,44 @@ export class ImportsService {
               completedAt: new Date(),
             },
           });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    });
+          await this.audit(tx, id, 'COMMIT', true, audit);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      });
+    } catch (error) {
+      await this.audit(this.prisma, id, 'COMMIT', false, audit, error);
+      throw error;
+    }
 
     return this.findOne(id);
+  }
+
+  private audit(
+    client: Pick<PrismaService, 'securityEvent'> | Prisma.TransactionClient,
+    importBatchId: string,
+    action: string,
+    success: boolean,
+    audit?: ImportAudit,
+    error?: unknown,
+  ) {
+    if (!audit) return Promise.resolve();
+    return client.securityEvent.create({
+      data: {
+        type: SecurityEventType.IMPORT_ACTION,
+        actorUserId: audit.actor.id,
+        requestId: audit.context.requestId,
+        ipAddress: audit.context.ipAddress,
+        userAgent: audit.context.userAgent,
+        success,
+        metadata: {
+          importBatchId,
+          action,
+          result: success ? 'SUCCESS' : 'FAILURE',
+          reason: error instanceof Error ? error.message : undefined,
+        },
+      },
+    });
   }
 
   private async enrichRows(rows: ParsedImportRow[], importType: ImportType) {

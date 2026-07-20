@@ -3,6 +3,9 @@ import {
   hasCapability,
   IMPORT_WRITE_ROLES,
   STOCK_DOCUMENT_WRITE_ROLES,
+  STOCK_DOCUMENT_READ_ROLES,
+  STOCK_READ_ROLES,
+  TRANSFER_TARGET_READ_ROLES,
 } from './access-policy';
 
 describe('ACCOUNTANT access policy', () => {
@@ -12,6 +15,16 @@ describe('ACCOUNTANT access policy', () => {
     expect(hasCapability(UserRole.ACCOUNTANT, 'STOCK_DOCUMENT_READ')).toBe(
       true,
     );
+  });
+
+  it('keeps MVO read access to own stock and stock documents', () => {
+    expect(STOCK_READ_ROLES).toContain(UserRole.MVO);
+    expect(STOCK_DOCUMENT_READ_ROLES).toContain(UserRole.MVO);
+    expect(TRANSFER_TARGET_READ_ROLES).toContain(UserRole.MVO);
+    expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.ACCOUNTANT);
+    expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.AUDITOR);
+    expect(hasCapability(UserRole.MVO, 'REFERENCE_DATA_READ')).toBe(false);
+    expect(hasCapability(UserRole.MVO, 'MVO_SCOPED_ACCESS')).toBe(true);
   });
 
   it('does not grant MVO, document-write, user or destructive permissions', () => {

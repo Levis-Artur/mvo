@@ -68,8 +68,14 @@ export class StockDocumentsController {
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
     @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.attachmentsService.upload(id, file, actor);
+    return this.attachmentsService.upload(
+      id,
+      file,
+      actor,
+      getRequestContext(request),
+    );
   }
 
   @Get(':id/attachments')
@@ -85,12 +91,14 @@ export class StockDocumentsController {
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
     @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ) {
     const download = await this.attachmentsService.download(
       id,
       attachmentId,
       actor,
+      getRequestContext(request),
     );
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Cache-Control', 'private, no-store');
@@ -107,8 +115,14 @@ export class StockDocumentsController {
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
     @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.attachmentsService.remove(id, attachmentId, actor);
+    return this.attachmentsService.remove(
+      id,
+      attachmentId,
+      actor,
+      getRequestContext(request),
+    );
   }
 
   @Get(':id')

@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { ListResponsiblePersonsQueryDto } from './dto/list-responsible-persons-query.dto';
 import { ResponsiblePersonsService } from './responsible-persons.service';
 
 type MockPrisma = {
@@ -53,6 +57,19 @@ function validDto() {
 }
 
 describe('ResponsiblePersonsService', () => {
+  it('rejects transfer-target pagination limits above 100', async () => {
+    const query = plainToInstance(ListResponsiblePersonsQueryDto, {
+      page: '1',
+      limit: '101',
+    });
+
+    await expect(validate(query)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'limit' }),
+      ]),
+    );
+  });
+
   it('forbids creating a responsible person in a missing management', async () => {
     const prisma = createPrismaMock();
     const service = createService(prisma);
@@ -174,5 +191,85 @@ describe('ResponsiblePersonsService', () => {
         take: 20,
       }),
     );
+  });
+
+  it('returns active transfer targets and excludes the current MVO', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    const currentResponsiblePersonId =
+      '77777777-7777-4777-8777-777777777777';
+    prisma.responsiblePerson.findMany.mockResolvedValue([
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        personnelNumber: '003',
+        lastName: 'Левіс',
+        firstName: 'Артур',
+        middleName: 'Сергійович',
+        management: { id: ids.management, name: 'Управління' },
+        service: { id: ids.service, name: 'Служба' },
+        unit: { id: ids.unit, name: 'Підрозділ' },
+        phone: '+380000000000',
+        externalAccountingCode: 'secret-code',
+      },
+    ]);
+    prisma.responsiblePerson.count.mockResolvedValue(1);
+
+    const result = await service.transferTargets(
+      { page: 1, limit: 100, search: 'Левіс' },
+      {
+        id: '88888888-8888-4888-8888-888888888888',
+        username: 'mvo',
+        role: UserRole.MVO,
+        isActive: true,
+        mustChangePassword: false,
+        responsiblePersonId: currentResponsiblePersonId,
+      },
+    );
+
+    expect(prisma.responsiblePerson.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          id: { not: currentResponsiblePersonId },
+          OR: expect.any(Array),
+        }),
+        select: expect.objectContaining({
+          id: true,
+          personnelNumber: true,
+          management: expect.any(Object),
+        }),
+        take: 100,
+      }),
+    );
+    expect(result.items).toEqual([
+      {
+        id: '99999999-9999-4999-8999-999999999999',
+        personnelNumber: '003',
+        fullName: 'Левіс Артур Сергійович',
+        management: { id: ids.management, name: 'Управління' },
+        service: { id: ids.service, name: 'Служба' },
+        unit: { id: ids.unit, name: 'Підрозділ' },
+      },
+    ]);
+    expect(result.items[0]).not.toHaveProperty('phone');
+    expect(result.items[0]).not.toHaveProperty('externalAccountingCode');
+  });
+
+  it('does not expose transfer targets to an unlinked MVO account', async () => {
+    const service = createService(createPrismaMock());
+
+    await expect(
+      service.transferTargets(
+        { page: 1, limit: 20 },
+        {
+          id: '88888888-8888-4888-8888-888888888888',
+          username: 'mvo-without-person',
+          role: UserRole.MVO,
+          isActive: true,
+          mustChangePassword: false,
+          responsiblePersonId: null,
+        },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

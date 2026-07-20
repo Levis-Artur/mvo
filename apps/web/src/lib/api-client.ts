@@ -29,6 +29,7 @@ import type {
   StockDocumentsQuery,
   StockTransaction,
   StockTransactionsQuery,
+  TransferTarget,
   Unit,
   UpdateInventoryItemDto,
   UpdateManagementDto,
@@ -295,6 +296,12 @@ export const apiClient = {
   responsiblePersons: (query: ResponsiblePersonsQuery) =>
     request<PaginatedResponse<ResponsiblePerson>>(
       '/responsible-persons',
+      {},
+      query,
+    ),
+  transferTargets: (query: ResponsiblePersonsQuery) =>
+    request<PaginatedResponse<TransferTarget>>(
+      '/responsible-persons/transfer-targets',
       {},
       query,
     ),

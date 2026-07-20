@@ -1,13 +1,13 @@
-import type { PaginatedResponse, ResponsiblePerson, ResponsiblePersonsQuery } from '@/lib/types';
+import type { PaginatedResponse, ResponsiblePersonsQuery, TransferTarget } from '@/lib/types';
 import { loadTransferTargets } from './transfer-targets';
 
 describe('loadTransferTargets', () => {
   it('викликає transfer-targets сторінками не більше 100 записів', async () => {
-    const fetchPage = jest.fn(async (query: ResponsiblePersonsQuery): Promise<PaginatedResponse<ResponsiblePerson>> => {
+    const fetchPage = jest.fn(async (query: ResponsiblePersonsQuery): Promise<PaginatedResponse<TransferTarget>> => {
       const page = query.page ?? 1;
       const count = page === 1 ? 100 : 1;
       return {
-        items: Array.from({ length: count }, (_, index) => ({ id: `person-${page}-${index}` }) as ResponsiblePerson),
+        items: Array.from({ length: count }, (_, index) => ({ id: `person-${page}-${index}` }) as TransferTarget),
         pagination: { page, limit: query.limit ?? 100, total: 101, totalPages: 2 },
       };
     });

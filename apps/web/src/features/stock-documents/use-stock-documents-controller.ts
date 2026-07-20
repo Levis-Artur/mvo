@@ -12,8 +12,13 @@ import type {
   StockDocumentInput,
   StockDocumentStatus,
   StockDocumentType,
+  TransferTarget,
 } from '@/lib/types';
 import { stockDocumentsService } from './stock-documents.service';
+import {
+  formLoadPolicy,
+  shouldLoadGlobalResponsiblePersons,
+} from './stock-document-loading-policy';
 import { loadTransferTargets } from './transfer-targets';
 
 export type DocumentFilters = {
@@ -34,7 +39,7 @@ const emptyPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 
 export function useStockDocumentsController(user: AuthUser) {
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
-  const [transferTargets, setTransferTargets] = useState<ResponsiblePerson[]>([]);
+  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
   const [availableSources, setAvailableSources] = useState<AvailableStockSource[]>([]);
   const [pagination, setPagination] = useState(emptyPagination);
   const [page, setPage] = useState(1);
@@ -49,7 +54,7 @@ export function useStockDocumentsController(user: AuthUser) {
   const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSources, setLoadingSources] = useState(false);
-  const [loadingTargets, setLoadingTargets] = useState(true);
+  const [loadingTargets, setLoadingTargets] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,8 +69,8 @@ export function useStockDocumentsController(user: AuthUser) {
       const response = await stockDocumentsService.list({
         type: appliedFilters.type || undefined,
         status: appliedFilters.status || undefined,
-        sourceResponsiblePersonId: appliedFilters.sourceId || undefined,
-        destinationResponsiblePersonId: appliedFilters.destinationId || undefined,
+        sourceResponsiblePersonId: user.role === 'MVO' ? undefined : appliedFilters.sourceId || undefined,
+        destinationResponsiblePersonId: user.role === 'MVO' ? undefined : appliedFilters.destinationId || undefined,
         documentDateFrom: appliedFilters.dateFrom ? new Date(`${appliedFilters.dateFrom}T00:00:00.000Z`).toISOString() : undefined,
         documentDateTo: appliedFilters.dateTo ? new Date(`${appliedFilters.dateTo}T23:59:59.999Z`).toISOString() : undefined,
         page,
@@ -77,19 +82,33 @@ export function useStockDocumentsController(user: AuthUser) {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, limit, page]);
+  }, [appliedFilters, limit, page, user.role]);
 
   const loadReferences = useCallback(async () => {
-    setPersonsError(''); setTargetsError(''); setLoadingTargets(true);
-    const [sources, targets] = await Promise.allSettled([
-      fetchAllPages((pagination) => stockDocumentsService.persons({ ...pagination, isActive: true })),
-      loadTransferTargets(stockDocumentsService.transferTargets),
-    ]);
-    if (sources.status === 'fulfilled') setPersons(sources.value);
-    else setPersonsError(`Не вдалося завантажити список МВО: ${getErrorMessage(sources.reason)}`);
-    if (targets.status === 'fulfilled') setTransferTargets(targets.value);
-    else setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${getErrorMessage(targets.reason)}`);
-    setLoadingTargets(false);
+    setPersonsError('');
+    if (!shouldLoadGlobalResponsiblePersons(user.role)) {
+      setPersons([]);
+      return;
+    }
+    try {
+      setPersons(await fetchAllPages((pagination) =>
+        stockDocumentsService.persons({ ...pagination, isActive: true }),
+      ));
+    } catch (reason) {
+      setPersonsError(`Не вдалося завантажити список МВО: ${getErrorMessage(reason)}`);
+    }
+  }, [user.role]);
+
+  const loadTargets = useCallback(async () => {
+    setTargetsError(''); setLoadingTargets(true);
+    try {
+      setTransferTargets(await loadTransferTargets(stockDocumentsService.transferTargets));
+    } catch (reason) {
+      setTransferTargets([]);
+      setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${getErrorMessage(reason)}`);
+    } finally {
+      setLoadingTargets(false);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -157,7 +176,10 @@ export function useStockDocumentsController(user: AuthUser) {
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : requestedSourceId;
     setFormSourceId(source); setFormType(nextType);
     setInitialSourceBalanceId(requestedBalanceId);
-    void loadSources(source);
+    const policy = formLoadPolicy(nextType);
+    if (policy.transferTargets) void loadTargets();
+    else { setTransferTargets([]); setTargetsError(''); }
+    if (policy.availableSources) void loadSources(source);
   }
 
   async function openDetails(document: StockDocument) {
@@ -170,7 +192,10 @@ export function useStockDocumentsController(user: AuthUser) {
     setSelected(null); setEditing(document); setFormSourceId(document.sourceResponsiblePersonId);
     setInitialSourceBalanceId('');
     setFormType(document.type); setActionError('');
-    await loadSources(document.sourceResponsiblePersonId);
+    await Promise.all([
+      loadSources(document.sourceResponsiblePersonId),
+      document.type === 'ASSIGNMENT' ? loadTargets() : Promise.resolve(),
+    ]);
   }
 
   async function save(input: StockDocumentInput, files: File[]) {
@@ -257,7 +282,7 @@ export function useStockDocumentsController(user: AuthUser) {
     selected, setSelected, formType, setFormType, formSourceId, initialSourceBalanceId, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
     actionLoading, error, personsError, targetsError, actionError, toast, setToast,
-    load, loadReferences, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,
+    load, loadReferences, loadTargets, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,
     openConfirmation, closeConfirmation,
   };
 }
