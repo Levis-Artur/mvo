@@ -11,6 +11,15 @@ const migrationPath = join(
 );
 const schema = readFileSync(join(prismaDirectory, 'schema.prisma'), 'utf8');
 const migration = readFileSync(migrationPath, 'utf8');
+const assignmentInDirectMigration = readFileSync(
+  join(
+    prismaDirectory,
+    'migrations',
+    '20260720000200_add_assignment_in_direct_transaction',
+    'migration.sql',
+  ),
+  'utf8',
+);
 
 describe('owner/custody Prisma model and migration', () => {
   it('defines a unique Decimal CustodyBalance with indexed relations', () => {
@@ -88,5 +97,13 @@ describe('owner/custody Prisma model and migration', () => {
     ]) {
       expect(migration).toContain(fragment);
     }
+  });
+
+  it('adds an explicit transaction type for custody returning to owner direct', () => {
+    expect(schema).toContain('ASSIGNMENT_IN_DIRECT');
+    expect(assignmentInDirectMigration).toContain(
+      "ALTER TYPE \"StockTransactionType\" ADD VALUE 'ASSIGNMENT_IN_DIRECT'",
+    );
+    expect(assignmentInDirectMigration).not.toMatch(/\b(?:DELETE|UPDATE)\b/i);
   });
 });

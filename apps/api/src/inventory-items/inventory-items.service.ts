@@ -46,6 +46,22 @@ export class InventoryItemsService {
                   },
                 },
               },
+              {
+                custodyBalances: {
+                  some: {
+                    OR: [
+                      {
+                        accountingOwnerResponsiblePersonId:
+                          user.responsiblePersonId ?? '__no_mvo_person__',
+                      },
+                      {
+                        custodianResponsiblePersonId:
+                          user.responsiblePersonId ?? '__no_mvo_person__',
+                      },
+                    ],
+                  },
+                },
+              },
             ],
           }
         : undefined;
@@ -133,6 +149,22 @@ export class InventoryItemsService {
                     },
                   },
                 },
+                {
+                  custodyBalances: {
+                    some: {
+                      OR: [
+                        {
+                          accountingOwnerResponsiblePersonId:
+                            user.responsiblePersonId ?? '__no_mvo_person__',
+                        },
+                        {
+                          custodianResponsiblePersonId:
+                            user.responsiblePersonId ?? '__no_mvo_person__',
+                        },
+                      ],
+                    },
+                  },
+                },
               ],
             }
           : {}),
@@ -144,6 +176,116 @@ export class InventoryItemsService {
     }
 
     return item;
+  }
+
+  async accountingCard(id: string, user: CurrentUser) {
+    const inventoryItem = await this.findOne(id, user);
+    const [directBalances, custodyBalances, recentDocuments, recentTransactions] =
+      await Promise.all([
+        this.prisma.stockBalance.findMany({
+          where: { inventoryItemId: id, quantity: { gt: 0 } },
+          include: { responsiblePerson: true },
+          orderBy: { quantity: 'desc' },
+        }),
+        this.prisma.custodyBalance.findMany({
+          where: { inventoryItemId: id, quantity: { gt: 0 } },
+          include: {
+            accountingOwnerResponsiblePerson: true,
+            custodianResponsiblePerson: true,
+          },
+          orderBy: { quantity: 'desc' },
+        }),
+        this.prisma.stockDocument.findMany({
+          where: { lines: { some: { inventoryItemId: id } } },
+          include: {
+            sourceResponsiblePerson: true,
+            destinationResponsiblePerson: true,
+            lines: {
+              where: { inventoryItemId: id },
+              select: {
+                id: true,
+                quantity: true,
+                accountingOwnerResponsiblePersonId: true,
+              },
+            },
+          },
+          orderBy: [{ documentDate: 'desc' }, { createdAt: 'desc' }],
+          take: 10,
+        }),
+        this.prisma.stockTransaction.findMany({
+          where: { inventoryItemId: id },
+          include: {
+            responsiblePerson: true,
+            accountingOwnerResponsiblePerson: true,
+            sourceCustodianResponsiblePerson: true,
+            destinationCustodianResponsiblePerson: true,
+          },
+          orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+          take: 20,
+        }),
+      ]);
+
+    const directQuantity = this.sumQuantities(directBalances);
+    const assignedQuantity = this.sumQuantities(custodyBalances);
+
+    return {
+      inventoryItem,
+      totals: {
+        directQuantity: directQuantity.toString(),
+        assignedQuantity: assignedQuantity.toString(),
+        totalAccountedQuantity: directQuantity.plus(assignedQuantity).toString(),
+      },
+      directBalances: directBalances.map((balance) => ({
+        responsiblePerson: this.personReference(balance.responsiblePerson),
+        quantity: balance.quantity.toString(),
+      })),
+      custodyBalances: custodyBalances.map((balance) => ({
+        accountingOwner: this.personReference(
+          balance.accountingOwnerResponsiblePerson,
+        ),
+        custodian: this.personReference(balance.custodianResponsiblePerson),
+        quantity: balance.quantity.toString(),
+      })),
+      recentDocuments: recentDocuments.map((document) => ({
+        id: document.id,
+        documentNumber: document.documentNumber,
+        documentDate: document.documentDate,
+        type: document.type,
+        status: document.status,
+        sourceResponsiblePerson: this.personReference(
+          document.sourceResponsiblePerson,
+        ),
+        destinationResponsiblePerson: document.destinationResponsiblePerson
+          ? this.personReference(document.destinationResponsiblePerson)
+          : null,
+        lines: document.lines.map((line) => ({
+          ...line,
+          quantity: line.quantity.toString(),
+        })),
+      })),
+      recentTransactions: recentTransactions.map((transaction) => ({
+        ...transaction,
+        quantity: transaction.quantity.toString(),
+        balanceBefore: transaction.balanceBefore.toString(),
+        balanceAfter: transaction.balanceAfter.toString(),
+        responsiblePerson: this.personReference(transaction.responsiblePerson),
+        accountingOwner: transaction.accountingOwnerResponsiblePerson
+          ? this.personReference(transaction.accountingOwnerResponsiblePerson)
+          : null,
+        sourceCustodian: transaction.sourceCustodianResponsiblePerson
+          ? this.personReference(transaction.sourceCustodianResponsiblePerson)
+          : null,
+        destinationCustodian:
+          transaction.destinationCustodianResponsiblePerson
+            ? this.personReference(
+                transaction.destinationCustodianResponsiblePerson,
+              )
+            : null,
+        accountingOwnerResponsiblePerson: undefined,
+        sourceCustodianResponsiblePerson: undefined,
+        destinationCustodianResponsiblePerson: undefined,
+      })),
+    };
   }
 
   async create(dto: CreateInventoryItemDto) {
@@ -178,6 +320,29 @@ export class InventoryItemsService {
       ...dto,
       externalCode: dto.externalCode?.trim(),
       name: dto.name?.trim().replace(/\s+/g, ' '),
+    };
+  }
+
+  private sumQuantities(rows: { quantity: Prisma.Decimal }[]) {
+    return rows.reduce(
+      (sum, row) => sum.plus(row.quantity),
+      new Prisma.Decimal(0),
+    );
+  }
+
+  private personReference(person: {
+    id: string;
+    lastName: string;
+    firstName: string;
+    middleName: string | null;
+    personnelNumber: string;
+  }) {
+    return {
+      id: person.id,
+      fullName: [person.lastName, person.firstName, person.middleName]
+        .filter(Boolean)
+        .join(' '),
+      personnelNumber: person.personnelNumber,
     };
   }
 

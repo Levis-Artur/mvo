@@ -1,11 +1,12 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
+  Prisma,
+  StockAccountingModel,
   StockDocumentStatus,
   StockDocumentType,
   StockSourceKind,
   StockTransactionType,
   UserRole,
-  Prisma,
 } from '@prisma/client';
 import { StockDocumentsService } from './stock-documents.service';
 
@@ -20,20 +21,49 @@ const owner = {
 const sourceId = '22222222-2222-2222-2222-222222222222';
 const destinationId = '33333333-3333-3333-3333-333333333333';
 const itemId = '44444444-4444-4444-4444-444444444444';
+const accountingOwnerId = '55555555-5555-5555-5555-555555555555';
+const custodyBalanceId = '66666666-6666-6666-6666-666666666666';
 
 function document(
   type: StockDocumentType = StockDocumentType.TRANSFER,
   status: StockDocumentStatus = StockDocumentStatus.DRAFT,
+  sourceKind?: StockSourceKind,
 ) {
+  const accountingModel =
+    type === StockDocumentType.ASSIGNMENT
+      ? StockAccountingModel.OWNER_CUSTODY
+      : StockAccountingModel.LEGACY_BALANCE;
+  const lineOwnerId =
+    sourceKind === StockSourceKind.ASSIGNED ? accountingOwnerId : sourceId;
+  const transactions =
+    type === StockDocumentType.ASSIGNMENT && status === StockDocumentStatus.POSTED
+      ? [
+          {
+            id: 'outgoing-transaction-id',
+            type:
+              sourceKind === StockSourceKind.ASSIGNED
+                ? StockTransactionType.ASSIGNMENT_OUT_CUSTODY
+                : StockTransactionType.ASSIGNMENT_OUT_DIRECT,
+          },
+          {
+            id: 'incoming-transaction-id',
+            type: StockTransactionType.ASSIGNMENT_IN_CUSTODY,
+          },
+        ]
+      : [];
   return {
     id: 'document-id',
     documentNumber: 'MOV-1',
     documentDate: new Date(),
     type,
+    accountingModel,
     status,
     sourceResponsiblePersonId: sourceId,
     destinationResponsiblePersonId:
-      type === StockDocumentType.TRANSFER ? destinationId : null,
+      type === StockDocumentType.TRANSFER ||
+      type === StockDocumentType.ASSIGNMENT
+        ? destinationId
+        : null,
     recipientName: type === StockDocumentType.ISSUE ? 'Одержувач' : null,
     recipientUnit: null,
     basis: null,
@@ -50,10 +80,20 @@ function document(
         id: 'line-id',
         documentId: 'document-id',
         inventoryItemId: itemId,
+        sourceKind: sourceKind ?? null,
+        accountingOwnerResponsiblePersonId: sourceKind ? lineOwnerId : null,
+        sourceCustodianResponsiblePersonId:
+          sourceKind === StockSourceKind.ASSIGNED ? sourceId : null,
+        sourceCustodyBalanceId:
+          sourceKind === StockSourceKind.ASSIGNED ? custodyBalanceId : null,
         quantity: new Prisma.Decimal(2),
         note: null,
         createdAt: new Date(),
         inventoryItem: { id: itemId },
+        accountingOwnerResponsiblePerson: null,
+        sourceCustodianResponsiblePerson: null,
+        sourceCustodyBalance: null,
+        transactions,
       },
     ],
     sourceResponsiblePerson: { id: sourceId },
@@ -69,8 +109,10 @@ function createService() {
     stockDocument: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     stockDocumentLine: { deleteMany: jest.fn() },
+    custodyBalance: { findUnique: jest.fn() },
     securityEvent: { create: jest.fn() },
   };
   const prisma = {
@@ -90,6 +132,8 @@ function createService() {
   const stock = {
     createDecreasingTransactionInTx: jest.fn(),
     createIncreasingTransactionInTx: jest.fn(),
+    createCustodyDecreasingTransactionInTx: jest.fn(),
+    createCustodyIncreasingTransactionInTx: jest.fn(),
   };
   return {
     service: new StockDocumentsService(prisma as never, stock as never),
@@ -107,58 +151,160 @@ const transferDto = {
   lines: [{ inventoryItemId: itemId, quantity: '2' }],
 };
 
-describe('StockDocumentsService', () => {
-  it('does not route ASSIGNMENT through the legacy TRANSFER or ISSUE logic', async () => {
-    const { service, prisma, stock } = createService();
+function preparePostedResult(
+  prisma: ReturnType<typeof createService>['prisma'],
+  value: ReturnType<typeof document>,
+) {
+  prisma.stockDocument.findUnique.mockResolvedValue({
+    ...value,
+    status: StockDocumentStatus.POSTED,
+  });
+}
 
-    await expect(
-      service.create(
+describe('StockDocumentsService', () => {
+  it('creates and edits an ASSIGNMENT draft with explicit source metadata', async () => {
+    const { service, prisma, tx } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    const dto = {
+      ...transferDto,
+      type: StockDocumentType.ASSIGNMENT,
+      lines: [
         {
-          ...transferDto,
-          type: StockDocumentType.ASSIGNMENT,
-          lines: [
-            {
-              inventoryItemId: itemId,
-              quantity: '2',
-              sourceKind: StockSourceKind.DIRECT,
-              accountingOwnerResponsiblePersonId: sourceId,
-            },
-          ],
+          inventoryItemId: itemId,
+          quantity: '2',
+          sourceKind: StockSourceKind.DIRECT,
+          accountingOwnerResponsiblePersonId: sourceId,
         },
-        owner,
-        {},
-      ),
-    ).rejects.toThrow('custody-сервісу');
-    expect(prisma.stockDocument.create).not.toHaveBeenCalled();
-    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
-    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+      ],
+    };
+    prisma.stockDocument.create.mockResolvedValue(value);
+
+    await service.create(dto, owner, {});
+
+    expect(prisma.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          accountingModel: StockAccountingModel.OWNER_CUSTODY,
+          lines: {
+            create: [
+              expect.objectContaining({
+                sourceKind: StockSourceKind.DIRECT,
+                accountingOwnerResponsiblePersonId: sourceId,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+
+    prisma.stockDocument.findUnique.mockResolvedValue(value);
+    tx.stockDocument.update.mockResolvedValue(value);
+    await expect(
+      service.update('document-id', dto, owner, {}),
+    ).resolves.toBeDefined();
+    expect(tx.stockDocumentLine.deleteMany).toHaveBeenCalledWith({
+      where: { documentId: 'document-id' },
+    });
   });
 
-  it('posts a transfer with matching out and in transactions', async () => {
+  it('posts DIRECT to CUSTODY without increasing recipient StockBalance', async () => {
     const { service, prisma, tx, stock } = createService();
-    tx.stockDocument.findUnique.mockResolvedValue(document());
-    prisma.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.TRANSFER, StockDocumentStatus.POSTED),
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
     );
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    preparePostedResult(prisma, value);
 
     await service.post('document-id', owner, { requestId: 'request-1' });
 
     expect(stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
-        type: StockTransactionType.TRANSFER_OUT,
+        type: StockTransactionType.ASSIGNMENT_OUT_DIRECT,
         responsiblePersonId: sourceId,
-        documentId: 'document-id',
-        documentLineId: 'line-id',
+        accountingOwnerResponsiblePersonId: sourceId,
       }),
     );
+    expect(stock.createCustodyIncreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        type: StockTransactionType.ASSIGNMENT_IN_CUSTODY,
+        accountingOwnerResponsiblePersonId: sourceId,
+        custodianResponsiblePersonId: destinationId,
+      }),
+    );
+    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('posts CUSTODY to CUSTODY and keeps the accounting owner', async () => {
+    const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.ASSIGNED,
+    );
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    tx.custodyBalance.findUnique.mockResolvedValue({
+      inventoryItemId: itemId,
+      accountingOwnerResponsiblePersonId: accountingOwnerId,
+      custodianResponsiblePersonId: sourceId,
+    });
+    preparePostedResult(prisma, value);
+
+    await service.post('document-id', owner, {});
+
+    expect(stock.createCustodyDecreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        accountingOwnerResponsiblePersonId: accountingOwnerId,
+        custodianResponsiblePersonId: sourceId,
+      }),
+    );
+    expect(stock.createCustodyIncreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        accountingOwnerResponsiblePersonId: accountingOwnerId,
+        custodianResponsiblePersonId: destinationId,
+      }),
+    );
+    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('returns CUSTODY to the accounting owner DIRECT bucket', async () => {
+    const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.ASSIGNED,
+    );
+    value.destinationResponsiblePersonId = accountingOwnerId;
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    tx.custodyBalance.findUnique.mockResolvedValue({
+      inventoryItemId: itemId,
+      accountingOwnerResponsiblePersonId: accountingOwnerId,
+      custodianResponsiblePersonId: sourceId,
+    });
+    preparePostedResult(prisma, value);
+
+    await service.post('document-id', owner, {});
+
+    expect(stock.createCustodyDecreasingTransactionInTx).toHaveBeenCalled();
     expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
-        type: StockTransactionType.TRANSFER_IN,
-        responsiblePersonId: destinationId,
+        type: StockTransactionType.ASSIGNMENT_IN_DIRECT,
+        responsiblePersonId: accountingOwnerId,
+        accountingOwnerResponsiblePersonId: accountingOwnerId,
+        bucketKind: StockSourceKind.DIRECT,
       }),
     );
+    expect(stock.createCustodyIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
   it('rejects transfer to the same MVO', async () => {
@@ -172,24 +318,68 @@ describe('StockDocumentsService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('relies on decreasing transaction validation for insufficient stock', async () => {
+  it('rejects an ASSIGNED source held by another MVO', async () => {
+    const { service } = createService();
+    await expect(
+      service.create(
+        {
+          ...transferDto,
+          type: StockDocumentType.ASSIGNMENT,
+          lines: [
+            {
+              inventoryItemId: itemId,
+              quantity: '1',
+              sourceKind: StockSourceKind.ASSIGNED,
+              accountingOwnerResponsiblePersonId: accountingOwnerId,
+              sourceCustodianResponsiblePersonId: destinationId,
+            },
+          ],
+        },
+        owner,
+        {},
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('propagates insufficient direct or custody quantity errors', async () => {
     const { service, tx, stock } = createService();
-    tx.stockDocument.findUnique.mockResolvedValue(document());
+    tx.stockDocument.findUnique.mockResolvedValue(
+      document(
+        StockDocumentType.ASSIGNMENT,
+        StockDocumentStatus.DRAFT,
+        StockSourceKind.DIRECT,
+      ),
+    );
     stock.createDecreasingTransactionInTx.mockRejectedValue(
       new BadRequestException('Недостатній залишок'),
     );
     await expect(service.post('document-id', owner, {})).rejects.toThrow(
       'Недостатній залишок',
     );
-    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(stock.createCustodyIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
   it('rolls back the whole posting transaction when one line fails', async () => {
-    const { service, prisma } = createService();
-    prisma.$transaction.mockRejectedValue(new Error('line failed'));
+    const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    value.lines.push({
+      ...value.lines[0],
+      id: 'line-id-2',
+      inventoryItemId: '77777777-7777-7777-7777-777777777777',
+    });
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    stock.createDecreasingTransactionInTx
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('line failed'));
+
     await expect(service.post('document-id', owner, {})).rejects.toThrow(
       'line failed',
     );
+    expect(tx.stockDocument.update).not.toHaveBeenCalled();
     expect(prisma.securityEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ success: false }),
@@ -197,74 +387,102 @@ describe('StockDocumentsService', () => {
     );
   });
 
-  it('posts an issue with one decreasing transaction', async () => {
+  it('keeps posting idempotent after the document is POSTED', async () => {
     const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.POSTED,
+      StockSourceKind.DIRECT,
+    );
+    tx.stockDocument.updateMany.mockResolvedValue({ count: 0 });
+    tx.stockDocument.findUnique.mockResolvedValue({
+      status: StockDocumentStatus.POSTED,
+    });
+    preparePostedResult(prisma, value);
+
+    await expect(service.post('document-id', owner, {})).resolves.toBeDefined();
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(stock.createCustodyIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('reverses ASSIGNMENT only after taking quantity from the new custodian', async () => {
+    const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ASSIGNMENT,
+      StockDocumentStatus.POSTED,
+      StockSourceKind.DIRECT,
+    );
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    prisma.stockDocument.findUnique.mockResolvedValue({
+      ...value,
+      status: StockDocumentStatus.CANCELLED,
+    });
+
+    await service.cancel('document-id', owner, {});
+
+    expect(stock.createCustodyDecreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        type: StockTransactionType.ASSIGNMENT_REVERSAL,
+        custodianResponsiblePersonId: destinationId,
+        reversalOfTransactionId: 'incoming-transaction-id',
+      }),
+    );
+    expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        responsiblePersonId: sourceId,
+        reversalOfTransactionId: 'outgoing-transaction-id',
+      }),
+    );
+  });
+
+  it('does not complete cancellation when destination custody is insufficient', async () => {
+    const { service, tx, stock } = createService();
     tx.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.ISSUE),
+      document(
+        StockDocumentType.ASSIGNMENT,
+        StockDocumentStatus.POSTED,
+        StockSourceKind.DIRECT,
+      ),
     );
-    prisma.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.ISSUE, StockDocumentStatus.POSTED),
+    stock.createCustodyDecreasingTransactionInTx.mockRejectedValue(
+      new BadRequestException('Недостатньо закріпленого майна'),
     );
+
+    await expect(service.cancel('document-id', owner, {})).rejects.toThrow(
+      'Недостатньо закріпленого майна',
+    );
+    expect(tx.stockDocument.update).not.toHaveBeenCalled();
+  });
+
+  it('preserves legacy TRANSFER posting behavior', async () => {
+    const { service, prisma, tx, stock } = createService();
+    const value = document();
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    preparePostedResult(prisma, value);
+
     await service.post('document-id', owner, {});
+
     expect(stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
       tx,
-      expect.objectContaining({ type: StockTransactionType.ISSUE }),
-    );
-    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
-  });
-
-  it('does not post the same document twice', async () => {
-    const { service, tx } = createService();
-    tx.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.TRANSFER, StockDocumentStatus.POSTED),
-    );
-    await expect(service.post('document-id', owner, {})).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-  });
-
-  it('cancels a transfer with reverse transactions', async () => {
-    const { service, prisma, tx, stock } = createService();
-    tx.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.TRANSFER, StockDocumentStatus.POSTED),
-    );
-    prisma.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.TRANSFER, StockDocumentStatus.CANCELLED),
-    );
-    await service.cancel('document-id', owner, {});
-    expect(stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({
-        type: StockTransactionType.TRANSFER_REVERSAL_OUT,
-        responsiblePersonId: destinationId,
-      }),
+      expect.objectContaining({ type: StockTransactionType.TRANSFER_OUT }),
     );
     expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
       tx,
-      expect.objectContaining({
-        type: StockTransactionType.TRANSFER_REVERSAL_IN,
-        responsiblePersonId: sourceId,
-      }),
+      expect.objectContaining({ type: StockTransactionType.TRANSFER_IN }),
     );
   });
 
-  it('cancels an issue by restoring source stock', async () => {
-    const { service, prisma, tx, stock } = createService();
-    tx.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.ISSUE, StockDocumentStatus.POSTED),
-    );
-    prisma.stockDocument.findUnique.mockResolvedValue(
-      document(StockDocumentType.ISSUE, StockDocumentStatus.CANCELLED),
-    );
-    await service.cancel('document-id', owner, {});
-    expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({
-        type: StockTransactionType.ISSUE_REVERSAL,
-        responsiblePersonId: sourceId,
-      }),
-    );
-  });
+  it.each([UserRole.ACCOUNTANT, UserRole.AUDITOR])(
+    'keeps %s read-only for stock documents',
+    async (role) => {
+      const { service } = createService();
+      await expect(
+        service.create(transferDto, { ...owner, role }, {}),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    },
+  );
 
   it('prevents MVO from creating a document for another source', async () => {
     const { service } = createService();
@@ -272,17 +490,6 @@ describe('StockDocumentsService', () => {
       service.create(
         transferDto,
         { ...owner, role: UserRole.MVO, responsiblePersonId: destinationId },
-        {},
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-  });
-
-  it('prevents AUDITOR from creating or posting documents', async () => {
-    const { service } = createService();
-    await expect(
-      service.create(
-        transferDto,
-        { ...owner, role: UserRole.AUDITOR },
         {},
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
@@ -296,21 +503,5 @@ describe('StockDocumentsService', () => {
     await expect(
       service.update('document-id', transferDto, owner, {}),
     ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('prevents deleting a posted document and permits deleting a draft', async () => {
-    const { service, prisma } = createService();
-    prisma.stockDocument.findUnique
-      .mockResolvedValueOnce(
-        document(StockDocumentType.TRANSFER, StockDocumentStatus.POSTED),
-      )
-      .mockResolvedValueOnce(document());
-    await expect(
-      service.remove('document-id', owner, {}),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    await expect(service.remove('document-id', owner, {})).resolves.toEqual({
-      deleted: true,
-      id: 'document-id',
-    });
   });
 });

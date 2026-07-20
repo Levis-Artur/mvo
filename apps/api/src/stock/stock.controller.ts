@@ -22,6 +22,12 @@ export class StockController {
     return this.stockService.listBalances(query, user);
   }
 
+  @Get('stock/available-to-me')
+  @Roles(UserRole.MVO)
+  availableToMe(@CurrentUserParam() user: CurrentUser) {
+    return this.stockService.availableToMe(user);
+  }
+
   @Get('stock-balances/:id')
   findBalance(@Param('id') id: string, @CurrentUserParam() user: CurrentUser) {
     return this.stockService.findBalance(id, user);

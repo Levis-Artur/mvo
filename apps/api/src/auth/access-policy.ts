@@ -61,7 +61,6 @@ export const REFERENCE_DATA_READ_ROLES = [
   UserRole.DPP_ADMIN,
   UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
-  UserRole.MVO,
 ];
 
 export const REFERENCE_DATA_WRITE_ROLES = [
@@ -70,6 +69,14 @@ export const REFERENCE_DATA_WRITE_ROLES = [
 ];
 
 export const STOCK_READ_ROLES = REFERENCE_DATA_READ_ROLES;
+
+export const ACCOUNTING_CARD_READ_ROLES = [
+  UserRole.OWNER,
+  UserRole.DPP_ADMIN,
+  UserRole.ACCOUNTANT,
+  UserRole.AUDITOR,
+  UserRole.MVO,
+];
 
 export const IMPORT_READ_ROLES = [
   UserRole.OWNER,

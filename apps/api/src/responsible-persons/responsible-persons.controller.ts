@@ -41,6 +41,15 @@ export class ResponsiblePersonsController {
     return this.responsiblePersonsService.findOne(id, user);
   }
 
+  @Get(':id/accounting-card')
+  async accountingCard(
+    @Param('id') id: string,
+    @CurrentUserParam() user: CurrentUser,
+  ) {
+    await this.responsiblePersonsService.findOne(id, user);
+    return this.stockService.responsiblePersonAccountingCard(id, user);
+  }
+
   @Post()
   @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
   create(@Body() dto: CreateResponsiblePersonDto) {
