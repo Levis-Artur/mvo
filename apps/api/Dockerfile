@@ -45,6 +45,9 @@ RUN test -f apps/api/prisma/schema.prisma \
   && test -f apps/api/package.json \
   && test -x node_modules/.bin/prisma
 
+RUN mkdir -p /app/data/stock-document-attachments \
+  && chown -R node:node /app/data
+
 USER node
 
 EXPOSE 3001

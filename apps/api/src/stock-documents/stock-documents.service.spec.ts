@@ -30,7 +30,8 @@ function document(
   sourceKind?: StockSourceKind,
 ) {
   const accountingModel =
-    type === StockDocumentType.ASSIGNMENT
+    type === StockDocumentType.ASSIGNMENT ||
+    (type === StockDocumentType.ISSUE && sourceKind)
       ? StockAccountingModel.OWNER_CUSTODY
       : StockAccountingModel.LEGACY_BALANCE;
   const lineOwnerId =
@@ -50,6 +51,18 @@ function document(
             type: StockTransactionType.ASSIGNMENT_IN_CUSTODY,
           },
         ]
+      : type === StockDocumentType.ISSUE &&
+          sourceKind &&
+          status === StockDocumentStatus.POSTED
+        ? [
+            {
+              id: 'issue-transaction-id',
+              type:
+                sourceKind === StockSourceKind.DIRECT
+                  ? StockTransactionType.ISSUE_FROM_DIRECT
+                  : StockTransactionType.ISSUE_FROM_CUSTODY,
+            },
+          ]
       : [];
   return {
     id: 'document-id',
@@ -66,7 +79,7 @@ function document(
         : null,
     recipientName: type === StockDocumentType.ISSUE ? 'Одержувач' : null,
     recipientUnit: null,
-    basis: null,
+    basis: type === StockDocumentType.ISSUE ? 'Видаткова накладна' : null,
     note: null,
     createdByUserId: owner.id,
     postedByUserId: null,
@@ -101,6 +114,27 @@ function document(
     createdByUser: { id: owner.id, username: 'owner', role: UserRole.OWNER },
     postedByUser: null,
     cancelledByUser: null,
+    attachments:
+      type === StockDocumentType.ISSUE
+        ? [
+            {
+              id: 'attachment-id',
+              documentId: 'document-id',
+              originalFileName: 'invoice.pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 100,
+              sha256: 'hash',
+              storagePath: 'stored.pdf',
+              uploadedByUserId: owner.id,
+              uploadedByUser: {
+                id: owner.id,
+                username: owner.username,
+                role: owner.role,
+              },
+              createdAt: new Date(),
+            },
+          ]
+        : [],
   };
 }
 
@@ -110,8 +144,10 @@ function createService() {
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      delete: jest.fn(),
     },
     stockDocumentLine: { deleteMany: jest.fn() },
+    stockDocumentAttachment: { deleteMany: jest.fn() },
     custodyBalance: { findUnique: jest.fn() },
     securityEvent: { create: jest.fn() },
   };
@@ -124,6 +160,7 @@ function createService() {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    stockDocumentAttachment: { findMany: jest.fn().mockResolvedValue([]) },
     securityEvent: { create: jest.fn() },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) =>
       callback(tx),
@@ -135,11 +172,22 @@ function createService() {
     createCustodyDecreasingTransactionInTx: jest.fn(),
     createCustodyIncreasingTransactionInTx: jest.fn(),
   };
+  const attachmentStorage = {
+    assertStoredFilesExist: jest.fn(),
+    stageForDeletion: jest.fn(),
+    restoreStaged: jest.fn(),
+    finalizeDeletion: jest.fn(),
+  };
   return {
-    service: new StockDocumentsService(prisma as never, stock as never),
+    service: new StockDocumentsService(
+      prisma as never,
+      stock as never,
+      attachmentStorage as never,
+    ),
     prisma,
     tx,
     stock,
+    attachmentStorage,
   };
 }
 
@@ -149,6 +197,22 @@ const transferDto = {
   sourceResponsiblePersonId: sourceId,
   destinationResponsiblePersonId: destinationId,
   lines: [{ inventoryItemId: itemId, quantity: '2' }],
+};
+
+const issueDto = {
+  documentDate: new Date().toISOString(),
+  type: StockDocumentType.ISSUE,
+  sourceResponsiblePersonId: sourceId,
+  recipientName: 'Одержувач',
+  basis: 'Видаткова накладна',
+  lines: [
+    {
+      inventoryItemId: itemId,
+      quantity: '2',
+      sourceKind: StockSourceKind.DIRECT,
+      accountingOwnerResponsiblePersonId: sourceId,
+    },
+  ],
 };
 
 function preparePostedResult(
@@ -306,6 +370,173 @@ describe('StockDocumentsService', () => {
     );
     expect(stock.createCustodyIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
+
+  it('posts ISSUE FROM DIRECT and reduces only the owner direct bucket', async () => {
+    const { service, prisma, tx, stock, attachmentStorage } = createService();
+    const value = document(
+      StockDocumentType.ISSUE,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    preparePostedResult(prisma, value);
+
+    await service.post('document-id', owner, {});
+
+    expect(attachmentStorage.assertStoredFilesExist).toHaveBeenCalledWith([
+      'stored.pdf',
+    ]);
+    expect(stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        type: StockTransactionType.ISSUE_FROM_DIRECT,
+        responsiblePersonId: sourceId,
+        accountingOwnerResponsiblePersonId: sourceId,
+        bucketKind: StockSourceKind.DIRECT,
+      }),
+    );
+    expect(stock.createCustodyDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('posts ISSUE FROM ASSIGNED without changing custodian StockBalance', async () => {
+    const { service, prisma, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ISSUE,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.ASSIGNED,
+    );
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    tx.custodyBalance.findUnique.mockResolvedValue({
+      inventoryItemId: itemId,
+      accountingOwnerResponsiblePersonId: accountingOwnerId,
+      custodianResponsiblePersonId: sourceId,
+    });
+    preparePostedResult(prisma, value);
+
+    await service.post('document-id', owner, {});
+
+    expect(stock.createCustodyDecreasingTransactionInTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        type: StockTransactionType.ISSUE_FROM_CUSTODY,
+        accountingOwnerResponsiblePersonId: accountingOwnerId,
+        custodianResponsiblePersonId: sourceId,
+      }),
+    );
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('rejects posting ISSUE without an attachment before moving stock', async () => {
+    const { service, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ISSUE,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    value.attachments = [];
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+
+    await expect(service.post('document-id', owner, {})).rejects.toThrow(
+      'додайте хоча б одне фото або скан',
+    );
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('does not post a legacy ISSUE draft through the old balance model', async () => {
+    const { service, tx, stock } = createService();
+    tx.stockDocument.findUnique.mockResolvedValue(
+      document(StockDocumentType.ISSUE, StockDocumentStatus.DRAFT),
+    );
+
+    await expect(service.post('document-id', owner, {})).rejects.toThrow(
+      'явним джерелом DIRECT або ASSIGNED',
+    );
+    expect(stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('requires recipient, basis and explicit source for a new ISSUE', async () => {
+    const { service } = createService();
+    await expect(
+      service.create({ ...issueDto, basis: undefined }, owner, {}),
+    ).rejects.toThrow('мету або підставу');
+    await expect(
+      service.create(
+        {
+          ...issueDto,
+          lines: [{ inventoryItemId: itemId, quantity: '2' }],
+        },
+        owner,
+        {},
+      ),
+    ).rejects.toThrow('тип джерела та облікового власника');
+  });
+
+  it('rolls back ISSUE posting when one line has insufficient stock', async () => {
+    const { service, tx, stock } = createService();
+    const value = document(
+      StockDocumentType.ISSUE,
+      StockDocumentStatus.DRAFT,
+      StockSourceKind.DIRECT,
+    );
+    value.lines.push({
+      ...value.lines[0],
+      id: 'line-id-2',
+      inventoryItemId: '77777777-7777-7777-7777-777777777777',
+    });
+    tx.stockDocument.findUnique.mockResolvedValue(value);
+    stock.createDecreasingTransactionInTx
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new BadRequestException('Недостатній залишок'));
+
+    await expect(service.post('document-id', owner, {})).rejects.toThrow(
+      'Недостатній залишок',
+    );
+    expect(tx.stockDocument.update).not.toHaveBeenCalled();
+  });
+
+  it.each([StockSourceKind.DIRECT, StockSourceKind.ASSIGNED])(
+    'reverses ISSUE back into the %s source bucket and keeps attachments',
+    async (sourceKind) => {
+      const { service, prisma, tx, stock, attachmentStorage } = createService();
+      const value = document(
+        StockDocumentType.ISSUE,
+        StockDocumentStatus.POSTED,
+        sourceKind,
+      );
+      tx.stockDocument.findUnique.mockResolvedValue(value);
+      prisma.stockDocument.findUnique.mockResolvedValue({
+        ...value,
+        status: StockDocumentStatus.CANCELLED,
+      });
+
+      await service.cancel('document-id', owner, {});
+
+      if (sourceKind === StockSourceKind.DIRECT) {
+        expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
+          tx,
+          expect.objectContaining({
+            type: StockTransactionType.ISSUE_REVERSAL,
+            bucketKind: StockSourceKind.DIRECT,
+            reversalOfTransactionId: 'issue-transaction-id',
+          }),
+        );
+      } else {
+        expect(
+          stock.createCustodyIncreasingTransactionInTx,
+        ).toHaveBeenCalledWith(
+          tx,
+          expect.objectContaining({
+            type: StockTransactionType.ISSUE_REVERSAL,
+            accountingOwnerResponsiblePersonId: accountingOwnerId,
+            custodianResponsiblePersonId: sourceId,
+            reversalOfTransactionId: 'issue-transaction-id',
+          }),
+        );
+      }
+      expect(attachmentStorage.stageForDeletion).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects transfer to the same MVO', async () => {
     const { service } = createService();
@@ -503,5 +734,34 @@ describe('StockDocumentsService', () => {
     await expect(
       service.update('document-id', transferDto, owner, {}),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('deletes DRAFT attachment metadata and files through controlled staging', async () => {
+    const { service, prisma, tx, attachmentStorage } = createService();
+    prisma.stockDocument.findUnique.mockResolvedValue(
+      document(StockDocumentType.ISSUE, StockDocumentStatus.DRAFT),
+    );
+    prisma.stockDocumentAttachment.findMany.mockResolvedValue([
+      { storagePath: 'stored.pdf' },
+    ]);
+    attachmentStorage.stageForDeletion.mockResolvedValue({
+      storagePath: 'stored.pdf',
+      stagedStoragePath: '.deleting-file',
+    });
+
+    await service.remove('document-id', owner, {});
+
+    expect(tx.stockDocumentAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { documentId: 'document-id' },
+    });
+    expect(tx.stockDocument.delete).toHaveBeenCalledWith({
+      where: { id: 'document-id' },
+    });
+    expect(attachmentStorage.finalizeDeletion).toHaveBeenCalledWith([
+      {
+        storagePath: 'stored.pdf',
+        stagedStoragePath: '.deleting-file',
+      },
+    ]);
   });
 });

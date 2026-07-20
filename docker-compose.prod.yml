@@ -29,6 +29,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
       CORS_ORIGIN: ${CORS_ORIGIN}
       MAX_IMPORT_FILE_SIZE_MB: ${MAX_IMPORT_FILE_SIZE_MB:-20}
+      MAX_ATTACHMENT_FILE_SIZE_MB: ${MAX_ATTACHMENT_FILE_SIZE_MB:-10}
+      STOCK_DOCUMENT_ATTACHMENTS_DIR: /app/data/stock-document-attachments
+    volumes:
+      - stock_document_attachments:/app/data/stock-document-attachments
     expose:
       - '3001'
     healthcheck:
@@ -64,7 +68,7 @@ services:
       - api
       - web
     environment:
-      MAX_IMPORT_FILE_SIZE_MB: ${MAX_IMPORT_FILE_SIZE_MB:-20}
+      MAX_UPLOAD_FILE_SIZE_MB: ${MAX_UPLOAD_FILE_SIZE_MB:-20}
     ports:
       - '${PUBLIC_PORT:-80}:80'
     volumes:
@@ -73,10 +77,11 @@ services:
       - /bin/sh
       - -c
       - |
-        envsubst '$${MAX_IMPORT_FILE_SIZE_MB}' \
+        envsubst '$${MAX_UPLOAD_FILE_SIZE_MB}' \
         < /etc/nginx/templates/default.conf \
         > /etc/nginx/conf.d/default.conf
         exec nginx -g 'daemon off;'
 
 volumes:
   postgres_prod_data:
+  stock_document_attachments:

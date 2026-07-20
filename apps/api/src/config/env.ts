@@ -7,6 +7,8 @@ type Environment = {
   corsOrigin: string;
   databaseUrl: string;
   maxImportFileSizeBytes: number;
+  maxAttachmentFileSizeBytes: number;
+  stockDocumentAttachmentsDir: string;
   ownerDestructiveActionsEnabled: boolean;
 };
 
@@ -66,6 +68,17 @@ export function validateEnvironment(): Environment {
     process.env.MAX_IMPORT_FILE_SIZE_BYTES ??
       maxImportFileSizeMegabytes * 1024 * 1024,
   );
+  const maxAttachmentFileSizeMegabytes = Number(
+    process.env.MAX_ATTACHMENT_FILE_SIZE_MB ?? 10,
+  );
+  const maxAttachmentFileSizeBytes = Number(
+    process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES ??
+      maxAttachmentFileSizeMegabytes * 1024 * 1024,
+  );
+  const stockDocumentAttachmentsDir = resolve(
+    process.env.STOCK_DOCUMENT_ATTACHMENTS_DIR ??
+      'storage/stock-document-attachments',
+  );
   const ownerDestructiveActionsEnabled =
     (process.env.OWNER_DESTRUCTIVE_ACTIONS_ENABLED ?? 'false').toLowerCase() ===
     'true';
@@ -83,11 +96,30 @@ export function validateEnvironment(): Environment {
     );
   }
 
+  if (
+    !Number.isInteger(maxAttachmentFileSizeBytes) ||
+    maxAttachmentFileSizeBytes < 1024
+  ) {
+    throw new Error(
+      'MAX_ATTACHMENT_FILE_SIZE_MB must produce an integer file size >= 1024 bytes',
+    );
+  }
+
   return {
     apiPort,
     corsOrigin,
     databaseUrl,
     maxImportFileSizeBytes,
+    maxAttachmentFileSizeBytes,
+    stockDocumentAttachmentsDir,
     ownerDestructiveActionsEnabled,
   };
+}
+
+export function attachmentFileSizeLimitBytes(): number {
+  const megabytes = Number(process.env.MAX_ATTACHMENT_FILE_SIZE_MB ?? 10);
+  const bytes = Number(
+    process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES ?? megabytes * 1024 * 1024,
+  );
+  return Number.isInteger(bytes) && bytes >= 1024 ? bytes : 10 * 1024 * 1024;
 }

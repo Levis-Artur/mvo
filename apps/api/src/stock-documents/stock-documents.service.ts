@@ -19,6 +19,10 @@ import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import {
+  type StagedAttachmentFile,
+  StockDocumentAttachmentStorageService,
+} from './stock-document-attachment-storage.service';
+import {
   assertValidStockSource,
   StockAccountingInvariantError,
 } from '../stock/stock-accounting.domain';
@@ -49,10 +53,27 @@ const documentInclude = {
     },
     orderBy: { createdAt: 'asc' as const },
   },
+  attachments: {
+    select: {
+      id: true,
+      documentId: true,
+      originalFileName: true,
+      mimeType: true,
+      sizeBytes: true,
+      sha256: true,
+      uploadedByUserId: true,
+      uploadedByUser: { select: { id: true, username: true, role: true } },
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
 } satisfies Prisma.StockDocumentInclude;
 
 type PostingDocument = Prisma.StockDocumentGetPayload<{
-  include: { lines: true };
+  include: {
+    lines: true;
+    attachments: { select: { id: true; storagePath: true } };
+  };
 }>;
 type PostingLine = PostingDocument['lines'][number];
 type CancellationDocument = Prisma.StockDocumentGetPayload<{
@@ -65,6 +86,7 @@ export class StockDocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stockService: StockService,
+    private readonly attachmentStorage: StockDocumentAttachmentStorageService,
   ) {}
 
   async list(query: ListStockDocumentsQueryDto, actor: CurrentUser) {
@@ -202,11 +224,39 @@ export class StockDocumentsService {
     const document = await this.findRaw(id);
     this.assertDraft(document.status);
     this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
-    const deleted = await this.prisma.stockDocument.deleteMany({
-      where: { id, status: StockDocumentStatus.DRAFT },
+    const attachments = await this.prisma.stockDocumentAttachment.findMany({
+      where: { documentId: id },
+      select: { storagePath: true },
     });
-    if (deleted.count !== 1) this.assertDraft(StockDocumentStatus.POSTED);
-    await this.audit(actor, id, 'DELETE', document.status, true, context);
+    const staged = await this.stageAttachmentFiles(
+      attachments.map((attachment) => attachment.storagePath),
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const claim = await tx.stockDocument.updateMany({
+          where: { id, status: StockDocumentStatus.DRAFT },
+          data: { updatedAt: new Date() },
+        });
+        if (claim.count !== 1) this.assertDraft(StockDocumentStatus.POSTED);
+        await tx.stockDocumentAttachment.deleteMany({
+          where: { documentId: id },
+        });
+        await tx.stockDocument.delete({ where: { id } });
+        await this.auditInTx(
+          tx,
+          actor,
+          id,
+          'DELETE',
+          document.status,
+          true,
+          context,
+        );
+      });
+    } catch (error) {
+      await this.attachmentStorage.restoreStaged(staged);
+      throw error;
+    }
+    await this.attachmentStorage.finalizeDeletion(staged);
     return { deleted: true, id };
   }
 
@@ -233,7 +283,10 @@ export class StockDocumentsService {
 
         const document = await tx.stockDocument.findUnique({
           where: { id },
-          include: { lines: true },
+          include: {
+            lines: true,
+            attachments: { select: { id: true, storagePath: true } },
+          },
         });
         if (!document) {
           throw new NotFoundException('Документ руху майна не знайдено');
@@ -242,6 +295,33 @@ export class StockDocumentsService {
         if (!document.lines.length) {
           throw new BadRequestException(
             'Документ повинен містити хоча б один рядок',
+          );
+        }
+        if (document.type === StockDocumentType.ISSUE) {
+          if (
+            document.accountingModel !== StockAccountingModel.OWNER_CUSTODY
+          ) {
+            throw new BadRequestException(
+              'Legacy-чернетку видачі потрібно оновити з явним джерелом DIRECT або ASSIGNED',
+            );
+          }
+          if (!document.recipientName?.trim()) {
+            throw new BadRequestException(
+              'Для проведення видачі обов’язково вкажіть одержувача',
+            );
+          }
+          if (!document.basis?.trim()) {
+            throw new BadRequestException(
+              'Для проведення видачі обов’язково вкажіть мету або підставу',
+            );
+          }
+          if (!document.attachments.length) {
+            throw new BadRequestException(
+              'Для проведення видачі додайте хоча б одне фото або скан накладної',
+            );
+          }
+          await this.attachmentStorage.assertStoredFilesExist(
+            document.attachments.map((attachment) => attachment.storagePath),
           );
         }
 
@@ -803,8 +883,7 @@ export class StockDocumentsService {
         line.sourceCustodyBalanceId !== undefined,
     );
     const usesOwnerCustody =
-      isAssignment ||
-      (dto.type === StockDocumentType.ISSUE && hasSourceMetadata);
+      isAssignment || dto.type === StockDocumentType.ISSUE;
 
     if (isAssignment || isTransfer) {
       if (!dto.destinationResponsiblePersonId) {
@@ -831,6 +910,11 @@ export class StockDocumentsService {
       if (!dto.recipientName?.trim()) {
         throw new BadRequestException(
           'Для видачі обов’язково вкажіть одержувача',
+        );
+      }
+      if (!dto.basis?.trim()) {
+        throw new BadRequestException(
+          'Для видачі обов’язково вкажіть мету або підставу',
         );
       }
     }
@@ -914,6 +998,21 @@ export class StockDocumentsService {
           : null,
       lines,
     };
+  }
+
+  private async stageAttachmentFiles(storagePaths: string[]) {
+    const staged: StagedAttachmentFile[] = [];
+    try {
+      for (const storagePath of storagePaths) {
+        staged.push(
+          await this.attachmentStorage.stageForDeletion(storagePath),
+        );
+      }
+      return staged;
+    } catch (error) {
+      await this.attachmentStorage.restoreStaged(staged);
+      throw error;
+    }
   }
 
   private assertCanWrite(actor: CurrentUser) {
