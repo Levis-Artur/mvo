@@ -73,4 +73,30 @@ describe('my-stock frontend model', () => {
     expect(modal).toContain('Лише поточна вкладка');
     expect(css).toContain('.my-stock-toolbar { grid-template-columns: minmax(0, 1fr);');
   });
+
+  it('keeps the simplified property flow without summary cards or an extra summary request', () => {
+    const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
+    const toolbarIndex = view.indexOf('className="my-stock-toolbar"');
+    const tabsIndex = view.indexOf('aria-label="Склад майна"');
+    const sortIndex = view.indexOf('className="my-stock-sort-bar"');
+    const tableIndex = view.indexOf('<DataTable');
+
+    expect(view).not.toContain('Разом під моїм обліком');
+    expect(view).not.toContain('Фактично утримую');
+    expect(view).not.toContain('const summary = data?.summary');
+    expect(view).not.toContain('<Metric ');
+    expect(view).not.toContain('function Metric(');
+    expect(view).not.toContain('responsiblePersonAccountingCard');
+    expect(view.match(/responsiblePersonsService\.myProperty\(/g)).toHaveLength(1);
+
+    expect(toolbarIndex).toBeGreaterThan(-1);
+    expect(tabsIndex).toBeGreaterThan(toolbarIndex);
+    expect(sortIndex).toBeGreaterThan(tabsIndex);
+    expect(tableIndex).toBeGreaterThan(sortIndex);
+    expect(view).toContain('MY_PROPERTY_SECTION_LABELS');
+    expect(view).toContain('setSection(item.id)');
+    expect(view).toContain('responsiblePersonsService.exportMyPropertyCsv');
+    expect(view).toContain('actionLinks.transfer');
+    expect(view).toContain('actionLinks.issue');
+  });
 });

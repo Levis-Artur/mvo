@@ -6,7 +6,6 @@ import { getErrorMessage } from '@/components/common';
 import { PageHeader } from '@/components/layout/page-header';
 import {
   Button,
-  Card,
   DataTable,
   ErrorState,
   Input,
@@ -124,7 +123,6 @@ export function MyStockView() {
     }
   }
 
-  const summary = data?.summary;
   return <section className="grid min-w-0 gap-4">
     <PageHeader
       action={personId ? <div className="flex flex-wrap gap-2">
@@ -165,14 +163,6 @@ export function MyStockView() {
       </div>
     </form>
 
-    {error ? <ErrorState message={error} /> : null}
-    {summary ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Metric label="Разом під моїм обліком" value={summary.totalOwnedAccountingQuantity} />
-      <Metric label="Фактично утримую" value={summary.totalPhysicallyHeldQuantity} />
-      <Metric label="Закріплень за іншими" value={String(summary.assignedOutCount)} />
-      <Metric label="Закріплень за мною" value={String(summary.assignedToMeCount)} />
-    </div> : null}
-
     <nav aria-label="Склад майна" className="flex flex-wrap gap-2">
       {tabs.map((item) => <Button
         aria-current={section === item.id ? 'page' : undefined}
@@ -192,6 +182,8 @@ export function MyStockView() {
         setSortOrder(event.target.value as SortOrder); setPage(1);
       }}><option value="asc">За зростанням</option><option value="desc">За спаданням</option></Select></label>
     </div>
+
+    {error ? <ErrorState message={error} /> : null}
 
     <DataTable
       ariaLabel={MY_PROPERTY_SECTION_LABELS[section]}
@@ -250,8 +242,4 @@ function myStockRow(item: MyPropertyItem) {
       {item.canIssue ? <a className="btn btn-ghost" href={links.issue}>Видати</a> : null}
     </div> : 'Лише перегляд',
   ];
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return <Card title={label}><p className="text-xl font-bold tabular-nums">{formatQuantity(value)}</p></Card>;
 }
