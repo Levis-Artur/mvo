@@ -7,6 +7,7 @@ import {
   documentCounterparty,
   documentNumberLabel,
   documentTypeLabel,
+  documentVolumePresentation,
   lifecycleActions,
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
@@ -26,11 +27,9 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
       ariaLabel="Мої передачі та видачі"
       columns={[
         { label: 'Дата', className: 'stock-documents-table__date' },
-        { label: 'Тип', className: 'stock-documents-table__type' },
-        { label: 'Номер', className: 'stock-documents-table__number' },
-        { label: 'Кому або від кого', className: 'stock-documents-table__person' },
-        { label: 'Позицій', className: 'stock-documents-table__positions', numeric: true },
-        { label: 'Загальна кількість', className: 'stock-documents-table__quantity', numeric: true },
+        { label: 'Документ', className: 'stock-documents-table__document' },
+        { label: 'Кому / від кого', className: 'stock-documents-table__person' },
+        { label: 'Обсяг', className: 'stock-documents-table__volume' },
         { label: 'Статус', className: 'stock-documents-table__status' },
         { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
       ]}
@@ -39,15 +38,15 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
       tableClassName="stock-documents-table stock-documents-table--mvo"
       rows={documents.map((document) => {
         const actions = lifecycleActions(document, user);
+        const counterparty = documentCounterparty(document, user);
+        const volume = documentVolumePresentation(document.totalPositions, document.totalQuantity);
         return [
           new Date(document.documentDate).toLocaleDateString('uk-UA'),
-          <StatusBadge key="type" tone={document.type === 'ISSUE' ? 'warning' : document.type === 'TRANSFER' ? 'neutral' : 'info'}>{documentTypeLabel(document.type)}</StatusBadge>,
-          <Button key="number" size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>,
-          <span className="stock-documents-table__person-text" key="counterparty" title={documentCounterparty(document, user)}>{documentCounterparty(document, user)}</span>,
-          document.totalPositions,
-          formatQuantity(document.totalQuantity),
+          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'TRANSFER' ? 'neutral' : 'info'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button></div>,
+          <span className="stock-documents-table__person-text" key="counterparty" title={counterparty}>{counterparty}</span>,
+          <span aria-label={volume.full} className="stock-documents-table__volume-text" key="volume" title={volume.full}>{volume.compact}</span>,
           <StockDocumentStatusBadge key="status" status={document.status} />,
-          <DocumentActions key="actions" actions={actions} document={document} onView={onView} onEdit={onEdit} onPost={onPost} onCancel={onCancel} onRemove={onRemove} />,
+          <MvoDocumentActions key="actions" actions={actions} document={document} onView={onView} onCancel={onCancel} />,
         ];
       })}
     />;
@@ -85,6 +84,18 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
       ];
     })}
   />;
+}
+
+function MvoDocumentActions({ actions, document, onView, onCancel }: {
+  actions: ReturnType<typeof lifecycleActions>;
+  document: StockDocument;
+  onView: (document: StockDocument) => void;
+  onCancel: (document: StockDocument) => void;
+}) {
+  return <div className="stock-document-actions stock-document-actions--mvo">
+    <Button aria-label={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} size="compact" title="Переглянути документ" variant="outline" type="button" onClick={() => onView(document)}>Переглянути</Button>
+    {actions.cancel ? <Button size="compact" title="Скасувати документ" variant="danger" type="button" onClick={() => onCancel(document)}>Скасувати</Button> : null}
+  </div>;
 }
 
 function DocumentActions({ actions, document, onView, onEdit, onPost, onCancel, onRemove }: {

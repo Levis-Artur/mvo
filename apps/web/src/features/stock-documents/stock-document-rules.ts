@@ -9,6 +9,7 @@ import type {
   TransferTarget,
 } from '@/lib/types';
 import type { StatusTone } from '@/components/ui';
+import { formatQuantity } from '../inventory/quantity-format';
 import type { DocumentFormLine } from './stock-document.types';
 
 export function parseStockDocumentQuickAction(search: string): {
@@ -131,6 +132,21 @@ export function documentTypeLabel(type: StockDocumentType) {
 
 export function documentNumberLabel(displayNumber: number) {
   return `№ ${displayNumber}`;
+}
+
+export function documentVolumePresentation(totalPositions: number, totalQuantity: string) {
+  const quantity = formatQuantity(totalQuantity);
+  const lastTwoDigits = totalPositions % 100;
+  const lastDigit = totalPositions % 10;
+  const positionWord = lastDigit === 1 && lastTwoDigits !== 11
+    ? 'позиція'
+    : lastDigit >= 2 && lastDigit <= 4 && (lastTwoDigits < 12 || lastTwoDigits > 14)
+      ? 'позиції'
+      : 'позицій';
+  return {
+    compact: `${totalPositions} поз. · ${quantity} од.`,
+    full: `${totalPositions} ${positionWord}, загальна кількість ${quantity} одиниць`,
+  };
 }
 
 export function documentCounterparty(

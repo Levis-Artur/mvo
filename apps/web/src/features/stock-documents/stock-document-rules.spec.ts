@@ -15,6 +15,7 @@ import {
   documentRecipientMode,
   documentStatusPresentation,
   documentTypeLabel,
+  documentVolumePresentation,
   filterRecipientOptions,
   lifecycleActions,
   personOptionLabel,
@@ -143,6 +144,22 @@ describe('stock document frontend rules', () => {
     expect(documentTypeLabel('TRANSFER')).toBe('Стара передача');
     expect(documentNumberLabel(1)).toBe('№ 1');
     expect(documentNumberLabel(42)).toBe('№ 42');
+  });
+
+  it('формує компактний обсяг і правильне відмінювання позицій', () => {
+    expect(documentVolumePresentation(1, '5')).toEqual({
+      compact: '1 поз. · 5 од.',
+      full: '1 позиція, загальна кількість 5 одиниць',
+    });
+    expect(documentVolumePresentation(3, '9.5').full).toBe(
+      '3 позиції, загальна кількість 9,5 одиниць',
+    );
+    expect(documentVolumePresentation(5, '12').full).toBe(
+      '5 позицій, загальна кількість 12 одиниць',
+    );
+    expect(documentVolumePresentation(11, '20').full).toBe(
+      '11 позицій, загальна кількість 20 одиниць',
+    );
   });
 
   it('формує людський підсумок успішної передачі', () => {

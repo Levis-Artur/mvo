@@ -47,7 +47,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     controller.openCreate(action.type, action.sourceResponsiblePersonId, action.sourceBalanceId, action.sourceKind);
   }, [controller, writable]);
 
-  return <section className="grid min-w-0 gap-4">
+  return <section className={`stock-documents-page grid min-w-0 gap-4 ${user.role === 'MVO' ? 'stock-documents-page--mvo' : ''}`}>
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
         {writable ? <>
