@@ -51,8 +51,6 @@ export function useStockDocumentsController(user: AuthUser) {
   const [selected, setSelected] = useState<StockDocument | null>(null);
   const [formType, setFormType] = useState<StockDocumentType | null>(null);
   const [formSourceId, setFormSourceId] = useState('');
-  const [initialSourceBalanceId, setInitialSourceBalanceId] = useState('');
-  const [initialSourceKind, setInitialSourceKind] = useState<'DIRECT' | 'ASSIGNED' | undefined>();
   const [editing, setEditing] = useState<StockDocument | null>(null);
   const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,12 +174,10 @@ export function useStockDocumentsController(user: AuthUser) {
     }
   }
 
-  function openCreate(nextType: StockDocumentType, requestedSourceId = '', requestedBalanceId = '', requestedSourceKind?: 'DIRECT' | 'ASSIGNED') {
+  function openCreate(nextType: StockDocumentType) {
     setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
-    const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : requestedSourceId;
+    const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : '';
     setFormSourceId(source); setFormType(nextType);
-    setInitialSourceBalanceId(requestedBalanceId);
-    setInitialSourceKind(requestedSourceKind);
     const policy = formLoadPolicy(nextType);
     if (policy.transferTargets) void loadTargets();
     else { setTransferTargets([]); setTargetsError(''); }
@@ -196,8 +192,6 @@ export function useStockDocumentsController(user: AuthUser) {
 
   async function openEdit(document: StockDocument) {
     setSelected(null); setEditing(document); setFormSourceId(document.sourceResponsiblePersonId);
-    setInitialSourceBalanceId('');
-    setInitialSourceKind(undefined);
     setFormType(document.type); setActionError('');
     await Promise.all([
       loadSources(document.sourceResponsiblePersonId),
@@ -287,7 +281,7 @@ export function useStockDocumentsController(user: AuthUser) {
   return {
     documents: filteredDocuments, persons, transferTargets, availableSources, pagination,
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
-    selected, setSelected, formType, setFormType, formSourceId, initialSourceBalanceId, initialSourceKind, editing,
+    selected, setSelected, formType, setFormType, formSourceId, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
     actionLoading, error, personsError, targetsError, sourcesError, actionError, toast, setToast, success, setSuccess,
     load, loadReferences, loadTargets, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,

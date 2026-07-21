@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
 import { fullName } from '@/components/common/formatters';
@@ -14,7 +14,7 @@ import {
   Select,
   Toast,
 } from '@/components/ui';
-import { canChangeStockDocuments, parseStockDocumentQuickAction } from './stock-document-rules';
+import { canChangeStockDocuments } from './stock-document-rules';
 import { canUseGlobalResponsiblePersonFilters } from './stock-document-loading-policy';
 import { CancelDocumentModal } from './cancel-document-modal';
 import { DeleteDocumentModal } from './delete-document-modal';
@@ -37,16 +37,6 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
   const [advancedFilters, setAdvancedFilters] = useState(false);
   const writable = canChangeStockDocuments(user);
   const globalPersonFilters = canUseGlobalResponsiblePersonFilters(user.role);
-  const quickActionHandled = useRef(false);
-
-  useEffect(() => {
-    if (quickActionHandled.current || !writable) return;
-    quickActionHandled.current = true;
-    const action = parseStockDocumentQuickAction(window.location.search);
-    if (!action) return;
-    controller.openCreate(action.type, action.sourceResponsiblePersonId, action.sourceBalanceId, action.sourceKind);
-  }, [controller, writable]);
-
   return <section className={`stock-documents-page grid min-w-0 gap-4 ${user.role === 'MVO' ? 'stock-documents-page--mvo' : ''}`}>
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
@@ -118,8 +108,6 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       document={controller.editing}
       error={controller.actionError}
       initialSourceId={controller.formSourceId}
-      initialSourceBalanceId={controller.initialSourceBalanceId}
-      initialSourceKind={controller.initialSourceKind}
       loadingSources={controller.loadingSources}
       loadingTargets={controller.loadingTargets}
       persons={controller.persons}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
@@ -36,7 +36,7 @@ import type { DocumentFormLine, StockDocumentFormProps } from './stock-document.
 
 export function StockDocumentForm(props: StockDocumentFormProps) {
   const {
-    user, type, document, initialSourceId, initialSourceBalanceId, initialSourceKind, persons, transferTargets, availableSources,
+    user, type, document, initialSourceId, persons, transferTargets, availableSources,
     loadingSources, loadingTargets, saving, error, sourcesError, targetsError,
     onSourceChange, onSubmit, onRemoveAttachment, onClose,
   } = props;
@@ -72,7 +72,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   );
   const [files, setFiles] = useState<File[]>([]);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
-  const initialSourceAdded = useRef(false);
   const [dirty, setDirty] = useState(false);
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   useEffect(() => {
@@ -93,19 +92,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const source = persons.find((person) => person.id === sourceId);
   const recipientMode = documentRecipientMode(type);
   const simplified = user.role === 'MVO';
-
-  useEffect(() => {
-    if (document || initialSourceAdded.current || !initialSourceBalanceId) return;
-    const initial = availableSources.find((item) =>
-      item.sourceBalanceId === initialSourceBalanceId &&
-      (!initialSourceKind || item.sourceKind === initialSourceKind) &&
-      sourceSupportsDocument(item, type),
-    );
-    if (!initial) return;
-    initialSourceAdded.current = true;
-    setLines((current) => addSelectedStockSource(current, initial));
-    setDirty(true);
-  }, [availableSources, document, initialSourceBalanceId, initialSourceKind, type]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -150,7 +136,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
 
   if (sourcePickerOpen) return <StockSourcePickerModal
     error={sourcesError}
-    initialSourceBalanceId={initialSourceBalanceId}
     loading={loadingSources}
     simplified={simplified}
     selectedSourceKeys={selectedSourceKeys}

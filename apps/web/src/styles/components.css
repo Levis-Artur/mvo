@@ -71,19 +71,17 @@
 .my-stock-sort-bar { display: flex; max-width: 100%; flex-wrap: wrap; align-items: end; gap: var(--space-3); color: var(--color-text-secondary); font-size: var(--text-sm); }
 .my-stock-sort-bar > strong { margin-right: auto; color: var(--color-text); }
 .my-stock-sort-bar label { display: grid; min-width: 180px; gap: var(--space-1); font-size: var(--text-xs); font-weight: 650; }
-.my-stock-table { width: 100%; min-width: 720px; table-layout: fixed; }
-.my-stock-table--assigned_out { min-width: 1080px; }
-.my-stock-table--assigned_to_me { min-width: 940px; }
+.my-stock-table { width: 100%; min-width: 560px; table-layout: fixed; }
+.my-stock-table--assigned_out { min-width: 900px; }
+.my-stock-table--assigned_to_me { min-width: 780px; }
 .my-stock-table th, .my-stock-table td { height: 52px; padding: 0.45rem 0.55rem; vertical-align: middle; }
-.my-stock-table__code { width: 128px; white-space: nowrap; }
+.my-stock-table__code { width: 140px; white-space: nowrap; }
 .my-stock-table__name { min-width: 0; overflow: hidden; }
 .my-stock-table__name-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.my-stock-table__unit { width: 76px; white-space: nowrap; }
-.my-stock-table__quantity { width: 92px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.my-stock-table__unit { width: 90px; white-space: nowrap; }
+.my-stock-table__quantity { width: 110px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .my-stock-table__person { width: 220px; overflow-wrap: break-word; word-break: normal; }
 .my-stock-table__date { width: 120px; white-space: nowrap; }
-.my-stock-table__actions { width: 210px; white-space: nowrap; }
-.my-stock-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--space-2); white-space: nowrap; }
 .stock-documents-page { width: min(100%, 1440px); margin-inline: auto; }
 .stock-documents-page--mvo .filter-bar > .filter-bar__field:first-child { flex: 1 1 360px; }
 .stock-documents-page--mvo .filter-bar > .filter-bar__field:not(:first-child) { min-width: 160px; flex: 0 1 180px; }

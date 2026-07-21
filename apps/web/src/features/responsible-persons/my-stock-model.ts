@@ -1,7 +1,6 @@
 import type { DownloadedFile } from '@/lib/api-client';
 import type {
   MyPropertyExportSection,
-  MyPropertyItem,
   MyPropertySection,
   MyPropertySortBy,
   SortOrder,
@@ -39,15 +38,6 @@ export function exportSection(
   currentSection: MyPropertySection,
 ): MyPropertyExportSection {
   return scope === 'ALL' ? 'ALL' : currentSection;
-}
-
-export function propertyActionLinks(item: MyPropertyItem) {
-  const source = encodeURIComponent(item.currentCustodian.id);
-  const balance = encodeURIComponent(item.sourceBalanceId);
-  return {
-    transfer: `/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=${source}&sourceBalanceId=${balance}&sourceKind=${item.sourceKind}`,
-    issue: `/transfers?create=ISSUE&sourceResponsiblePersonId=${source}&sourceBalanceId=${balance}&sourceKind=${item.sourceKind}`,
-  };
 }
 
 export type FileDownloadEnvironment = {

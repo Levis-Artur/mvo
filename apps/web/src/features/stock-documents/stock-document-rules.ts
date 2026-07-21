@@ -12,22 +12,6 @@ import type { StatusTone } from '@/components/ui';
 import { formatQuantity } from '../inventory/quantity-format';
 import type { DocumentFormLine } from './stock-document.types';
 
-export function parseStockDocumentQuickAction(search: string): {
-  type: StockDocumentType;
-  sourceResponsiblePersonId: string;
-  sourceBalanceId?: string;
-  sourceKind?: 'DIRECT' | 'ASSIGNED';
-} | null {
-  const params = new URLSearchParams(search);
-  const type = params.get('create');
-  const sourceResponsiblePersonId = params.get('sourceResponsiblePersonId');
-  const sourceBalanceId = params.get('sourceBalanceId') ?? undefined;
-  const rawSourceKind = params.get('sourceKind');
-  const sourceKind = rawSourceKind === 'DIRECT' || rawSourceKind === 'ASSIGNED' ? rawSourceKind : undefined;
-  if ((type !== 'ASSIGNMENT' && type !== 'ISSUE') || !sourceResponsiblePersonId) return null;
-  return { type, sourceResponsiblePersonId, sourceBalanceId, sourceKind };
-}
-
 export function canChangeStockDocuments(user: Pick<AuthUser, 'role'>) {
   return user.role !== 'AUDITOR' && user.role !== 'ACCOUNTANT';
 }

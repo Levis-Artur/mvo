@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
 import { getMvoErrorMessage } from '@/components/common';
 import { PageHeader } from '@/components/layout/page-header';
@@ -17,7 +16,6 @@ import {
 } from '@/components/ui';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
 import { formatQuantity } from '@/features/inventory/quantity-format';
-import { mvoStockActionLinks } from '@/features/inventory/stock-model';
 import type {
   MyPropertyItem,
   MyPropertyResponse,
@@ -26,7 +24,6 @@ import type {
   SortOrder,
 } from '@/lib/types';
 import { MyStockExportModal } from './my-stock-export-modal';
-import { MyPropertyDetailsModal } from './my-property-details-modal';
 import {
   DEFAULT_MY_PROPERTY_SORT,
   downloadFileInBrowser,
@@ -35,7 +32,6 @@ import {
   MY_PROPERTY_SECTION_DESCRIPTIONS,
   myPropertySortOptions,
   normalizedPropertySearch,
-  propertyActionLinks,
 } from './my-stock-model';
 import { responsiblePersonsService } from './responsible-persons.service';
 
@@ -43,10 +39,8 @@ const tabs = (Object.entries(MY_PROPERTY_SECTION_LABELS) as [MyPropertySection, 
   .map(([id, label]) => ({ id, label }));
 
 export function MyStockView() {
-  const router = useRouter();
   const { user } = useAuth();
   const personId = user?.responsiblePersonId ?? '';
-  const actionLinks = mvoStockActionLinks(personId);
   const [data, setData] = useState<MyPropertyResponse | null>(null);
   const [section, setSection] = useState<MyPropertySection>('DIRECT');
   const [searchDraft, setSearchDraft] = useState('');
@@ -60,7 +54,6 @@ export function MyStockView() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState('');
-  const [selectedItem, setSelectedItem] = useState<MyPropertyItem | null>(null);
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -130,10 +123,6 @@ export function MyStockView() {
 
   return <section className="grid min-w-0 gap-4">
     <PageHeader
-      action={personId ? <div className="flex flex-wrap gap-2">
-        <a className="btn btn-primary" href={actionLinks.transfer}>Передати майно</a>
-        <a className="btn btn-secondary" href={actionLinks.issue}>Видати майно</a>
-      </div> : undefined}
       description="Переглядайте майно, яке знаходиться у вас або було передане іншим МВО."
       icon="box"
       title="Моє майно"
@@ -202,7 +191,7 @@ export function MyStockView() {
       columns={myStockColumns(section)}
       emptyMessage={search ? 'За вказаним запитом майно не знайдено' : myStockEmptyMessage(section)}
       loading={loading}
-      rows={(data?.items ?? []).map((item) => myStockRow(item, section, setSelectedItem, (href) => router.push(href)))}
+      rows={(data?.items ?? []).map((item) => myStockRow(item, section))}
       tableClassName={`my-stock-table my-stock-table--${section.toLocaleLowerCase()}`}
     />
     <Pagination
@@ -221,7 +210,6 @@ export function MyStockView() {
       onClose={() => { if (!exporting) setExportOpen(false); }}
       onExport={(scope) => void exportCsv(scope)}
     /> : null}
-    {selectedItem ? <MyPropertyDetailsModal item={selectedItem} onClose={() => setSelectedItem(null)} /> : null}
     {toast ? <Toast message={toast} tone="error" onClose={() => setToast('')} /> : null}
   </section>;
 }
@@ -234,12 +222,12 @@ function myStockColumns(section: MyPropertySection): DataTableColumn[] {
     { label: 'Кількість', className: 'my-stock-table__quantity', numeric: true },
   ];
   if (section === 'ASSIGNED_OUT') {
-    return [...common, { label: 'У кого знаходиться', className: 'my-stock-table__person' }, { label: 'Дата передачі', className: 'my-stock-table__date' }, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
+    return [...common, { label: 'У кого знаходиться', className: 'my-stock-table__person' }, { label: 'Дата передачі', className: 'my-stock-table__date' }];
   }
   if (section === 'ASSIGNED_TO_ME') {
-    return [...common, { label: 'Від кого отримано', className: 'my-stock-table__person' }, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
+    return [...common, { label: 'Від кого отримано', className: 'my-stock-table__person' }];
   }
-  return [...common, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
+  return common;
 }
 
 function myStockEmptyMessage(section: MyPropertySection) {
@@ -248,8 +236,7 @@ function myStockEmptyMessage(section: MyPropertySection) {
   return 'У вас немає майна, доступного для передачі або видачі.';
 }
 
-function myStockRow(item: MyPropertyItem, section: MyPropertySection, onView: (item: MyPropertyItem) => void, onNavigate: (href: string) => void) {
-  const links = propertyActionLinks(item);
+function myStockRow(item: MyPropertyItem, section: MyPropertySection) {
   const common = [
     item.inventoryItem.externalCode,
     <span className="my-stock-table__name-text" key="name" title={item.inventoryItem.name}>{item.inventoryItem.name}</span>,
@@ -260,17 +247,10 @@ function myStockRow(item: MyPropertyItem, section: MyPropertySection, onView: (i
     return [...common,
       `${item.currentCustodian.personnelNumber} — ${item.currentCustodian.fullName}`,
       new Date(item.updatedAt).toLocaleDateString('uk-UA'),
-      <div className="my-stock-actions" key="actions">
-        <Button aria-label={`Переглянути ${item.inventoryItem.name}`} size="compact" title="Переглянути майно" variant="outline" type="button" onClick={() => onView(item)}>Переглянути</Button>
-      </div>,
     ];
   }
-  const actions = <div className="my-stock-actions" key="actions">
-    {item.canAssign ? <Button aria-label={`Передати ${item.inventoryItem.name}`} icon="transfer" size="compact" title="Передати майно" type="button" onClick={() => onNavigate(links.transfer)}>Передати</Button> : null}
-    {item.canIssue ? <Button aria-label={`Видати ${item.inventoryItem.name}`} size="compact" title="Видати майно" variant="outline" type="button" onClick={() => onNavigate(links.issue)}>Видати</Button> : null}
-  </div>;
   if (section === 'ASSIGNED_TO_ME') {
-    return [...common, `${item.accountingOwner.personnelNumber} — ${item.accountingOwner.fullName}`, actions];
+    return [...common, `${item.accountingOwner.personnelNumber} — ${item.accountingOwner.fullName}`];
   }
-  return [...common, actions];
+  return common;
 }

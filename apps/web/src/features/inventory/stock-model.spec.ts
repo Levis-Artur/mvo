@@ -3,7 +3,6 @@ import {
   allowsDirectBalanceEditing,
   filterProblematicBalances,
   filterVisibleBalances,
-  mvoStockActionLinks,
   paginateBalances,
   stockQueryFromFilters,
   stockScope,
@@ -28,13 +27,6 @@ describe('stock presentation model', () => {
 
   it('does not expose direct balance editing', () => {
     expect(allowsDirectBalanceEditing()).toBe(false);
-  });
-
-  it('builds transfer and issue links for the current MVO', () => {
-    expect(mvoStockActionLinks('person-1')).toEqual({
-      transfer: '/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=person-1',
-      issue: '/transfers?create=ISSUE&sourceResponsiblePersonId=person-1',
-    });
   });
 
   it('never creates a page limit greater than 100', () => {

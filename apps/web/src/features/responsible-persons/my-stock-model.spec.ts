@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { MyPropertyItem } from '@/lib/types';
 import {
   deliverDownloadedFile,
   exportSection,
@@ -8,7 +7,6 @@ import {
   MY_PROPERTY_SECTION_DESCRIPTIONS,
   MY_PROPERTY_SECTION_LABELS,
   myPropertySortOptions,
-  propertyActionLinks,
 } from './my-stock-model';
 
 describe('my-stock frontend model', () => {
@@ -27,18 +25,6 @@ describe('my-stock frontend model', () => {
     expect(MY_PROPERTY_SECTION_DESCRIPTIONS.DIRECT).toContain('безпосередньо у вас');
     expect(myPropertySortOptions('ASSIGNED_OUT')).toContainEqual({ value: 'currentCustodian', label: 'У кого знаходиться' });
     expect(myPropertySortOptions('ASSIGNED_TO_ME')).toContainEqual({ value: 'accountingOwner', label: 'Від кого отримано' });
-  });
-
-  it('keeps source balance identity in action links without mixing sections', () => {
-    const item = {
-      sourceBalanceId: 'balance/direct',
-      sourceKind: 'DIRECT',
-      currentCustodian: { id: 'holder/id' },
-    } as MyPropertyItem;
-    expect(propertyActionLinks(item)).toEqual({
-      transfer: '/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect&sourceKind=DIRECT',
-      issue: '/transfers?create=ISSUE&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect&sourceKind=DIRECT',
-    });
   });
 
   it('downloads a Blob and always revokes the object URL', () => {
@@ -111,8 +97,8 @@ describe('my-stock frontend model', () => {
     expect(view).toContain('MY_PROPERTY_SECTION_LABELS');
     expect(view).toContain('setSection(item.id)');
     expect(view).toContain('responsiblePersonsService.exportMyPropertyCsv');
-    expect(view).toContain('actionLinks.transfer');
-    expect(view).toContain('actionLinks.issue');
+    expect(view).not.toContain('actionLinks.transfer');
+    expect(view).not.toContain('actionLinks.issue');
     expect(view).not.toContain("{ label: 'Обліковий власник'");
     expect(view).not.toContain("{ label: 'Фактичний утримувач'");
     expect(view).not.toContain("{ label: 'Тип' }");
@@ -125,32 +111,36 @@ describe('my-stock frontend model', () => {
     expect(view).toContain('Інші МВО ще не передавали вам майно.');
   });
 
-  it('renders compact property actions in one row without exposing source identifiers', () => {
+  it('renders a read-only property table without operation links or action columns', () => {
     const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
-    const button = readFileSync(join(__dirname, '../../components/ui/button.tsx'), 'utf8');
     const css = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
 
-    expect(button).toContain("size?: 'default' | 'compact'");
-    expect(button).toContain("size === 'compact' ? 'btn-compact' : ''");
-    expect(view).toContain('className="my-stock-actions"');
-    expect(view).not.toContain('className="flex flex-wrap justify-end gap-1"');
-    expect(view).toContain('size="compact" title="Передати майно"');
-    expect(view).toContain('size="compact" title="Видати майно"');
-    expect(view).toContain('size="compact" title="Переглянути майно"');
-    expect(view).toContain('onNavigate(links.transfer)');
-    expect(view).toContain('onNavigate(links.issue)');
-    expect(view).toContain('item.canAssign ? <Button');
-    expect(view).toContain('item.canIssue ? <Button');
+    expect(view).not.toContain('title="Передати майно"');
+    expect(view).not.toContain('title="Видати майно"');
+    expect(view).not.toContain('title="Переглянути майно"');
+    expect(view).not.toContain("{ label: 'Дії'");
+    expect(view).not.toContain('propertyActionLinks');
+    expect(view).not.toContain('selectedItem');
+    expect(view).not.toContain('onNavigate');
     expect(view).not.toContain('>sourceKind<');
     expect(view).not.toContain('>sourceBalanceId<');
+    expect(view).toContain("{ label: 'Код', className: 'my-stock-table__code' }");
+    expect(view).toContain("{ label: 'Назва', className: 'my-stock-table__name' }");
+    expect(view).toContain("{ label: 'Одиниця', className: 'my-stock-table__unit' }");
+    expect(view).toContain("{ label: 'Кількість', className: 'my-stock-table__quantity', numeric: true }");
+    expect(view).toContain("{ label: 'У кого знаходиться', className: 'my-stock-table__person' }");
+    expect(view).toContain("{ label: 'Дата передачі', className: 'my-stock-table__date' }");
+    expect(view).toContain("{ label: 'Від кого отримано', className: 'my-stock-table__person' }");
 
-    expect(css).toContain('.btn-compact { min-height: 34px; height: 34px;');
-    expect(css).toContain('.my-stock-actions { display: flex; flex-direction: row; flex-wrap: nowrap;');
-    expect(css).toContain('.my-stock-table { width: 100%; min-width: 720px; table-layout: fixed; }');
-    expect(css).toContain('.my-stock-table__code { width: 128px; white-space: nowrap; }');
-    expect(css).toContain('.my-stock-table__unit { width: 76px; white-space: nowrap; }');
-    expect(css).toContain('.my-stock-table__quantity { width: 92px; white-space: nowrap; font-variant-numeric: tabular-nums; }');
-    expect(css).toContain('.my-stock-table__actions { width: 210px; white-space: nowrap; }');
+    expect(css).toContain('.my-stock-table { width: 100%; min-width: 560px; table-layout: fixed; }');
+    expect(css).toContain('.my-stock-table--assigned_out { min-width: 900px; }');
+    expect(css).toContain('.my-stock-table--assigned_to_me { min-width: 780px; }');
+    expect(css).toContain('.my-stock-table__code { width: 140px; white-space: nowrap; }');
+    expect(css).toContain('.my-stock-table__unit { width: 90px; white-space: nowrap; }');
+    expect(css).toContain('.my-stock-table__quantity { width: 110px; white-space: nowrap; font-variant-numeric: tabular-nums; }');
+    expect(css).not.toContain('.my-stock-table__actions');
+    expect(css).not.toContain('.my-stock-actions');
+    expect(css).toContain('.data-table-scroll { max-width: 100%; max-height: 560px; overflow: auto; }');
     expect(css).toContain('text-overflow: ellipsis; white-space: nowrap;');
   });
 });

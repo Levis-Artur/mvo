@@ -105,14 +105,6 @@ export function stockScope(
     : selectedResponsiblePersonId;
 }
 
-export function mvoStockActionLinks(responsiblePersonId: string) {
-  const source = encodeURIComponent(responsiblePersonId);
-  return {
-    transfer: `/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=${source}`,
-    issue: `/transfers?create=ISSUE&sourceResponsiblePersonId=${source}`,
-  };
-}
-
 export function allowsDirectBalanceEditing() {
   return false;
 }

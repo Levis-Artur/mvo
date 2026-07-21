@@ -156,8 +156,9 @@ describe('stock source picker model', () => {
     expect(picker).toContain('title="Вибір майна"');
     expect(picker).toContain('Додати вибране');
     expect(picker).toContain("source.sourceKind === 'DIRECT' ? 'У вас'");
-    expect(form).toContain('initialSourceAdded.current');
-    expect(form).toContain('item.sourceBalanceId === initialSourceBalanceId');
+    expect(form).not.toContain('initialSourceAdded.current');
+    expect(form).not.toContain('initialSourceBalanceId');
+    expect(picker).not.toContain('initialSourceBalanceId');
     expect(form).toContain('quantity:');
   });
 

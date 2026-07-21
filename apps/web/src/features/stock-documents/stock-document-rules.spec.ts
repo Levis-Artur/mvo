@@ -19,7 +19,6 @@ import {
   filterRecipientOptions,
   lifecycleActions,
   personOptionLabel,
-  parseStockDocumentQuickAction,
   recipientOptions,
   resolveSourceId,
   shouldConfirmUnsavedDocument,
@@ -65,12 +64,6 @@ const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => (
 });
 
 describe('stock document frontend rules', () => {
-  it('створює нову передачу тільки як ASSIGNMENT і підтримує попередній вибір source', () => {
-    expect(parseStockDocumentQuickAction('?create=ASSIGNMENT&sourceResponsiblePersonId=person-1&sourceBalanceId=balance-1&sourceKind=ASSIGNED'))
-      .toEqual({ type: 'ASSIGNMENT', sourceResponsiblePersonId: 'person-1', sourceBalanceId: 'balance-1', sourceKind: 'ASSIGNED' });
-    expect(parseStockDocumentQuickAction('?create=TRANSFER&sourceResponsiblePersonId=person-1')).toBeNull();
-  });
-
   it('AUDITOR і ACCOUNTANT мають read-only UI, а MVO може створювати власні документи', () => {
     expect(canChangeStockDocuments(mvoUser)).toBe(true);
     expect(canChangeStockDocuments(auditor)).toBe(false);

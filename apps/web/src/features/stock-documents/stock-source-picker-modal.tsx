@@ -27,7 +27,6 @@ export function StockSourcePickerModal({
   loading,
   error,
   simplified,
-  initialSourceBalanceId,
   onRefresh,
   onConfirm,
   onClose,
@@ -38,7 +37,6 @@ export function StockSourcePickerModal({
   loading: boolean;
   error: string;
   simplified: boolean;
-  initialSourceBalanceId?: string;
   onRefresh: () => Promise<void> | void;
   onConfirm: (source: AvailableStockSource) => void;
   onClose: () => void;
@@ -51,12 +49,6 @@ export function StockSourcePickerModal({
     [search, selectedSourceKeys, sourceFilter, sources, type],
   );
   const selected = options.find((source) => stockSourceKey(source) === selectedKey);
-
-  useEffect(() => {
-    if (selected || !initialSourceBalanceId) return;
-    const initial = options.find((source) => source.sourceBalanceId === initialSourceBalanceId);
-    if (initial) setSelectedKey(stockSourceKey(initial));
-  }, [initialSourceBalanceId, options, selected]);
 
   useEffect(() => {
     if (selectedKey && !options.some((source) => stockSourceKey(source) === selectedKey)) {

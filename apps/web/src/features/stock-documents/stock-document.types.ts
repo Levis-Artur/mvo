@@ -24,8 +24,6 @@ export type StockDocumentFormProps = {
   type: StockDocumentType;
   document?: StockDocument | null;
   initialSourceId: string;
-  initialSourceBalanceId?: string;
-  initialSourceKind?: 'DIRECT' | 'ASSIGNED';
   persons: ResponsiblePerson[];
   transferTargets: TransferTarget[];
   availableSources: AvailableStockSource[];
