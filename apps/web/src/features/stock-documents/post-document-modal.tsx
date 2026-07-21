@@ -4,8 +4,8 @@ import { Button, Card, ErrorState, Modal } from '@/components/ui';
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import { documentNumberLabel, documentPostingBlocker, documentTypeLabel } from './stock-document-rules';
 
-export function PostDocumentModal({ document, loading, error, simplified, onConfirm, onClose }: {
-  document: StockDocument; loading: boolean; error: string; simplified: boolean; onConfirm: () => void; onClose: () => void;
+export function PostDocumentModal({ document, loading, error, onConfirm, onClose }: {
+  document: StockDocument; loading: boolean; error: string; onConfirm: () => void; onClose: () => void;
 }) {
   const postingBlocker = documentPostingBlocker(document);
   const recipient = document.destinationResponsiblePerson
@@ -19,7 +19,7 @@ export function PostDocumentModal({ document, loading, error, simplified, onConf
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
-      <Card title={`Документ: ${documentNumberLabel(document.documentNumber, simplified)}`}>
+      <Card title={`Документ: ${documentNumberLabel(document.displayNumber)}`}>
         <dl className="grid grid-cols-[auto_1fr] gap-2">
           <dt>Тип</dt><dd className="font-semibold">{documentTypeLabel(document.type)}</dd>
           <dt>Відправник</dt><dd>{fullName(document.sourceResponsiblePerson)}</dd>

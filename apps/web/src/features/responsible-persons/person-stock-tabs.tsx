@@ -7,6 +7,7 @@ import { Button, Card, DataTable, ErrorState, StatusBadge } from '@/components/u
 import { getErrorMessage } from '@/components/common';
 import { transactionTypeLabel } from '@/features/inventory/transaction-model';
 import { StockDocumentStatusBadge } from '@/features/stock-documents/stock-document-status-badge';
+import { documentNumberLabel } from '@/features/stock-documents/stock-document-rules';
 import { formatQuantity } from '@/features/inventory/quantity-format';
 
 type PersonStockSection = 'direct' | 'assigned-out' | 'assigned-to-me';
@@ -85,5 +86,5 @@ export function PersonTransfersTab({ personId }: { personId: string }) {
   }, [personId]);
 
   if (error) return <ErrorState message={error} />;
-  return <DataTable ariaLabel="Останні передачі та видачі МВО" columns={[{ label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Статус' }]} emptyMessage="Передач і видач не знайдено." loading={loading} rows={documents.map((document) => [document.documentNumber, new Date(document.documentDate).toLocaleDateString('uk-UA'), document.type === 'ASSIGNMENT' ? <StatusBadge key="assignment" tone="info">Передача</StatusBadge> : <StatusBadge key="issue" tone="warning">Видача</StatusBadge>, document.sourceResponsiblePerson.fullName, document.destinationResponsiblePerson?.fullName ?? 'Зовнішній одержувач', <StockDocumentStatusBadge key="status" status={document.status} />])} />;
+  return <DataTable ariaLabel="Останні передачі та видачі МВО" columns={[{ label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Статус' }]} emptyMessage="Передач і видач не знайдено." loading={loading} rows={documents.map((document) => [documentNumberLabel(document.displayNumber), new Date(document.documentDate).toLocaleDateString('uk-UA'), document.type === 'ASSIGNMENT' ? <StatusBadge key="assignment" tone="info">Передача</StatusBadge> : <StatusBadge key="issue" tone="warning">Видача</StatusBadge>, document.sourceResponsiblePerson.fullName, document.destinationResponsiblePerson?.fullName ?? 'Зовнішній одержувач', <StockDocumentStatusBadge key="status" status={document.status} />])} />;
 }

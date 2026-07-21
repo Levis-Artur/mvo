@@ -60,6 +60,7 @@ const balanceInclude = {
 } satisfies Prisma.StockBalanceInclude;
 
 const transactionInclude = {
+  document: { select: { displayNumber: true } },
   responsiblePerson: {
     select: {
       id: true,
@@ -823,6 +824,7 @@ export class StockService {
     return documents.map((document) => ({
       id: document.id,
       documentNumber: document.documentNumber,
+      displayNumber: document.displayNumber,
       documentDate: document.documentDate,
       type: document.type,
       status: document.status,
@@ -920,8 +922,12 @@ export class StockService {
       include: typeof transactionInclude;
     }>,
   ) {
+    const { document, ...data } = transaction;
     return {
-      ...transaction,
+      ...data,
+      sourceDocument: document
+        ? `№ ${document.displayNumber}`
+        : transaction.sourceDocument,
       quantity: transaction.quantity.toString(),
       balanceBefore: transaction.balanceBefore.toString(),
       balanceAfter: transaction.balanceAfter.toString(),

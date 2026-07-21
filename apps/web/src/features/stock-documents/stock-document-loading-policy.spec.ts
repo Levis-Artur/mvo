@@ -63,8 +63,34 @@ describe('stock document lazy loading policy', () => {
     expect(view).toContain('<option value="CANCELLED">Скасовані</option>');
     expect(table).toContain("if (user.role === 'MVO')");
     expect(table).toContain("documentTypeLabel(document.type)");
-    expect(table).toContain("documentNumberLabel(document.documentNumber, true)");
+    expect(table).toContain('documentNumberLabel(document.displayNumber)');
     expect(details).toContain("user.role === 'MVO' ? [");
+  });
+
+  it('renders sequential numbers and a compact document table without exposing legacy identifiers', () => {
+    const table = readFileSync(join(__dirname, 'stock-documents-table.tsx'), 'utf8');
+    const form = readFileSync(join(__dirname, 'stock-document-form.tsx'), 'utf8');
+    const css = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
+
+    expect(table).toContain('documentNumberLabel(document.displayNumber)');
+    expect(table).not.toContain('>{document.documentNumber}<');
+    expect(table).toContain('className="stock-document-actions"');
+    expect(table).toContain('size="compact" title="Переглянути документ"');
+    expect(table).toContain('size="compact" title="Скасувати документ" variant="danger"');
+    expect(table).toContain('onClick={() => onView(document)}');
+    expect(table).toContain('onClick={() => onCancel(document)}');
+    expect(form).toContain('documentNumberLabel(document.displayNumber)');
+    expect(form).not.toContain('setDocumentNumber');
+
+    expect(css).toContain('.stock-documents-table--mvo { width: 100%; min-width: 1160px; table-layout: fixed; }');
+    expect(css).toContain('.stock-documents-table__date { width: 110px; white-space: nowrap; }');
+    expect(css).toContain('.stock-documents-table__type { width: 120px; white-space: nowrap; }');
+    expect(css).toContain('.stock-documents-table__number { width: 140px; white-space: nowrap;');
+    expect(css).toContain('.stock-documents-table__positions { width: 90px; white-space: nowrap; }');
+    expect(css).toContain('.stock-documents-table__quantity { width: 130px; white-space: nowrap;');
+    expect(css).toContain('.stock-documents-table__status { width: 140px; white-space: nowrap; }');
+    expect(css).toContain('.stock-documents-table__actions { width: 210px; white-space: nowrap; }');
+    expect(css).toContain('text-overflow: ellipsis; white-space: nowrap;');
   });
 
   it('hides dates behind additional filters and renders human success actions', () => {

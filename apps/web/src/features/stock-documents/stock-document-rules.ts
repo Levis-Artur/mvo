@@ -129,9 +129,8 @@ export function documentTypeLabel(type: StockDocumentType) {
   return 'Стара передача';
 }
 
-export function documentNumberLabel(documentNumber: string, simplified = false) {
-  const automatic = simplified ? documentNumber.match(/^MOV-([0-9A-F]{8})$/i) : null;
-  return automatic ? `№ ${automatic[1]}` : documentNumber;
+export function documentNumberLabel(displayNumber: number) {
+  return `№ ${displayNumber}`;
 }
 
 export function documentCounterparty(

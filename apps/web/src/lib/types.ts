@@ -241,6 +241,7 @@ export type StockDocumentLine = {
 export type StockDocument = {
   id: string;
   documentNumber: string;
+  displayNumber: number;
   documentDate: string;
   type: StockDocumentType;
   status: StockDocumentStatus;
@@ -362,6 +363,7 @@ export type CustodyBalanceView = {
 export type AccountingCardDocument = {
   id: string;
   documentNumber: string;
+  displayNumber: number;
   documentDate: string;
   type: StockDocumentType;
   status: StockDocumentStatus;

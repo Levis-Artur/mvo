@@ -380,6 +380,7 @@ model StockTransaction {
 model StockDocument {
   id                             String              @id @default(uuid()) @db.Uuid
   documentNumber                 String              @unique
+  displayNumber                  Int                 @unique @default(autoincrement())
   documentDate                   DateTime
   type                           StockDocumentType
   accountingModel                StockAccountingModel?

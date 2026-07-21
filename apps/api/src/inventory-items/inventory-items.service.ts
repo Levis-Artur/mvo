@@ -215,6 +215,7 @@ export class InventoryItemsService {
         this.prisma.stockTransaction.findMany({
           where: { inventoryItemId: id },
           include: {
+            document: { select: { displayNumber: true } },
             responsiblePerson: true,
             accountingOwnerResponsiblePerson: true,
             sourceCustodianResponsiblePerson: true,
@@ -249,6 +250,7 @@ export class InventoryItemsService {
       recentDocuments: recentDocuments.map((document) => ({
         id: document.id,
         documentNumber: document.documentNumber,
+        displayNumber: document.displayNumber,
         documentDate: document.documentDate,
         type: document.type,
         status: document.status,
@@ -263,28 +265,34 @@ export class InventoryItemsService {
           quantity: line.quantity.toString(),
         })),
       })),
-      recentTransactions: recentTransactions.map((transaction) => ({
-        ...transaction,
-        quantity: transaction.quantity.toString(),
-        balanceBefore: transaction.balanceBefore.toString(),
-        balanceAfter: transaction.balanceAfter.toString(),
-        responsiblePerson: this.personReference(transaction.responsiblePerson),
-        accountingOwner: transaction.accountingOwnerResponsiblePerson
-          ? this.personReference(transaction.accountingOwnerResponsiblePerson)
-          : null,
-        sourceCustodian: transaction.sourceCustodianResponsiblePerson
-          ? this.personReference(transaction.sourceCustodianResponsiblePerson)
-          : null,
-        destinationCustodian:
-          transaction.destinationCustodianResponsiblePerson
-            ? this.personReference(
-                transaction.destinationCustodianResponsiblePerson,
-              )
+      recentTransactions: recentTransactions.map((transaction) => {
+        const { document, ...data } = transaction;
+        return {
+          ...data,
+          sourceDocument: document
+            ? `№ ${document.displayNumber}`
+            : transaction.sourceDocument,
+          quantity: transaction.quantity.toString(),
+          balanceBefore: transaction.balanceBefore.toString(),
+          balanceAfter: transaction.balanceAfter.toString(),
+          responsiblePerson: this.personReference(transaction.responsiblePerson),
+          accountingOwner: transaction.accountingOwnerResponsiblePerson
+            ? this.personReference(transaction.accountingOwnerResponsiblePerson)
             : null,
-        accountingOwnerResponsiblePerson: undefined,
-        sourceCustodianResponsiblePerson: undefined,
-        destinationCustodianResponsiblePerson: undefined,
-      })),
+          sourceCustodian: transaction.sourceCustodianResponsiblePerson
+            ? this.personReference(transaction.sourceCustodianResponsiblePerson)
+            : null,
+          destinationCustodian:
+            transaction.destinationCustodianResponsiblePerson
+              ? this.personReference(
+                  transaction.destinationCustodianResponsiblePerson,
+                )
+              : null,
+          accountingOwnerResponsiblePerson: undefined,
+          sourceCustodianResponsiblePerson: undefined,
+          destinationCustodianResponsiblePerson: undefined,
+        };
+      }),
     };
   }
 

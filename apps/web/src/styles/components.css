@@ -84,8 +84,18 @@
 .my-stock-table__date { width: 120px; white-space: nowrap; }
 .my-stock-table__actions { width: 210px; white-space: nowrap; }
 .my-stock-actions { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: var(--space-2); white-space: nowrap; }
-.stock-documents-table--mvo { min-width: 980px; }
-.stock-documents-table__person { min-width: 220px; overflow-wrap: break-word; word-break: normal; }
+.stock-documents-table--mvo { width: 100%; min-width: 1160px; table-layout: fixed; }
+.stock-documents-table--mvo th, .stock-documents-table--mvo td { height: 48px; padding: 0.35rem 0.5rem; vertical-align: middle; }
+.stock-documents-table__date { width: 110px; white-space: nowrap; }
+.stock-documents-table__type { width: 120px; white-space: nowrap; }
+.stock-documents-table__number { width: 140px; white-space: nowrap; font-weight: 750; }
+.stock-documents-table__person { min-width: 0; overflow: hidden; }
+.stock-documents-table__person-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-documents-table__positions { width: 90px; white-space: nowrap; }
+.stock-documents-table__quantity { width: 130px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stock-documents-table__status { width: 140px; white-space: nowrap; }
+.stock-documents-table__actions { width: 210px; white-space: nowrap; }
+.stock-document-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-1) var(--space-2); }
 .stock-document-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-2); margin: 0 0 var(--space-4); padding: 0; list-style: none; }
 .stock-document-steps--assignment { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stock-document-steps li { display: flex; min-width: 0; align-items: center; gap: var(--space-2); border: 1px solid var(--color-border-light); border-radius: var(--radius-sm); background: var(--color-surface-muted); padding: var(--space-2); color: var(--color-text-secondary); font-size: var(--text-xs); font-weight: 650; }

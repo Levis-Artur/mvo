@@ -6,6 +6,7 @@ import { Button, Card, DataTable, ErrorState, LoadingState, Modal, StatusBadge }
 import { getErrorMessage } from '@/components/common';
 import { inventoryService } from './inventory.service';
 import { formatQuantity } from './quantity-format';
+import { documentNumberLabel } from '@/features/stock-documents/stock-document-rules';
 import { transactionTypeLabel } from './transaction-model';
 
 type CardTab = 'distribution' | 'documents' | 'transactions';
@@ -71,7 +72,7 @@ export function InventoryItemDetailsModal({ item, canEdit, onClose, onEdit }: {
           <Tab active={tab === 'transactions'} label="Історія операцій" onClick={() => setTab('transactions')} />
         </nav>
         {tab === 'distribution' ? <DistributionTable card={card} /> : null}
-        {tab === 'documents' ? <DataTable ariaLabel="Документи номенклатури" columns={[{ label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Статус' }, { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Кількість', numeric: true }]} emptyMessage="Документів немає." rows={card.recentDocuments.map((document) => [document.documentNumber, new Date(document.documentDate).toLocaleDateString('uk-UA'), document.type === 'ASSIGNMENT' ? 'Передача' : document.type === 'TRANSFER' ? 'Стара логіка' : 'Видача', document.status, document.sourceResponsiblePerson.fullName, document.destinationResponsiblePerson?.fullName ?? '—', formatQuantity(document.lines[0]?.quantity ?? '0')])} /> : null}
+        {tab === 'documents' ? <DataTable ariaLabel="Документи номенклатури" columns={[{ label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Статус' }, { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Кількість', numeric: true }]} emptyMessage="Документів немає." rows={card.recentDocuments.map((document) => [documentNumberLabel(document.displayNumber), new Date(document.documentDate).toLocaleDateString('uk-UA'), document.type === 'ASSIGNMENT' ? 'Передача' : document.type === 'TRANSFER' ? 'Стара логіка' : 'Видача', document.status, document.sourceResponsiblePerson.fullName, document.destinationResponsiblePerson?.fullName ?? '—', formatQuantity(document.lines[0]?.quantity ?? '0')])} /> : null}
         {tab === 'transactions' ? <DataTable ariaLabel="Історія операцій номенклатури" columns={[{ label: 'Дата' }, { label: 'Тип' }, { label: 'Bucket' }, { label: 'Обліковий власник' }, { label: 'Від кого' }, { label: 'Кому' }, { label: 'Кількість', numeric: true }]} emptyMessage="Операцій немає." rows={card.recentTransactions.map((transaction) => [new Date(transaction.occurredAt).toLocaleString('uk-UA'), transactionTypeLabel(transaction.type), transaction.bucketKind ?? 'LEGACY', transaction.accountingOwner?.fullName ?? transaction.responsiblePerson.fullName, transaction.sourceCustodian?.fullName ?? '—', transaction.destinationCustodian?.fullName ?? '—', formatQuantity(transaction.quantity)])} /> : null}
       </> : null}
     </div>

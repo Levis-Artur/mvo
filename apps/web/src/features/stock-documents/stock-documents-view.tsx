@@ -145,9 +145,9 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onEdit={() => void controller.openEdit(controller.selected!)}
       onPost={() => controller.openConfirmation('post', controller.selected!)}
     /> : null}
-    {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}
-    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('cancel')} /> : null}
-    {controller.selected && controller.confirming === 'remove' ? <DeleteDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('remove')} /> : null}
+    {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}
+    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('cancel')} /> : null}
+    {controller.selected && controller.confirming === 'remove' ? <DeleteDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('remove')} /> : null}
     {controller.success ? <DocumentSuccessModal
       document={controller.success.document}
       mode={controller.success.mode}

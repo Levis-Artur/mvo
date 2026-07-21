@@ -29,7 +29,7 @@ export function DocumentSuccessModal({ document, mode, onView, onReturn }: {
           <Detail label="Кількість позицій">{document.totalPositions}</Detail>
           <Detail label="Загальна кількість одиниць">{formatQuantity(document.totalQuantity)}</Detail>
           <Detail label={document.type === 'ISSUE' ? 'Кому видано' : 'Кому передано'}>{recipient}</Detail>
-          <Detail label="Номер документа">{documentNumberLabel(document.documentNumber, true)}</Detail>
+          <Detail label="Номер документа">{documentNumberLabel(document.displayNumber)}</Detail>
           {document.type === 'ISSUE' ? <Detail label="Накладна"><StatusBadge tone={document.attachments.length ? 'success' : 'warning'}>{document.attachments.length ? 'Прикріплена' : 'Не прикріплена'}</StatusBadge></Detail> : null}
         </dl>
       </Card>

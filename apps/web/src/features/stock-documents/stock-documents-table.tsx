@@ -25,10 +25,14 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
     return <DataTable
       ariaLabel="Мої передачі та видачі"
       columns={[
-        { label: 'Дата' }, { label: 'Тип' }, { label: 'Номер' },
+        { label: 'Дата', className: 'stock-documents-table__date' },
+        { label: 'Тип', className: 'stock-documents-table__type' },
+        { label: 'Номер', className: 'stock-documents-table__number' },
         { label: 'Кому або від кого', className: 'stock-documents-table__person' },
-        { label: 'Позицій', numeric: true }, { label: 'Загальна кількість', numeric: true },
-        { label: 'Статус' }, { label: 'Дії', actions: true },
+        { label: 'Позицій', className: 'stock-documents-table__positions', numeric: true },
+        { label: 'Загальна кількість', className: 'stock-documents-table__quantity', numeric: true },
+        { label: 'Статус', className: 'stock-documents-table__status' },
+        { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
       ]}
       emptyMessage="Передач і видач поки немає."
       loading={loading}
@@ -38,8 +42,8 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         return [
           new Date(document.documentDate).toLocaleDateString('uk-UA'),
           <StatusBadge key="type" tone={document.type === 'ISSUE' ? 'warning' : document.type === 'TRANSFER' ? 'neutral' : 'info'}>{documentTypeLabel(document.type)}</StatusBadge>,
-          <Button key="number" variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.documentNumber, true)}</Button>,
-          documentCounterparty(document, user),
+          <Button key="number" size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>,
+          <span className="stock-documents-table__person-text" key="counterparty" title={documentCounterparty(document, user)}>{documentCounterparty(document, user)}</span>,
           document.totalPositions,
           formatQuantity(document.totalQuantity),
           <StockDocumentStatusBadge key="status" status={document.status} />,
@@ -51,10 +55,10 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
   return <DataTable
     ariaLabel="Список документів передачі та видачі"
     columns={[
-      { label: 'Номер' }, { label: 'Дата' }, { label: 'Тип' }, { label: 'Статус' },
+      { label: 'Номер', className: 'stock-documents-table__number' }, { label: 'Дата', className: 'stock-documents-table__date' }, { label: 'Тип' }, { label: 'Статус' },
       { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Позицій', numeric: true },
       { label: 'Загальна кількість', numeric: true }, { label: 'Автор' },
-      { label: 'Проведення' }, { label: 'Дії', actions: true },
+      { label: 'Проведення' }, { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
     ]}
     emptyMessage="Документи за вказаними фільтрами не знайдено."
     loading={loading}
@@ -65,7 +69,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         ? fullName(document.destinationResponsiblePerson)
         : document.recipientName ?? '—';
       return [
-        <Button key="number" variant="link" type="button" onClick={() => onView(document)}>{document.documentNumber}</Button>,
+        <Button key="number" size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>,
         new Date(document.documentDate).toLocaleDateString('uk-UA'),
         <StatusBadge key="direction" tone={direction.tone}>{direction.label}</StatusBadge>,
         <StockDocumentStatusBadge key="status" status={document.status} />,
@@ -92,11 +96,11 @@ function DocumentActions({ actions, document, onView, onEdit, onPost, onCancel, 
   onCancel: (document: StockDocument) => void;
   onRemove: (document: StockDocument) => void;
 }) {
-  return <div className="flex flex-wrap justify-end gap-1">
-    <Button variant="ghost" type="button" onClick={() => onView(document)}>Переглянути</Button>
-    {actions.edit ? <Button variant="ghost" type="button" onClick={() => onEdit(document)}>Редагувати</Button> : null}
-    {actions.post ? <Button type="button" onClick={() => onPost(document)}>Провести</Button> : null}
-    {actions.cancel ? <Button variant="danger" type="button" onClick={() => onCancel(document)}>Скасувати</Button> : null}
-    {actions.remove ? <Button variant="danger" type="button" onClick={() => onRemove(document)}>Видалити</Button> : null}
+  return <div className="stock-document-actions">
+    <Button aria-label={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} size="compact" title="Переглянути документ" variant="outline" type="button" onClick={() => onView(document)}>Переглянути</Button>
+    {actions.edit ? <Button size="compact" title="Редагувати чернетку" variant="outline" type="button" onClick={() => onEdit(document)}>Редагувати</Button> : null}
+    {actions.post ? <Button size="compact" title="Провести документ" type="button" onClick={() => onPost(document)}>Провести</Button> : null}
+    {actions.cancel ? <Button size="compact" title="Скасувати документ" variant="danger" type="button" onClick={() => onCancel(document)}>Скасувати</Button> : null}
+    {actions.remove ? <Button size="compact" title="Видалити чернетку" variant="danger" type="button" onClick={() => onRemove(document)}>Видалити</Button> : null}
   </div>;
 }

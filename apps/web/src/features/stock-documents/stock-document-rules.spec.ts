@@ -137,12 +137,12 @@ describe('stock document frontend rules', () => {
     expect(documentStatusPresentation('CANCELLED').tone).toBe('neutral');
   });
 
-  it('не показує MVO технічні типи та автоматичні MOV-ідентифікатори', () => {
+  it('не показує технічні типи та формує послідовний номер документа', () => {
     expect(documentTypeLabel('ASSIGNMENT')).toBe('Передача');
     expect(documentTypeLabel('ISSUE')).toBe('Видача');
     expect(documentTypeLabel('TRANSFER')).toBe('Стара передача');
-    expect(documentNumberLabel('MOV-12AB34CD', true)).toBe('№ 12AB34CD');
-    expect(documentNumberLabel('НАК-42', true)).toBe('НАК-42');
+    expect(documentNumberLabel(1)).toBe('№ 1');
+    expect(documentNumberLabel(42)).toBe('№ 42');
   });
 
   it('формує людський підсумок успішної передачі', () => {

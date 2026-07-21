@@ -78,6 +78,7 @@ function document(
   return {
     id: 'document-id',
     documentNumber: 'MOV-1',
+    displayNumber: 1,
     documentDate: new Date(),
     type,
     accountingModel,
@@ -304,7 +305,9 @@ describe('StockDocumentsService', () => {
     };
     prisma.stockDocument.create.mockResolvedValue(value);
 
-    await service.create(dto, owner, {});
+    const created = await service.create(dto, owner, {});
+
+    expect(created.displayNumber).toBe(1);
 
     expect(prisma.stockDocument.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -321,6 +324,8 @@ describe('StockDocumentsService', () => {
         }),
       }),
     );
+    expect(prisma.stockDocument.create.mock.calls[0][0].data)
+      .not.toHaveProperty('displayNumber');
 
     prisma.stockDocument.findUnique.mockResolvedValue(value);
     tx.stockDocument.update.mockResolvedValue(value);

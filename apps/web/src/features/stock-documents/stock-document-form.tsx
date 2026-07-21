@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import type { StockDocumentInput } from '@/lib/types';
 import {
+  documentNumberLabel,
   documentRecipientMode,
   filterRecipientOptions,
   personOptionLabel,
@@ -43,7 +44,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     user,
     document?.sourceResponsiblePersonId ?? initialSourceId,
   );
-  const [documentNumber, setDocumentNumber] = useState(document?.documentNumber ?? '');
   const [documentDate, setDocumentDate] = useState((document?.documentDate ?? new Date().toISOString()).slice(0, 10));
   const [sourceId, setSourceId] = useState(initialSource);
   const [destinationId, setDestinationId] = useState(document?.destinationResponsiblePersonId ?? '');
@@ -111,7 +111,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     event.preventDefault();
     const input: StockDocumentInput = {
       type,
-      documentNumber: documentNumber.trim() || undefined,
       documentDate: new Date(`${documentDate}T00:00:00.000Z`).toISOString(),
       sourceResponsiblePersonId: resolveSourceId(user, sourceId),
       destinationResponsiblePersonId: recipientMode === 'MVO' ? destinationId : undefined,
@@ -198,7 +197,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     <form className="grid min-w-0 gap-4 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.7fr)]" id="stock-document-form" onSubmit={submit}>
       <Card title={simplified ? (type === 'ASSIGNMENT' ? 'Кому передаємо' : 'Кому видаємо') : 'Основні дані'}>
         <div className="grid gap-3">
-          <FormField label="Номер" hint="Якщо не вказати, номер сформує сервер."><Input value={documentNumber} onChange={(event) => { setDocumentNumber(event.target.value); setDirty(true); }} /></FormField>
+          <FormField label="Номер" hint={document ? 'Номер присвоєно під час створення документа.' : 'Наступний номер буде присвоєно під час збереження чернетки.'}><Input readOnly value={document ? documentNumberLabel(document.displayNumber) : 'Буде присвоєно автоматично'} /></FormField>
           <FormField label="Дата" required><Input required type="date" value={documentDate} onChange={(event) => { setDocumentDate(event.target.value); setDirty(true); }} /></FormField>
           <FormField label="МВО-відправник" hint={simplified ? 'Відправником автоматично є ваша картка МВО.' : undefined} required>
             {user.role === 'MVO' ? (

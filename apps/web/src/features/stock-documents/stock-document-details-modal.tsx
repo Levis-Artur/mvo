@@ -31,7 +31,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
     </>}
     onClose={onClose}
     size="large"
-    title={`Документ: ${documentNumberLabel(document.documentNumber, user.role === 'MVO')}`}
+    title={`Документ: ${documentNumberLabel(document.displayNumber)}`}
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}

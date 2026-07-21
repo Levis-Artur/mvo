@@ -123,7 +123,7 @@ export function useStockDocumentsController(user: AuthUser) {
     const needle = appliedFilters.search.trim().toLocaleLowerCase('uk-UA');
     if (!needle) return documents;
     return documents.filter((document) =>
-      [document.documentNumber, document.recipientName, document.recipientUnit,
+      [String(document.displayNumber), document.recipientName, document.recipientUnit,
         document.sourceResponsiblePerson.lastName, document.destinationResponsiblePerson?.lastName]
         .filter(Boolean).some((value) => value!.toLocaleLowerCase('uk-UA').includes(needle)),
     );
