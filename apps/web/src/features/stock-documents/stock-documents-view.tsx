@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
 import { fullName } from '@/components/common/formatters';
 import { PageHeader } from '@/components/layout/page-header';
@@ -22,6 +23,7 @@ import { StockDocumentDetailsModal } from './stock-document-details-modal';
 import { StockDocumentForm } from './stock-document-form';
 import { StockDocumentsTable } from './stock-documents-table';
 import { DEFAULT_DOCUMENT_FILTERS, useStockDocumentsController } from './use-stock-documents-controller';
+import { DocumentSuccessModal } from './document-success-modal';
 
 export function StockDocumentsView() {
   const { user } = useAuth();
@@ -31,6 +33,8 @@ export function StockDocumentsView() {
 
 function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
   const controller = useStockDocumentsController(user);
+  const router = useRouter();
+  const [advancedFilters, setAdvancedFilters] = useState(false);
   const writable = canChangeStockDocuments(user);
   const globalPersonFilters = canUseGlobalResponsiblePersonFilters(user.role);
   const quickActionHandled = useRef(false);
@@ -40,7 +44,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     quickActionHandled.current = true;
     const action = parseStockDocumentQuickAction(window.location.search);
     if (!action) return;
-    controller.openCreate(action.type, action.sourceResponsiblePersonId, action.sourceBalanceId);
+    controller.openCreate(action.type, action.sourceResponsiblePersonId, action.sourceBalanceId, action.sourceKind);
   }, [controller, writable]);
 
   return <section className="grid min-w-0 gap-4">
@@ -50,23 +54,23 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
           <Button icon="transfer" type="button" onClick={() => controller.openCreate('ASSIGNMENT')}>Нова передача</Button>
           <Button variant="outline" type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button>
         </> : null}
-        <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button>
+        {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}
       description="Документи передачі майна між МВО та видачі зовнішнім одержувачам."
       icon="transfer"
       title="Передачі та видачі"
     />
     <FilterBar
-      dateFrom={controller.draftFilters.dateFrom}
-      dateTo={controller.draftFilters.dateTo}
+      dateFrom={user.role !== 'MVO' || advancedFilters ? controller.draftFilters.dateFrom : undefined}
+      dateTo={user.role !== 'MVO' || advancedFilters ? controller.draftFilters.dateTo : undefined}
       loading={controller.loading}
       search={controller.draftFilters.search}
       onApply={() => {
         controller.setPage(1);
         controller.setAppliedFilters(controller.draftFilters);
       }}
-      onDateFromChange={(dateFrom) => controller.setDraftFilters((current) => ({ ...current, dateFrom }))}
-      onDateToChange={(dateTo) => controller.setDraftFilters((current) => ({ ...current, dateTo }))}
+      onDateFromChange={user.role !== 'MVO' || advancedFilters ? (dateFrom) => controller.setDraftFilters((current) => ({ ...current, dateFrom })) : undefined}
+      onDateToChange={user.role !== 'MVO' || advancedFilters ? (dateTo) => controller.setDraftFilters((current) => ({ ...current, dateTo })) : undefined}
       onRefresh={() => void controller.load()}
       onReset={() => {
         controller.setDraftFilters(DEFAULT_DOCUMENT_FILTERS);
@@ -76,11 +80,12 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onSearchChange={(search) => controller.setDraftFilters((current) => ({ ...current, search }))}
     >
       <FilterField label="Тип"><Select value={controller.draftFilters.type} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, type: event.target.value as typeof current.type }))}>
-        <option value="">Усі типи</option><option value="ASSIGNMENT">Передача</option><option value="ISSUE">Видача</option><option value="TRANSFER">Legacy transfer</option>
+        <option value="">Усі типи</option><option value="ASSIGNMENT">Передача</option><option value="ISSUE">Видача</option><option value="TRANSFER">Стара передача</option>
       </Select></FilterField>
       <FilterField label="Статус"><Select value={controller.draftFilters.status} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, status: event.target.value as typeof current.status }))}>
-        <option value="">Усі статуси</option><option value="DRAFT">DRAFT</option><option value="POSTED">POSTED</option><option value="CANCELLED">CANCELLED</option>
+        <option value="">Усі статуси</option><option value="DRAFT">Чернетки</option><option value="POSTED">Проведені</option><option value="CANCELLED">Скасовані</option>
       </Select></FilterField>
+      {user.role === 'MVO' ? <Button aria-expanded={advancedFilters} variant="outline" type="button" onClick={() => setAdvancedFilters((current) => !current)}>Додаткові фільтри</Button> : null}
       {globalPersonFilters ? <><FilterField label="Відправник"><Select value={controller.draftFilters.sourceId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, sourceId: event.target.value }))}>
         <option value="">Усі відправники</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
       </Select></FilterField>
@@ -114,6 +119,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       error={controller.actionError}
       initialSourceId={controller.formSourceId}
       initialSourceBalanceId={controller.initialSourceBalanceId}
+      initialSourceKind={controller.initialSourceKind}
       loadingSources={controller.loadingSources}
       loadingTargets={controller.loadingTargets}
       persons={controller.persons}
@@ -128,7 +134,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onSourceChange={controller.loadSources}
       onSubmit={controller.save}
     /> : null}
-    {controller.selected && !controller.confirming && !controller.formType ? <StockDocumentDetailsModal
+    {controller.selected && !controller.confirming && !controller.formType && !controller.success ? <StockDocumentDetailsModal
       document={controller.selected}
       error={controller.actionError}
       loading={controller.actionLoading}
@@ -139,9 +145,15 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onEdit={() => void controller.openEdit(controller.selected!)}
       onPost={() => controller.openConfirmation('post', controller.selected!)}
     /> : null}
-    {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}
-    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('cancel')} /> : null}
-    {controller.selected && controller.confirming === 'remove' ? <DeleteDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('remove')} /> : null}
+    {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}
+    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('cancel')} /> : null}
+    {controller.selected && controller.confirming === 'remove' ? <DeleteDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} simplified={user.role === 'MVO'} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('remove')} /> : null}
+    {controller.success ? <DocumentSuccessModal
+      document={controller.success.document}
+      mode={controller.success.mode}
+      onReturn={() => { controller.setSuccess(null); controller.setSelected(null); router.push('/my-stock'); }}
+      onView={() => controller.setSuccess(null)}
+    /> : null}
     {controller.toast ? <Toast message={controller.toast} onClose={() => controller.setToast('')} /> : null}
   </section>;
 }

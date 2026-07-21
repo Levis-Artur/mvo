@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
-import { STOCK_READ_ROLES } from '../auth/access-policy';
+import { STOCK_READ_ROLES, TRANSACTION_READ_ROLES } from '../auth/access-policy';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { ManualReceiptDto } from './dto/manual-receipt.dto';
@@ -68,6 +68,7 @@ export class StockController {
   }
 
   @Get('stock-transactions')
+  @Roles(...TRANSACTION_READ_ROLES)
   listTransactions(
     @Query() query: ListStockTransactionsQueryDto,
     @CurrentUserParam() user: CurrentUser,
@@ -76,6 +77,7 @@ export class StockController {
   }
 
   @Get('stock-transactions/:id')
+  @Roles(...TRANSACTION_READ_ROLES)
   findTransaction(
     @Param('id') id: string,
     @CurrentUserParam() user: CurrentUser,

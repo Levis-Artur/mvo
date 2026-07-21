@@ -1,6 +1,8 @@
 import { APP_SHELL_REGIONS } from './app-shell-model';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { isNavigationActive } from './navigation-model';
-import { can, getNavigationItems } from '../../lib/authz';
+import { can, getAccessRedirectPath, getNavigationItems } from '../../lib/authz';
 import type { AuthUser } from '../../lib/types';
 
 const user = (role: AuthUser['role']) => ({ id: role, username: role, role, isActive: true, mustChangePassword: false, responsiblePersonId: role === 'MVO' ? 'person-1' : null }) as AuthUser;
@@ -43,7 +45,10 @@ describe('AppShell presentation model', () => {
       '/transfers', '/profile',
     ]);
     expect(paths('MVO')).toEqual([
-      '/my-card', '/my-stock', '/my-transactions', '/transfers', '/profile',
+      '/my-stock', '/transfers', '/profile',
+    ]);
+    expect(getNavigationItems(user('MVO')).map((item) => item.label)).toEqual([
+      'Моє майно', 'Передачі та видачі', 'Профіль',
     ]);
   });
 
@@ -61,5 +66,24 @@ describe('AppShell presentation model', () => {
     expect(can(auditor, 'write', 'stockDocuments')).toBe(false);
     expect(can(auditor, 'write', 'imports')).toBe(false);
     expect(getNavigationItems(user('MVO')).some((item) => item.resource === 'users')).toBe(false);
+  });
+
+  it('перенаправляє MVO зі старого журналу до документів', () => {
+    expect(getAccessRedirectPath(user('MVO'), 'my-transactions')).toBe('/transfers');
+    expect(getAccessRedirectPath(user('OWNER'), 'my-transactions')).toBe('/');
+  });
+
+  it('відкриває MVO моє майно за замовчуванням і перенаправляє стару картку у профіль', () => {
+    expect(getAccessRedirectPath(user('MVO'), 'my-card')).toBe('/profile');
+    expect(getAccessRedirectPath(user('MVO'), 'home')).toBe('/my-stock');
+  });
+
+  it('не монтує технічний журнал під час завантаження MVO AppShell', () => {
+    const app = readFileSync(join(__dirname, '../../app/ui/mvo-app.tsx'), 'utf8');
+    const views = readFileSync(join(__dirname, '../../features/responsible-persons/my-views.tsx'), 'utf8');
+    expect(app).not.toContain('MyTransactionsView');
+    expect(app).not.toContain('MyCardView');
+    expect(views).not.toContain('PersonOperationsTab');
+    expect(views).not.toContain('getResponsiblePersonStockTransactions');
   });
 });

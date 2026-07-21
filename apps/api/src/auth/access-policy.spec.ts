@@ -6,6 +6,7 @@ import {
   STOCK_DOCUMENT_READ_ROLES,
   STOCK_READ_ROLES,
   TRANSFER_TARGET_READ_ROLES,
+  TRANSACTION_READ_ROLES,
 } from './access-policy';
 
 describe('ACCOUNTANT access policy', () => {
@@ -25,6 +26,10 @@ describe('ACCOUNTANT access policy', () => {
     expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.AUDITOR);
     expect(hasCapability(UserRole.MVO, 'REFERENCE_DATA_READ')).toBe(false);
     expect(hasCapability(UserRole.MVO, 'MVO_SCOPED_ACCESS')).toBe(true);
+    expect(TRANSACTION_READ_ROLES).not.toContain(UserRole.MVO);
+    expect(TRANSACTION_READ_ROLES).toEqual(expect.arrayContaining([
+      UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR,
+    ]));
   });
 
   it('does not grant MVO, document-write, user or destructive permissions', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getErrorMessage } from '@/components/common/formatters';
+import { getErrorMessage, getMvoErrorMessage } from '@/components/common/formatters';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import type {
   AuthUser,
@@ -20,6 +20,7 @@ import {
   shouldLoadGlobalResponsiblePersons,
 } from './stock-document-loading-policy';
 import { loadTransferTargets } from './transfer-targets';
+import { successfulDocumentActionMessage } from './stock-document-rules';
 
 export type DocumentFilters = {
   search: string;
@@ -37,6 +38,7 @@ export const DEFAULT_DOCUMENT_FILTERS: DocumentFilters = {
 const emptyPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 0 };
 
 export function useStockDocumentsController(user: AuthUser) {
+  const errorMessage = user.role === 'MVO' ? getMvoErrorMessage : getErrorMessage;
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
@@ -50,6 +52,7 @@ export function useStockDocumentsController(user: AuthUser) {
   const [formType, setFormType] = useState<StockDocumentType | null>(null);
   const [formSourceId, setFormSourceId] = useState('');
   const [initialSourceBalanceId, setInitialSourceBalanceId] = useState('');
+  const [initialSourceKind, setInitialSourceKind] = useState<'DIRECT' | 'ASSIGNED' | undefined>();
   const [editing, setEditing] = useState<StockDocument | null>(null);
   const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,6 +66,7 @@ export function useStockDocumentsController(user: AuthUser) {
   const [sourcesError, setSourcesError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState('');
+  const [success, setSuccess] = useState<{ document: StockDocument; mode: 'draft' | 'post' } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -79,11 +83,11 @@ export function useStockDocumentsController(user: AuthUser) {
       });
       setDocuments(response.items); setPagination(response.pagination);
     } catch (reason) {
-      setError(getErrorMessage(reason));
+      setError(errorMessage(reason));
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, limit, page, user.role]);
+  }, [appliedFilters, errorMessage, limit, page, user.role]);
 
   const loadReferences = useCallback(async () => {
     setPersonsError('');
@@ -96,9 +100,9 @@ export function useStockDocumentsController(user: AuthUser) {
         stockDocumentsService.persons({ ...pagination, isActive: true }),
       ));
     } catch (reason) {
-      setPersonsError(`Не вдалося завантажити список МВО: ${getErrorMessage(reason)}`);
+      setPersonsError(`Не вдалося завантажити список МВО: ${errorMessage(reason)}`);
     }
-  }, [user.role]);
+  }, [errorMessage, user.role]);
 
   const loadTargets = useCallback(async () => {
     setTargetsError(''); setLoadingTargets(true);
@@ -106,11 +110,11 @@ export function useStockDocumentsController(user: AuthUser) {
       setTransferTargets(await loadTransferTargets(stockDocumentsService.transferTargets));
     } catch (reason) {
       setTransferTargets([]);
-      setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${getErrorMessage(reason)}`);
+      setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${errorMessage(reason)}`);
     } finally {
       setLoadingTargets(false);
     }
-  }, []);
+  }, [errorMessage]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadReferences(); }, [loadReferences]);
@@ -166,17 +170,18 @@ export function useStockDocumentsController(user: AuthUser) {
         ]);
       }
     } catch (reason) {
-      setSourcesError(`Не вдалося завантажити майно, доступне фактичному утримувачу: ${getErrorMessage(reason)}`);
+      setSourcesError(`Не вдалося завантажити доступне майно: ${errorMessage(reason)}`);
     } finally {
       setLoadingSources(false);
     }
   }
 
-  function openCreate(nextType: StockDocumentType, requestedSourceId = '', requestedBalanceId = '') {
-    setActionError(''); setEditing(null); setSelected(null);
+  function openCreate(nextType: StockDocumentType, requestedSourceId = '', requestedBalanceId = '', requestedSourceKind?: 'DIRECT' | 'ASSIGNED') {
+    setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : requestedSourceId;
     setFormSourceId(source); setFormType(nextType);
     setInitialSourceBalanceId(requestedBalanceId);
+    setInitialSourceKind(requestedSourceKind);
     const policy = formLoadPolicy(nextType);
     if (policy.transferTargets) void loadTargets();
     else { setTransferTargets([]); setTargetsError(''); }
@@ -184,14 +189,15 @@ export function useStockDocumentsController(user: AuthUser) {
   }
 
   async function openDetails(document: StockDocument) {
-    setActionError(''); setConfirming(null);
+    setActionError(''); setConfirming(null); setSuccess(null);
     try { setSelected(await stockDocumentsService.findOne(document.id)); }
-    catch (reason) { setError(getErrorMessage(reason)); }
+    catch (reason) { setError(errorMessage(reason)); }
   }
 
   async function openEdit(document: StockDocument) {
     setSelected(null); setEditing(document); setFormSourceId(document.sourceResponsiblePersonId);
     setInitialSourceBalanceId('');
+    setInitialSourceKind(undefined);
     setFormType(document.type); setActionError('');
     await Promise.all([
       loadSources(document.sourceResponsiblePersonId),
@@ -215,10 +221,10 @@ export function useStockDocumentsController(user: AuthUser) {
         setEditing(result);
       }
       setFormType(null); setEditing(null); setSelected(result);
-      setToast('Чернетку успішно збережено');
+      setSuccess({ document: result, mode: 'draft' });
       await load();
     } catch (reason) {
-      setActionError(getErrorMessage(reason));
+      setActionError(errorMessage(reason));
       if (savedDocument) {
         try {
           setEditing(await stockDocumentsService.findOne(savedDocument.id));
@@ -238,7 +244,7 @@ export function useStockDocumentsController(user: AuthUser) {
       await stockDocumentsService.removeAttachment(editing.id, attachmentId);
       setEditing(await stockDocumentsService.findOne(editing.id));
     } catch (reason) {
-      setActionError(getErrorMessage(reason));
+      setActionError(errorMessage(reason));
     } finally {
       setSaving(false);
     }
@@ -254,7 +260,8 @@ export function useStockDocumentsController(user: AuthUser) {
       } else {
         const result = await stockDocumentsService[action](selected.id);
         setSelected(result);
-        setToast(action === 'post' ? 'Документ успішно проведено' : 'Документ скасовано');
+        if (action === 'post') setSuccess({ document: result, mode: 'post' });
+        else setToast(successfulDocumentActionMessage(result, action));
       }
       setConfirming(null);
       await load();
@@ -263,7 +270,7 @@ export function useStockDocumentsController(user: AuthUser) {
       window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
       window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
     } catch (reason) {
-      setActionError(getErrorMessage(reason));
+      setActionError(errorMessage(reason));
     } finally {
       setActionLoading(false);
     }
@@ -280,9 +287,9 @@ export function useStockDocumentsController(user: AuthUser) {
   return {
     documents: filteredDocuments, persons, transferTargets, availableSources, pagination,
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
-    selected, setSelected, formType, setFormType, formSourceId, initialSourceBalanceId, editing,
+    selected, setSelected, formType, setFormType, formSourceId, initialSourceBalanceId, initialSourceKind, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
-    actionLoading, error, personsError, targetsError, sourcesError, actionError, toast, setToast,
+    actionLoading, error, personsError, targetsError, sourcesError, actionError, toast, setToast, success, setSuccess,
     load, loadReferences, loadTargets, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,
     openConfirmation, closeConfirmation,
   };

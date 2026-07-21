@@ -35,4 +35,13 @@ describe('stock route role metadata', () => {
       expect.arrayContaining([UserRole.ACCOUNTANT, UserRole.AUDITOR]),
     );
   });
+
+  it('keeps the technical transaction journal closed to MVO', () => {
+    expect(roles(StockController.prototype.listTransactions)).not.toContain(UserRole.MVO);
+    expect(roles(StockController.prototype.findTransaction)).not.toContain(UserRole.MVO);
+    expect(roles(ResponsiblePersonsController.prototype.stockTransactions)).not.toContain(UserRole.MVO);
+    expect(roles(StockController.prototype.listTransactions)).toEqual(
+      expect.arrayContaining([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR]),
+    );
+  });
 });

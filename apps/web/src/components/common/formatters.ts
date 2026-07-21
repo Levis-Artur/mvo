@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api-client';
+import { ApiError } from '../../lib/api-client';
 import type { CreateResponsiblePersonDto, ImportType, ResponsiblePerson, UserSummary } from '@/lib/types';
 
 export function importTypeLabel(type: ImportType) {
@@ -41,6 +41,31 @@ export function getErrorMessage(reason: unknown) {
     return reason.message;
   }
   return 'Не вдалося виконати запит. Перевірте з’єднання із сервером.';
+}
+
+export function getMvoErrorMessage(reason: unknown) {
+  const message = getErrorMessage(reason);
+  const normalized = message.toLocaleLowerCase('uk-UA');
+
+  if ((reason instanceof ApiError && reason.status === 403) || /forbidden|доступ заборонено/.test(normalized)) {
+    return 'Ви не маєте доступу до цієї операції.';
+  }
+  if (/limit must not be greater than 100|limit.*100/.test(normalized)) {
+    return 'Не вдалося завантажити дані. Натисніть «Оновити».';
+  }
+  if (/source balance not found|invalid sourcekind|assigned bucket unavailable|record not found/.test(normalized)) {
+    return 'Ця позиція вже була змінена. Оновіть список і повторіть спробу.';
+  }
+  if (/insufficient|недостатн|exceed.*available|перевищ.*залиш/.test(normalized)) {
+    return 'Недостатньо майна для цієї операції.';
+  }
+  if (/file.*too large|payload too large|maximum.*size|перевищ.*розмір/.test(normalized)) {
+    return 'Файл накладної перевищує допустимий розмір.';
+  }
+  if (/attachment.*required|photo.*required|потрібно додати.*фото|без.*вкладенн/.test(normalized)) {
+    return 'Спочатку додайте фото або PDF накладної.';
+  }
+  return message;
 }
 
 export { ApiError };

@@ -10,15 +10,19 @@ import {
   canChangeStockDocuments,
   documentActionState,
   documentDirection,
+  documentNumberLabel,
   documentPostingBlocker,
   documentRecipientMode,
   documentStatusPresentation,
+  documentTypeLabel,
   filterRecipientOptions,
   lifecycleActions,
   personOptionLabel,
   parseStockDocumentQuickAction,
   recipientOptions,
   resolveSourceId,
+  shouldConfirmUnsavedDocument,
+  successfulDocumentActionMessage,
   validateDocumentInput,
 } from './stock-document-rules';
 
@@ -61,8 +65,8 @@ const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => (
 
 describe('stock document frontend rules', () => {
   it('створює нову передачу тільки як ASSIGNMENT і підтримує попередній вибір source', () => {
-    expect(parseStockDocumentQuickAction('?create=ASSIGNMENT&sourceResponsiblePersonId=person-1&sourceBalanceId=balance-1'))
-      .toEqual({ type: 'ASSIGNMENT', sourceResponsiblePersonId: 'person-1', sourceBalanceId: 'balance-1' });
+    expect(parseStockDocumentQuickAction('?create=ASSIGNMENT&sourceResponsiblePersonId=person-1&sourceBalanceId=balance-1&sourceKind=ASSIGNED'))
+      .toEqual({ type: 'ASSIGNMENT', sourceResponsiblePersonId: 'person-1', sourceBalanceId: 'balance-1', sourceKind: 'ASSIGNED' });
     expect(parseStockDocumentQuickAction('?create=TRANSFER&sourceResponsiblePersonId=person-1')).toBeNull();
   });
 
@@ -126,8 +130,35 @@ describe('stock document frontend rules', () => {
   });
 
   it('оформлює статуси документа стабільно', () => {
-    expect(documentStatusPresentation('DRAFT').label).toBe('DRAFT');
+    expect(documentStatusPresentation('DRAFT').label).toBe('Чернетка');
+    expect(documentStatusPresentation('POSTED').label).toBe('Проведено');
+    expect(documentStatusPresentation('CANCELLED').label).toBe('Скасовано');
     expect(documentStatusPresentation('POSTED').tone).toBe('success');
     expect(documentStatusPresentation('CANCELLED').tone).toBe('neutral');
+  });
+
+  it('не показує MVO технічні типи та автоматичні MOV-ідентифікатори', () => {
+    expect(documentTypeLabel('ASSIGNMENT')).toBe('Передача');
+    expect(documentTypeLabel('ISSUE')).toBe('Видача');
+    expect(documentTypeLabel('TRANSFER')).toBe('Стара передача');
+    expect(documentNumberLabel('MOV-12AB34CD', true)).toBe('№ 12AB34CD');
+    expect(documentNumberLabel('НАК-42', true)).toBe('НАК-42');
+  });
+
+  it('формує людський підсумок успішної передачі', () => {
+    const document = {
+      type: 'ASSIGNMENT', totalQuantity: '2', recipientName: null,
+      destinationResponsiblePerson: person('person-2'),
+      lines: [{ inventoryItem: { name: 'Клавіатура' } }],
+    } as StockDocument;
+    expect(successfulDocumentActionMessage(document, 'post')).toContain('Клавіатура');
+    expect(successfulDocumentActionMessage(document, 'post')).toContain('кількість 2');
+    expect(successfulDocumentActionMessage(document, 'post')).toContain('Кому:');
+  });
+
+  it('підтверджує закриття лише для зміненої незбереженої форми', () => {
+    expect(shouldConfirmUnsavedDocument(true, false)).toBe(true);
+    expect(shouldConfirmUnsavedDocument(false, false)).toBe(false);
+    expect(shouldConfirmUnsavedDocument(true, true)).toBe(false);
   });
 });

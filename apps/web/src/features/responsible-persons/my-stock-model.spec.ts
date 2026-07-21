@@ -5,6 +5,9 @@ import {
   deliverDownloadedFile,
   exportSection,
   normalizedPropertySearch,
+  MY_PROPERTY_SECTION_DESCRIPTIONS,
+  MY_PROPERTY_SECTION_LABELS,
+  myPropertySortOptions,
   propertyActionLinks,
 } from './my-stock-model';
 
@@ -15,14 +18,26 @@ describe('my-stock frontend model', () => {
     expect(exportSection('CURRENT', 'ASSIGNED_TO_ME')).toBe('ASSIGNED_TO_ME');
   });
 
+  it('uses plain Ukrainian section names, explanations and sorting labels', () => {
+    expect(MY_PROPERTY_SECTION_LABELS).toEqual({
+      DIRECT: 'У мене',
+      ASSIGNED_OUT: 'Передано іншим МВО',
+      ASSIGNED_TO_ME: 'Отримано від інших МВО',
+    });
+    expect(MY_PROPERTY_SECTION_DESCRIPTIONS.DIRECT).toContain('безпосередньо у вас');
+    expect(myPropertySortOptions('ASSIGNED_OUT')).toContainEqual({ value: 'currentCustodian', label: 'У кого знаходиться' });
+    expect(myPropertySortOptions('ASSIGNED_TO_ME')).toContainEqual({ value: 'accountingOwner', label: 'Від кого отримано' });
+  });
+
   it('keeps source balance identity in action links without mixing sections', () => {
     const item = {
       sourceBalanceId: 'balance/direct',
+      sourceKind: 'DIRECT',
       currentCustodian: { id: 'holder/id' },
     } as MyPropertyItem;
     expect(propertyActionLinks(item)).toEqual({
-      transfer: '/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect',
-      issue: '/transfers?create=ISSUE&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect',
+      transfer: '/transfers?create=ASSIGNMENT&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect&sourceKind=DIRECT',
+      issue: '/transfers?create=ISSUE&sourceResponsiblePersonId=holder%2Fid&sourceBalanceId=balance%2Fdirect&sourceKind=DIRECT',
     });
   });
 
@@ -98,5 +113,15 @@ describe('my-stock frontend model', () => {
     expect(view).toContain('responsiblePersonsService.exportMyPropertyCsv');
     expect(view).toContain('actionLinks.transfer');
     expect(view).toContain('actionLinks.issue');
+    expect(view).not.toContain("{ label: 'Обліковий власник'");
+    expect(view).not.toContain("{ label: 'Фактичний утримувач'");
+    expect(view).not.toContain("{ label: 'Тип' }");
+    expect(view).not.toContain("{ label: 'Доступно для передачі' }");
+    expect(view).not.toContain("{ label: 'Доступно для видачі' }");
+    expect(view).toContain("section === 'ASSIGNED_OUT'");
+    expect(view).toContain("section === 'ASSIGNED_TO_ME'");
+    expect(view).toContain('У вас немає майна, доступного для передачі або видачі.');
+    expect(view).toContain('Ви ще не передавали майно іншим МВО.');
+    expect(view).toContain('Інші МВО ще не передавали вам майно.');
   });
 });

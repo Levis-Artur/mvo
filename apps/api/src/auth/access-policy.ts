@@ -72,6 +72,13 @@ export const STOCK_READ_ROLES = [
   UserRole.MVO,
 ];
 
+export const TRANSACTION_READ_ROLES = [
+  UserRole.OWNER,
+  UserRole.DPP_ADMIN,
+  UserRole.ACCOUNTANT,
+  UserRole.AUDITOR,
+];
+
 export const ACCOUNTING_CARD_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,

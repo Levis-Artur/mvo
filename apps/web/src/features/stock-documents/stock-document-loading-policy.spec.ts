@@ -50,5 +50,36 @@ describe('stock document lazy loading policy', () => {
     expect(controller).toContain(
       'if (policy.availableSources) void loadSources(source);',
     );
+    expect(controller).not.toMatch(/useEffect\(\(\) => \{ void loadSources\(/);
+  });
+
+  it('uses a compact MVO list without technical status labels', () => {
+    const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
+    const table = readFileSync(join(__dirname, 'stock-documents-table.tsx'), 'utf8');
+    const details = readFileSync(join(__dirname, 'stock-document-details-modal.tsx'), 'utf8');
+
+    expect(view).toContain('<option value="DRAFT">Чернетки</option>');
+    expect(view).toContain('<option value="POSTED">Проведені</option>');
+    expect(view).toContain('<option value="CANCELLED">Скасовані</option>');
+    expect(table).toContain("if (user.role === 'MVO')");
+    expect(table).toContain("documentTypeLabel(document.type)");
+    expect(table).toContain("documentNumberLabel(document.documentNumber, true)");
+    expect(details).toContain("user.role === 'MVO' ? [");
+  });
+
+  it('hides dates behind additional filters and renders human success actions', () => {
+    const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
+    const form = readFileSync(join(__dirname, 'stock-document-form.tsx'), 'utf8');
+    const success = readFileSync(join(__dirname, 'document-success-modal.tsx'), 'utf8');
+
+    expect(view).toContain('advancedFilters');
+    expect(view).toContain('Додаткові фільтри');
+    expect(form).toContain('Ви внесли дані, але ще не зберегли чернетку.');
+    expect(form).toContain('Продовжити заповнення');
+    expect(form).toContain('Закрити без збереження');
+    expect(success).toContain('Чернетку збережено. Ви можете повернутися до неї пізніше або провести документ зараз.');
+    expect(success).toContain('Переглянути документ');
+    expect(success).toContain('Повернутися до мого майна');
+    expect(success).not.toContain('requestId');
   });
 });

@@ -77,7 +77,7 @@ export function stockSourceSearchText(source: AvailableStockSource) {
 }
 
 export function stockSourceKindLabel(sourceKind: AvailableStockSource['sourceKind']) {
-  return sourceKind === 'DIRECT' ? 'Безпосередньо у мене' : 'Закріплено за мною';
+  return sourceKind === 'DIRECT' ? 'У мене' : 'Отримано від іншого МВО';
 }
 
 export function canOpenSourcePicker(sourceReady: boolean) {

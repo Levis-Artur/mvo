@@ -1,9 +1,9 @@
 import type { StockDocument } from '@/lib/types';
 import { Button, ErrorState, Modal } from '@/components/ui';
-import { documentActionState } from './stock-document-rules';
+import { documentActionState, documentNumberLabel } from './stock-document-rules';
 
-export function CancelDocumentModal({ document, loading, error, onConfirm, onClose }: {
-  document: StockDocument; loading: boolean; error: string; onConfirm: () => void; onClose: () => void;
+export function CancelDocumentModal({ document, loading, error, simplified, onConfirm, onClose }: {
+  document: StockDocument; loading: boolean; error: string; simplified: boolean; onConfirm: () => void; onClose: () => void;
 }) {
   const state = documentActionState(error, loading);
   return <Modal
@@ -15,12 +15,12 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
   >
     <div className="grid gap-4 text-sm">
       {state.error ? <ErrorState message={state.error} /> : null}
-      <p>Скасувати проведений документ № <strong>{document.documentNumber}</strong>?</p>
+      <p>Скасувати проведений документ <strong>{documentNumberLabel(document.documentNumber, simplified)}</strong>?</p>
       <div className="ui-alert" data-tone="warning" role="status">
-        <strong>Буде виконано reversal</strong>
-        <span>Backend створить зворотні операції та відновить попередній вплив документа на залишки. Вихідні операції журналу не видаляються.</span>
+        <strong>Попередній стан майна буде відновлено</strong>
+        <span>Історія документа збережеться. Якщо майно вже було передане або видане далі, скасування може бути недоступним.</span>
       </div>
-      <p className="text-[var(--color-text-secondary)]">Якщо скасування небезпечне через поточні залишки або залежності, сервер заблокує дію. Повідомлення буде показано тут без приховування.</p>
+      <p className="text-[var(--color-text-secondary)]">Якщо документ зараз не можна скасувати, причина буде показана тут.</p>
     </div>
   </Modal>;
 }

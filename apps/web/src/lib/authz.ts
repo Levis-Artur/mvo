@@ -19,9 +19,7 @@ export type PermissionResource =
   | 'mvoUsers'
   | 'reports'
   | 'profile'
-  | 'ownCard'
   | 'ownStock'
-  | 'ownTransactions'
   | 'stockDocuments'
   | 'administration';
 
@@ -135,9 +133,7 @@ const permissions: Record<
     stockDocuments: ['read', 'write'],
   },
   MVO: {
-    ownCard: ['read'],
     ownStock: ['read'],
-    ownTransactions: ['read'],
     stockDocuments: ['read', 'write'],
     profile: ['read', 'write'],
   },
@@ -194,10 +190,8 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Користувачі МВО', '/mvo-users', 'users', 'mvoUsers'),
   ],
   MVO: [
-    nav('Моя картка', '/my-card', 'my-card', 'ownCard'),
     nav('Моє майно', '/my-stock', 'my-stock', 'ownStock'),
-    nav('Мої операції', '/my-transactions', 'my-transactions', 'ownTransactions'),
-    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі та видачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
 };
@@ -265,14 +259,8 @@ const toolbarByView: Partial<Record<AppView, ToolbarActionConfig[]>> = {
     action('Створити', 'create', 'users', 'write', { primary: true }),
     action('Оновити', 'refresh', 'users', 'read'),
   ],
-  'my-card': [action('Оновити', 'refresh', 'ownCard', 'read', { primary: true })],
   'my-stock': [
     action('Оновити', 'refresh', 'ownStock', 'read', { primary: true }),
-  ],
-  'my-transactions': [
-    action('Оновити', 'refresh', 'ownTransactions', 'read', {
-      primary: true,
-    }),
   ],
   transfers: [
     action('Оновити', 'refresh', 'stockDocuments', 'read', { primary: true }),
@@ -333,7 +321,9 @@ export function getNavigationItems(user: AuthUser | null) {
   return navigationByRole[user.role]
     .map((item) => ({
       ...item,
-      label: navigationLabels[item.view],
+      label: user.role === 'MVO' && item.view === 'transfers'
+        ? 'Передачі та видачі'
+        : navigationLabels[item.view],
       ...(user.role === 'OWNER' && item.view === 'administration'
         ? { href: '/admin', disabled: false, title: undefined }
         : {}),
@@ -346,6 +336,16 @@ export function getNavigationItems(user: AuthUser | null) {
 export function getDefaultAppPath(user: AuthUser | null) {
   const firstEnabled = getNavigationItems(user).find((item) => !item.disabled);
   return firstEnabled?.href ?? '/profile';
+}
+
+export function getAccessRedirectPath(user: AuthUser | null, view: AppView) {
+  if (user?.role === 'MVO' && view === 'my-card') {
+    return '/profile';
+  }
+  if (user?.role === 'MVO' && view === 'my-transactions') {
+    return '/transfers';
+  }
+  return getDefaultAppPath(user);
 }
 
 export function canAccessView(user: AuthUser | null, view: AppView) {

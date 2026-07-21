@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   canAccessPath,
-  getDefaultAppPath,
+  getAccessRedirectPath,
   type AppView,
 } from '@/lib/authz';
 import { useAuth } from './auth-context';
@@ -37,7 +37,7 @@ export function ProtectedMvoApp(props: ProtectedMvoAppProps) {
     }
 
     if (!canAccessPath(user, pathname, props.initialView ?? 'home')) {
-      router.replace(getDefaultAppPath(user));
+      router.replace(getAccessRedirectPath(user, props.initialView ?? 'home'));
     }
   }, [loading, pathname, props.initialView, router, user]);
 

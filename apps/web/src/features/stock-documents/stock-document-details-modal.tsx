@@ -4,6 +4,7 @@ import { Button, Card, DataTable, ErrorState, Modal, StatusBadge } from '@/compo
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import {
   documentDirectionPresentation,
+  documentNumberLabel,
   lifecycleActions,
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
@@ -30,11 +31,11 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
     </>}
     onClose={onClose}
     size="large"
-    title={`Документ № ${document.documentNumber}`}
+    title={`Документ: ${documentNumberLabel(document.documentNumber, user.role === 'MVO')}`}
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
-      {document.type === 'TRANSFER' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара логіка</strong><span>Legacy transfer доступний лише для перегляду. Нові передачі створюються як закріплення без зміни облікового власника.</span></div> : null}
+      {document.type === 'TRANSFER' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара передача</strong><span>Цей документ створено за старими правилами та доступний лише для перегляду.</span></div> : null}
       <Card title="Загальні дані">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Дата">{formatDateTime(document.documentDate)}</Detail>
@@ -52,11 +53,17 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
       </Card>
       <DataTable
         ariaLabel="Рядки документа"
-        columns={[
+        columns={user.role === 'MVO' ? [
+          { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
+          { label: 'Кількість', numeric: true }, { label: 'Примітка' },
+        ] : [
           { label: 'Код' }, { label: 'Номенклатура' }, { label: 'Джерело' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ]}
-        rows={document.lines.map((line) => [
+        rows={document.lines.map((line) => user.role === 'MVO' ? [
+          line.inventoryItem.externalCode, line.inventoryItem.name,
+          line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
+        ] : [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.sourceKind ? <StatusBadge key="source" tone={line.sourceKind === 'DIRECT' ? 'success' : 'info'}>{line.sourceKind}</StatusBadge> : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',

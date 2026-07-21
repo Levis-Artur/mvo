@@ -10,6 +10,7 @@ import {
   removeDocumentLine,
   sourceToDocumentLine,
   stockSourceKey,
+  stockSourceKindLabel,
 } from './stock-source-picker-model';
 
 function source({
@@ -74,6 +75,11 @@ describe('stock source picker model', () => {
       [stockSourceKey(direct)],
       'ASSIGNMENT',
     )).toEqual([assigned]);
+  });
+
+  it('keeps technical source kinds in state but presents plain labels', () => {
+    expect(stockSourceKindLabel('DIRECT')).toBe('У мене');
+    expect(stockSourceKindLabel('ASSIGNED')).toBe('Отримано від іншого МВО');
   });
 
   it('shows every permitted positive DIRECT and ASSIGNED source', () => {
@@ -144,10 +150,15 @@ describe('stock source picker model', () => {
     expect(lines).not.toMatch(/availableSourceOptions\([^)]*\)\[0\]/);
     expect(form).toContain('<StockSourcePickerModal');
     expect(form).toContain('type={type}');
+    expect(form).toContain('simplified={simplified}');
     expect(form).toContain('onConfirm={(selectedSource) =>');
     expect(form).toContain('onClose={() => setSourcePickerOpen(false)}');
     expect(picker).toContain('title="Вибір майна"');
     expect(picker).toContain('Додати вибране');
+    expect(picker).toContain("source.sourceKind === 'DIRECT' ? 'У вас'");
+    expect(form).toContain('initialSourceAdded.current');
+    expect(form).toContain('item.sourceBalanceId === initialSourceBalanceId');
+    expect(form).toContain('quantity:');
   });
 
   it('renders loading, empty, API error, refresh and controlled mobile overflow', () => {
@@ -162,6 +173,7 @@ describe('stock source picker model', () => {
     expect(picker).toContain('Оновити список');
     expect(controller).toContain('await stockDocumentsService.availableToMe()');
     expect(componentsCss).toContain('.stock-source-picker-table { min-width: 980px; }');
+    expect(componentsCss).toContain('.stock-source-picker-table--mvo { min-width: 760px; }');
     expect(componentsCss).toContain('.data-table-scroll { max-width: 100%;');
     expect(responsiveCss).toContain('.stock-source-picker__filters { grid-template-columns: minmax(0, 1fr);');
   });

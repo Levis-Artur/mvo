@@ -13,7 +13,7 @@ import { NomenclatureView } from '@/features/inventory/inventory-view';
 import { StockView } from '@/features/inventory/stock-view';
 import { TransactionsView } from '@/features/inventory/transactions-view';
 import { StructureView } from '@/features/organization/organization-view';
-import { MyCardView, MyStockView, MyTransactionsView } from '@/features/responsible-persons/my-views';
+import { MyStockView } from '@/features/responsible-persons/my-views';
 import { PersonsView } from '@/features/responsible-persons/persons-view';
 import { StockDocumentsView } from '@/features/stock-documents/stock-documents-view';
 import { UsersView } from '@/features/users/users-view';
@@ -50,9 +50,7 @@ export function MvoApp({ initialView = 'home', initialImportId }: { initialView?
     {view === 'imports' ? <ImportsView initialImportId={initialImportId} /> : null}
     {view === 'transactions' ? <TransactionsView /> : null}
     {view === 'users' ? <UsersView /> : null}
-    {view === 'my-card' ? <MyCardView /> : null}
     {view === 'my-stock' ? <MyStockView /> : null}
-    {view === 'my-transactions' ? <MyTransactionsView /> : null}
     {view === 'transfers' ? <StockDocumentsView /> : null}
     {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних можливостей API." /> : null}
     {view === 'administration' ? <AdministrationView /> : null}

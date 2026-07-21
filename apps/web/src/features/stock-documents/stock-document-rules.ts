@@ -15,13 +15,16 @@ export function parseStockDocumentQuickAction(search: string): {
   type: StockDocumentType;
   sourceResponsiblePersonId: string;
   sourceBalanceId?: string;
+  sourceKind?: 'DIRECT' | 'ASSIGNED';
 } | null {
   const params = new URLSearchParams(search);
   const type = params.get('create');
   const sourceResponsiblePersonId = params.get('sourceResponsiblePersonId');
   const sourceBalanceId = params.get('sourceBalanceId') ?? undefined;
+  const rawSourceKind = params.get('sourceKind');
+  const sourceKind = rawSourceKind === 'DIRECT' || rawSourceKind === 'ASSIGNED' ? rawSourceKind : undefined;
   if ((type !== 'ASSIGNMENT' && type !== 'ISSUE') || !sourceResponsiblePersonId) return null;
-  return { type, sourceResponsiblePersonId, sourceBalanceId };
+  return { type, sourceResponsiblePersonId, sourceBalanceId, sourceKind };
 }
 
 export function canChangeStockDocuments(user: Pick<AuthUser, 'role'>) {
@@ -120,10 +123,52 @@ export function documentDirectionPresentation(
   };
 }
 
+export function documentTypeLabel(type: StockDocumentType) {
+  if (type === 'ASSIGNMENT') return 'Передача';
+  if (type === 'ISSUE') return 'Видача';
+  return 'Стара передача';
+}
+
+export function documentNumberLabel(documentNumber: string, simplified = false) {
+  const automatic = simplified ? documentNumber.match(/^MOV-([0-9A-F]{8})$/i) : null;
+  return automatic ? `№ ${automatic[1]}` : documentNumber;
+}
+
+export function documentCounterparty(
+  document: StockDocument,
+  user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
+) {
+  if (document.type === 'ISSUE') {
+    return `Кому: ${document.recipientName ?? 'Не вказано'}`;
+  }
+  if (document.destinationResponsiblePersonId === user.responsiblePersonId) {
+    return `Від кого: ${document.sourceResponsiblePerson.lastName} ${document.sourceResponsiblePerson.firstName}`;
+  }
+  const destination = document.destinationResponsiblePerson;
+  return `Кому: ${destination ? `${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
+}
+
+export function successfulDocumentActionMessage(
+  document: StockDocument,
+  action: 'post' | 'cancel' | 'remove',
+) {
+  if (action === 'remove') return 'Чернетку видалено.';
+  if (action === 'cancel') return 'Документ скасовано. Попередній стан майна відновлено.';
+  const firstItem = document.lines[0]?.inventoryItem.name ?? 'майно';
+  const extra = document.lines.length > 1 ? ` та ще ${document.lines.length - 1}` : '';
+  const quantity = document.totalQuantity;
+  if (document.type === 'ISSUE') {
+    return `Видачу проведено: ${firstItem}${extra}, кількість ${quantity}. Кому: ${document.recipientName ?? 'одержувачу'}.`;
+  }
+  const destination = document.destinationResponsiblePerson;
+  const recipient = destination ? `${destination.lastName} ${destination.firstName}` : 'обраному МВО';
+  return `Передачу проведено: ${firstItem}${extra}, кількість ${quantity}. Кому: ${recipient}.`;
+}
+
 const statusPresentation: Record<StockDocumentStatus, { label: string; tone: StatusTone }> = {
-  DRAFT: { label: 'DRAFT', tone: 'info' },
-  POSTED: { label: 'POSTED', tone: 'success' },
-  CANCELLED: { label: 'CANCELLED', tone: 'neutral' },
+  DRAFT: { label: 'Чернетка', tone: 'info' },
+  POSTED: { label: 'Проведено', tone: 'success' },
+  CANCELLED: { label: 'Скасовано', tone: 'neutral' },
 };
 
 export const documentStatusPresentation = (status: StockDocumentStatus) => statusPresentation[status];
@@ -131,6 +176,10 @@ export const documentRecipientMode = (type: StockDocumentType) => type === 'ISSU
 
 export function documentActionState(error: string, loading: boolean) {
   return { error, loading, disabled: loading };
+}
+
+export function shouldConfirmUnsavedDocument(dirty: boolean, saving: boolean) {
+  return dirty && !saving;
 }
 
 export function documentPostingBlocker(

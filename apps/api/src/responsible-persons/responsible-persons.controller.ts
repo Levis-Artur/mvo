@@ -14,6 +14,7 @@ import type { CurrentUser } from '../auth/auth.types';
 import {
   ACCOUNTING_CARD_READ_ROLES,
   REFERENCE_DATA_READ_ROLES,
+  TRANSACTION_READ_ROLES,
   TRANSFER_TARGET_READ_ROLES,
 } from '../auth/access-policy';
 import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
@@ -91,7 +92,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id/stock-transactions')
-  @Roles(...ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...TRANSACTION_READ_ROLES)
   stockTransactions(
     @Param('id') id: string,
     @Query() query: ListStockTransactionsQueryDto,

@@ -26,6 +26,7 @@ export function StockSourcePickerModal({
   type,
   loading,
   error,
+  simplified,
   initialSourceBalanceId,
   onRefresh,
   onConfirm,
@@ -36,6 +37,7 @@ export function StockSourcePickerModal({
   type: StockDocumentType;
   loading: boolean;
   error: string;
+  simplified: boolean;
   initialSourceBalanceId?: string;
   onRefresh: () => Promise<void> | void;
   onConfirm: (source: AvailableStockSource) => void;
@@ -79,17 +81,17 @@ export function StockSourcePickerModal({
         <FormField label="Пошук">
           <Input
             autoFocus
-            placeholder="Код, назва або ПІБ облікового власника"
+            placeholder={simplified ? 'Код, назва або ПІБ МВО' : 'Код, назва або ПІБ облікового власника'}
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </FormField>
-        <FormField label="Тип джерела">
+        <FormField label={simplified ? 'Де знаходиться' : 'Тип джерела'}>
           <Select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as StockSourceFilter)}>
             <option value="ALL">Усі</option>
-            <option value="DIRECT">Безпосередньо у мене</option>
-            <option value="ASSIGNED">Закріплено за мною</option>
+            <option value="DIRECT">У мене</option>
+            <option value="ASSIGNED">Отримано від іншого МВО</option>
           </Select>
         </FormField>
         <Button disabled={loading} variant="outline" type="button" onClick={() => void onRefresh()}>
@@ -100,7 +102,14 @@ export function StockSourcePickerModal({
       {error ? <ErrorState message={error} /> : null}
       <DataTable
         ariaLabel="Доступне майно для додавання до документа"
-        columns={[
+        columns={simplified ? [
+          { label: 'Вибір', align: 'center', className: 'stock-source-picker__select' },
+          { label: 'Код', className: 'stock-source-picker__code' },
+          { label: 'Назва', className: 'stock-source-picker__name' },
+          { label: 'Доступно', numeric: true, className: 'stock-source-picker__quantity' },
+          { label: 'Одиниця' },
+          { label: 'Від кого', className: 'stock-source-picker__person' },
+        ] : [
           { label: 'Вибір', align: 'center', className: 'stock-source-picker__select' },
           { label: 'Код', className: 'stock-source-picker__code' },
           { label: 'Назва', className: 'stock-source-picker__name' },
@@ -116,20 +125,27 @@ export function StockSourcePickerModal({
         loading={loading}
         rows={options.map((source) => {
           const key = stockSourceKey(source);
-          return [
-            <input
-              aria-label={`Вибрати ${source.inventoryItem.name}`}
-              checked={selectedKey === key}
-              key="select"
-              name="stock-source"
-              type="radio"
-              value={key}
-              onChange={() => setSelectedKey(key)}
-            />,
+          const select = <input
+            aria-label={`Вибрати ${source.inventoryItem.name}`}
+            checked={selectedKey === key}
+            key="select"
+            name="stock-source"
+            type="radio"
+            value={key}
+            onChange={() => setSelectedKey(key)}
+          />;
+          const common = [
+            select,
             source.inventoryItem.externalCode,
             <span className="stock-source-picker__name-text" key="name">{source.inventoryItem.name}</span>,
             formatQuantity(source.availableQuantity),
             source.inventoryItem.unitOfMeasure,
+          ];
+          if (simplified) {
+            return [...common, source.sourceKind === 'DIRECT' ? 'У вас' : source.accountingOwner.fullName];
+          }
+          return [
+            ...common,
             <StatusBadge key="kind" tone={source.sourceKind === 'DIRECT' ? 'success' : 'info'}>
               {stockSourceKindLabel(source.sourceKind)}
             </StatusBadge>,
@@ -138,7 +154,7 @@ export function StockSourcePickerModal({
           ];
         })}
         selectedIndex={options.findIndex((source) => stockSourceKey(source) === selectedKey)}
-        tableClassName="stock-source-picker-table"
+        tableClassName={`stock-source-picker-table${simplified ? ' stock-source-picker-table--mvo' : ''}`}
         onRowClick={(index) => setSelectedKey(stockSourceKey(options[index]))}
       />
     </div>
