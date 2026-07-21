@@ -124,4 +124,33 @@ describe('my-stock frontend model', () => {
     expect(view).toContain('Ви ще не передавали майно іншим МВО.');
     expect(view).toContain('Інші МВО ще не передавали вам майно.');
   });
+
+  it('renders compact property actions in one row without exposing source identifiers', () => {
+    const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
+    const button = readFileSync(join(__dirname, '../../components/ui/button.tsx'), 'utf8');
+    const css = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
+
+    expect(button).toContain("size?: 'default' | 'compact'");
+    expect(button).toContain("size === 'compact' ? 'btn-compact' : ''");
+    expect(view).toContain('className="my-stock-actions"');
+    expect(view).not.toContain('className="flex flex-wrap justify-end gap-1"');
+    expect(view).toContain('size="compact" title="Передати майно"');
+    expect(view).toContain('size="compact" title="Видати майно"');
+    expect(view).toContain('size="compact" title="Переглянути майно"');
+    expect(view).toContain('onNavigate(links.transfer)');
+    expect(view).toContain('onNavigate(links.issue)');
+    expect(view).toContain('item.canAssign ? <Button');
+    expect(view).toContain('item.canIssue ? <Button');
+    expect(view).not.toContain('>sourceKind<');
+    expect(view).not.toContain('>sourceBalanceId<');
+
+    expect(css).toContain('.btn-compact { min-height: 34px; height: 34px;');
+    expect(css).toContain('.my-stock-actions { display: flex; flex-direction: row; flex-wrap: nowrap;');
+    expect(css).toContain('.my-stock-table { width: 100%; min-width: 720px; table-layout: fixed; }');
+    expect(css).toContain('.my-stock-table__code { width: 128px; white-space: nowrap; }');
+    expect(css).toContain('.my-stock-table__unit { width: 76px; white-space: nowrap; }');
+    expect(css).toContain('.my-stock-table__quantity { width: 92px; white-space: nowrap; font-variant-numeric: tabular-nums; }');
+    expect(css).toContain('.my-stock-table__actions { width: 210px; white-space: nowrap; }');
+    expect(css).toContain('text-overflow: ellipsis; white-space: nowrap;');
+  });
 });

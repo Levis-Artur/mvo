@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
 import { getMvoErrorMessage } from '@/components/common';
 import { PageHeader } from '@/components/layout/page-header';
@@ -42,6 +43,7 @@ const tabs = (Object.entries(MY_PROPERTY_SECTION_LABELS) as [MyPropertySection, 
   .map(([id, label]) => ({ id, label }));
 
 export function MyStockView() {
+  const router = useRouter();
   const { user } = useAuth();
   const personId = user?.responsiblePersonId ?? '';
   const actionLinks = mvoStockActionLinks(personId);
@@ -200,7 +202,7 @@ export function MyStockView() {
       columns={myStockColumns(section)}
       emptyMessage={search ? 'За вказаним запитом майно не знайдено' : myStockEmptyMessage(section)}
       loading={loading}
-      rows={(data?.items ?? []).map((item) => myStockRow(item, section, setSelectedItem))}
+      rows={(data?.items ?? []).map((item) => myStockRow(item, section, setSelectedItem, (href) => router.push(href)))}
       tableClassName={`my-stock-table my-stock-table--${section.toLocaleLowerCase()}`}
     />
     <Pagination
@@ -226,18 +228,18 @@ export function MyStockView() {
 
 function myStockColumns(section: MyPropertySection): DataTableColumn[] {
   const common = [
-    { label: 'Код' },
+    { label: 'Код', className: 'my-stock-table__code' },
     { label: 'Назва', className: 'my-stock-table__name' },
-    { label: 'Одиниця' },
-    { label: 'Кількість', numeric: true },
+    { label: 'Одиниця', className: 'my-stock-table__unit' },
+    { label: 'Кількість', className: 'my-stock-table__quantity', numeric: true },
   ];
   if (section === 'ASSIGNED_OUT') {
-    return [...common, { label: 'У кого знаходиться', className: 'my-stock-table__person' }, { label: 'Дата передачі' }, { label: 'Дії', actions: true }];
+    return [...common, { label: 'У кого знаходиться', className: 'my-stock-table__person' }, { label: 'Дата передачі', className: 'my-stock-table__date' }, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
   }
   if (section === 'ASSIGNED_TO_ME') {
-    return [...common, { label: 'Від кого отримано', className: 'my-stock-table__person' }, { label: 'Дії', actions: true }];
+    return [...common, { label: 'Від кого отримано', className: 'my-stock-table__person' }, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
   }
-  return [...common, { label: 'Дії', actions: true }];
+  return [...common, { label: 'Дії', actions: true, className: 'my-stock-table__actions' }];
 }
 
 function myStockEmptyMessage(section: MyPropertySection) {
@@ -246,11 +248,11 @@ function myStockEmptyMessage(section: MyPropertySection) {
   return 'У вас немає майна, доступного для передачі або видачі.';
 }
 
-function myStockRow(item: MyPropertyItem, section: MyPropertySection, onView: (item: MyPropertyItem) => void) {
+function myStockRow(item: MyPropertyItem, section: MyPropertySection, onView: (item: MyPropertyItem) => void, onNavigate: (href: string) => void) {
   const links = propertyActionLinks(item);
   const common = [
     item.inventoryItem.externalCode,
-    item.inventoryItem.name,
+    <span className="my-stock-table__name-text" key="name" title={item.inventoryItem.name}>{item.inventoryItem.name}</span>,
     item.inventoryItem.unitOfMeasure ?? '—',
     formatQuantity(item.quantity),
   ];
@@ -258,12 +260,14 @@ function myStockRow(item: MyPropertyItem, section: MyPropertySection, onView: (i
     return [...common,
       `${item.currentCustodian.personnelNumber} — ${item.currentCustodian.fullName}`,
       new Date(item.updatedAt).toLocaleDateString('uk-UA'),
-      <Button key="view" variant="ghost" type="button" onClick={() => onView(item)}>Переглянути</Button>,
+      <div className="my-stock-actions" key="actions">
+        <Button aria-label={`Переглянути ${item.inventoryItem.name}`} size="compact" title="Переглянути майно" variant="outline" type="button" onClick={() => onView(item)}>Переглянути</Button>
+      </div>,
     ];
   }
-  const actions = <div className="flex flex-wrap justify-end gap-1" key="actions">
-    {item.canAssign ? <a className="btn btn-ghost" href={links.transfer}>Передати</a> : null}
-    {item.canIssue ? <a className="btn btn-ghost" href={links.issue}>Видати</a> : null}
+  const actions = <div className="my-stock-actions" key="actions">
+    {item.canAssign ? <Button aria-label={`Передати ${item.inventoryItem.name}`} icon="transfer" size="compact" title="Передати майно" type="button" onClick={() => onNavigate(links.transfer)}>Передати</Button> : null}
+    {item.canIssue ? <Button aria-label={`Видати ${item.inventoryItem.name}`} size="compact" title="Видати майно" variant="outline" type="button" onClick={() => onNavigate(links.issue)}>Видати</Button> : null}
   </div>;
   if (section === 'ASSIGNED_TO_ME') {
     return [...common, `${item.accountingOwner.personnelNumber} — ${item.accountingOwner.fullName}`, actions];
