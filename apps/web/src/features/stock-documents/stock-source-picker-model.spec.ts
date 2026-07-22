@@ -10,172 +10,109 @@ import {
   removeDocumentLine,
   sourceToDocumentLine,
   stockSourceKey,
-  stockSourceKindLabel,
 } from './stock-source-picker-model';
 
-function source({
-  kind,
-  balanceId,
-  itemId = 'item-1',
-  code,
-  name,
-  ownerId,
-  ownerName,
-  quantity = '5',
-  canAssign = true,
-  canIssue = true,
-}: {
-  kind: 'DIRECT' | 'ASSIGNED';
-  balanceId: string;
-  itemId?: string;
-  code: string;
-  name: string;
-  ownerId: string;
-  ownerName: string;
-  quantity?: string;
-  canAssign?: boolean;
-  canIssue?: boolean;
-}): AvailableStockSource {
+function source(balanceId: string, quantity = '5'): AvailableStockSource {
   return {
-    sourceKind: kind,
-    sourceBalanceId: balanceId,
-    inventoryItem: { id: itemId, externalCode: code, name, unitOfMeasure: 'шт' },
-    accountingOwner: { id: ownerId, personnelNumber: ownerId, fullName: ownerName },
-    currentCustodian: { id: 'holder-1', personnelNumber: '007', fullName: 'Поточний Утримувач' },
+    balanceId,
+    inventoryItem: {
+      id: 'item-1',
+      externalCode: 'KB-001',
+      name: 'Клавіатура провідна',
+      unitOfMeasure: 'шт',
+    },
     availableQuantity: quantity,
-    canAssign,
-    canIssue,
+    unit: 'шт',
+    canTransfer: true,
+    canIssue: true,
   };
 }
 
-const direct = source({
-  kind: 'DIRECT',
-  balanceId: 'direct-balance',
-  code: 'KB-001',
-  name: 'Клавіатура провідна',
-  ownerId: 'holder-1',
-  ownerName: 'Андрій Власник',
-});
-const assigned = source({
-  kind: 'ASSIGNED',
-  balanceId: 'assigned-balance',
-  code: 'KB-001',
-  name: 'Клавіатура провідна',
-  ownerId: 'owner-assigned',
-  ownerName: 'Богдан Обліковий',
-  quantity: '3.5',
-});
+const direct = source('direct-balance');
 
 describe('stock source picker model', () => {
-  it('keeps DIRECT and ASSIGNED sources of one item separate', () => {
-    expect(stockSourceKey(direct)).toBe('DIRECT:direct-balance');
-    expect(stockSourceKey(assigned)).toBe('ASSIGNED:assigned-balance');
-    expect(availableSourceOptions(
-      [direct, assigned],
-      [stockSourceKey(direct)],
-      'ASSIGNMENT',
-    )).toEqual([assigned]);
+  it('offers only positive direct balances and rejects a legacy ASSIGNED payload', () => {
+    const assigned = {
+      ...direct,
+      balanceId: 'assigned-balance',
+      sourceKind: 'ASSIGNED',
+    } as AvailableStockSource;
+    expect(availableSourceOptions([assigned, direct], [], 'MVO_TRANSFER')).toEqual([direct]);
+    expect(availableSourceOptions([direct], [stockSourceKey(direct)], 'ISSUE')).toEqual([]);
+    expect(availableSourceOptions([{ ...direct, availableQuantity: '0' }], [], 'ISSUE')).toEqual([]);
   });
 
-  it('keeps technical source kinds in state but presents plain labels', () => {
-    expect(stockSourceKindLabel('DIRECT')).toBe('У мене');
-    expect(stockSourceKindLabel('ASSIGNED')).toBe('Отримано від іншого МВО');
-  });
+  it.each([['кодом', 'kb-001'], ['назвою', 'клавіатура']])(
+    'searches direct balances by %s',
+    (_label, query) => {
+      expect(filterStockSources([direct], [], query, 'MVO_TRANSFER')).toEqual([direct]);
+    },
+  );
 
-  it('shows every permitted positive DIRECT and ASSIGNED source', () => {
-    expect(filterStockSources([assigned, direct], [], '', 'ALL', 'ASSIGNMENT'))
-      .toEqual(expect.arrayContaining([direct, assigned]));
-    expect(filterStockSources([direct, assigned], [], '', 'DIRECT', 'ISSUE'))
-      .toEqual([direct]);
-    expect(filterStockSources([direct, assigned], [], '', 'ASSIGNED', 'ISSUE'))
-      .toEqual([assigned]);
-  });
-
-  it.each([
-    ['кодом', 'kb-001'],
-    ['назвою', 'клавіатура'],
-    ['номером власника', 'owner-assigned'],
-    ['ПІБ облікового власника', 'богдан обліковий'],
-  ])('searches by %s', (_label, query) => {
-    expect(filterStockSources([assigned], [], query, 'ALL', 'ISSUE')).toEqual([assigned]);
-  });
-
-  it('adds a row only after explicit selection and leaves quantity empty', () => {
-    const initial: ReturnType<typeof sourceToDocumentLine>[] = [];
-    expect(initial).toHaveLength(0);
-    const confirmed = addSelectedStockSource(initial, direct);
-    expect(confirmed).toHaveLength(1);
-    expect(confirmed[0]).toMatchObject({
-      inventoryItemId: direct.inventoryItem.id,
-      sourceKind: 'DIRECT',
+  it('adds a row only after explicit confirmation and leaves quantity empty', () => {
+    const confirmed = addSelectedStockSource([], direct);
+    expect(confirmed).toEqual([{
+      inventoryItemId: 'item-1',
       sourceBalanceId: 'direct-balance',
       quantity: '',
-    });
+      note: '',
+    }]);
   });
 
-  it('does not add one source twice and returns it after row removal', () => {
+  it('does not add one balance twice and returns it after row removal', () => {
     const withDirect = addSelectedStockSource([], direct);
     expect(addSelectedStockSource(withDirect, direct)).toBe(withDirect);
     const removed = removeDocumentLine(withDirect, 0);
-    expect(removed).toEqual([]);
-    expect(availableSourceOptions([direct], removed.map(documentLineSourceKey))).toEqual([direct]);
+    expect(availableSourceOptions([direct], removed.map(documentLineSourceKey), 'MVO_TRANSFER')).toEqual([direct]);
   });
 
   it('blocks zero, negative and excessive quantities', () => {
-    const line = sourceToDocumentLine(direct);
-    expect(documentLineError({ ...line, quantity: '0' }, [direct])).toContain('більшою за 0');
-    expect(documentLineError({ ...line, quantity: '-1' }, [direct])).toContain('більшою за 0');
-    expect(documentLineError({ ...line, quantity: '6' }, [direct])).toContain('доступний залишок');
-    expect(documentLineError({ ...line, quantity: '5' }, [direct])).toBe('');
+    const row = sourceToDocumentLine(direct);
+    expect(documentLineError({ ...row, quantity: '0' }, [direct])).toContain('більшою за 0');
+    expect(documentLineError({ ...row, quantity: '-1' }, [direct])).toContain('більшою за 0');
+    expect(documentLineError({ ...row, quantity: '6' }, [direct])).toContain('доступний залишок');
+    expect(documentLineError({ ...row, quantity: '5' }, [direct])).toBe('');
   });
 
-  it('allows one nomenclature from distinct accounting-owner sources', () => {
-    const directLine = { ...sourceToDocumentLine(direct), quantity: '1' };
-    const assignedLine = { ...sourceToDocumentLine(assigned), quantity: '1' };
+  it('rejects injected custody metadata outside the picker', () => {
     expect(validateDocumentInput({
-      type: 'ASSIGNMENT',
+      type: 'ISSUE',
       documentDate: '2026-07-20T00:00:00.000Z',
       sourceResponsiblePersonId: 'holder-1',
-      destinationResponsiblePersonId: 'holder-2',
-      lines: [directLine, assignedLine],
-    }, [direct, assigned])).toBe('');
+      recipientName: 'Одержувач',
+      basis: 'Підстава',
+      lines: [{
+        inventoryItemId: 'item-1',
+        sourceBalanceId: 'direct-balance',
+        quantity: '1',
+        sourceKind: 'ASSIGNED',
+      }],
+    }, [direct])).toBe('Для нового документа можна вибирати лише власний поточний залишок');
   });
 
-  it('uses one shared modal for ASSIGNMENT and ISSUE without automatic first-item insertion', () => {
+  it('uses explicit confirmation and does not expose custody terminology', () => {
     const form = readFileSync(join(__dirname, 'stock-document-form.tsx'), 'utf8');
     const lines = readFileSync(join(__dirname, 'stock-document-lines.tsx'), 'utf8');
     const picker = readFileSync(join(__dirname, 'stock-source-picker-modal.tsx'), 'utf8');
-
     expect(lines).toContain('onClick={onAddRequest}');
     expect(lines).not.toMatch(/availableSourceOptions\([^)]*\)\[0\]/);
     expect(form).toContain('<StockSourcePickerModal');
-    expect(form).toContain('type={type}');
-    expect(form).toContain('simplified={simplified}');
     expect(form).toContain('onConfirm={(selectedSource) =>');
-    expect(form).toContain('onClose={() => setSourcePickerOpen(false)}');
     expect(picker).toContain('title="Вибір майна"');
     expect(picker).toContain('Додати вибране');
-    expect(picker).toContain("source.sourceKind === 'DIRECT' ? 'У вас'");
-    expect(form).not.toContain('initialSourceAdded.current');
-    expect(form).not.toContain('initialSourceBalanceId');
-    expect(picker).not.toContain('initialSourceBalanceId');
-    expect(form).toContain('quantity:');
+    expect(picker).not.toContain('ASSIGNED');
+    expect(picker).not.toContain('Обліковий власник');
   });
 
-  it('renders loading, empty, API error, refresh and controlled mobile overflow', () => {
+  it('renders loading, empty, API error, refresh and mobile overflow', () => {
     const picker = readFileSync(join(__dirname, 'stock-source-picker-modal.tsx'), 'utf8');
     const controller = readFileSync(join(__dirname, 'use-stock-documents-controller.ts'), 'utf8');
-    const componentsCss = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
-    const responsiveCss = readFileSync(join(__dirname, '../../styles/responsive.css'), 'utf8');
-
+    const css = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
     expect(picker).toContain('loading={loading}');
     expect(picker).toContain('<ErrorState message={error} />');
-    expect(picker).toContain('emptyMessage=');
     expect(picker).toContain('Оновити список');
     expect(controller).toContain('await stockDocumentsService.availableToMe()');
-    expect(componentsCss).toContain('.stock-source-picker-table { min-width: 980px; }');
-    expect(componentsCss).toContain('.stock-source-picker-table--mvo { min-width: 760px; }');
-    expect(componentsCss).toContain('.data-table-scroll { max-width: 100%;');
-    expect(responsiveCss).toContain('.stock-source-picker__filters { grid-template-columns: minmax(0, 1fr);');
+    expect(controller).not.toContain('card.assignedToMe');
+    expect(css).toContain('.stock-source-picker-table { min-width: 620px; }');
   });
 });

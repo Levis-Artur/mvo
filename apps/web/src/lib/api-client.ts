@@ -6,6 +6,9 @@ import type {
   CreateUnitDto,
   AuthUser,
   AdminEntityType,
+  AccountingTransferExportBatch,
+  AccountingTransferFilters,
+  AccountingTransferRow,
   DashboardStats,
   DeletionPreview,
   ImportBatch,
@@ -14,6 +17,8 @@ import type {
   AvailableStockSource,
   InventoryItem,
   InventoryItemAccountingCard,
+  InventoryItemAccountingCardQuery,
+  InventoryItemMovementFilters,
   InventoryItemsQuery,
   Management,
   MyPropertyExportSection,
@@ -354,8 +359,23 @@ export const apiClient = {
 
   inventoryItems: (query: InventoryItemsQuery) =>
     request<PaginatedResponse<InventoryItem>>('/inventory-items', {}, query),
-  inventoryItemAccountingCard: (id: string) =>
-    request<InventoryItemAccountingCard>(`/inventory-items/${id}/accounting-card`),
+  inventoryItemAccountingCard: (
+    id: string,
+    query: InventoryItemAccountingCardQuery = {},
+  ) =>
+    request<InventoryItemAccountingCard>(
+      `/inventory-items/${id}/accounting-card`,
+      {},
+      query,
+    ),
+  exportInventoryItemHistoryCsv: (
+    id: string,
+    query: InventoryItemMovementFilters,
+  ) =>
+    downloadRequest(
+      `/inventory-items/${id}/accounting-card/movements/export.csv`,
+      query,
+    ),
   createInventoryItem: (body: CreateInventoryItemDto) =>
     request<InventoryItem>('/inventory-items', mutation('POST', body)),
   updateInventoryItem: (id: string, body: UpdateInventoryItemDto) =>
@@ -377,6 +397,24 @@ export const apiClient = {
     ),
   stockDocuments: (query: StockDocumentsQuery) =>
     request<PaginatedResponse<StockDocument>>('/stock-documents', {}, query),
+  accountingMvoTransfers: (
+    query: AccountingTransferFilters & { page?: number; limit?: number },
+  ) =>
+    request<PaginatedResponse<AccountingTransferRow>>(
+      '/accounting/mvo-transfers',
+      {},
+      query,
+    ),
+  exportAccountingMvoTransfers: (query: AccountingTransferFilters) =>
+    downloadRequest('/accounting/mvo-transfers/export.csv', query),
+  accountingMvoTransferExportBatches: (query: { page?: number; limit?: number }) =>
+    request<PaginatedResponse<AccountingTransferExportBatch>>(
+      '/accounting/mvo-transfer-exports',
+      {},
+      query,
+    ),
+  downloadAccountingMvoTransferExportBatch: (id: string) =>
+    downloadRequest(`/accounting/mvo-transfer-exports/${encodeURIComponent(id)}/download`),
   stockDocument: (id: string) =>
     request<StockDocument>(`/stock-documents/${id}`),
   createStockDocument: (body: StockDocumentInput) =>

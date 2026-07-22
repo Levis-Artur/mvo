@@ -4,23 +4,22 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export enum MyPropertySection {
   DIRECT = 'DIRECT',
-  ASSIGNED_OUT = 'ASSIGNED_OUT',
-  ASSIGNED_TO_ME = 'ASSIGNED_TO_ME',
+  TRANSFERRED = 'TRANSFERRED',
 }
 
 export enum MyPropertyExportSection {
   ALL = 'ALL',
   DIRECT = 'DIRECT',
-  ASSIGNED_OUT = 'ASSIGNED_OUT',
-  ASSIGNED_TO_ME = 'ASSIGNED_TO_ME',
+  TRANSFERRED = 'TRANSFERRED',
 }
 
 export enum MyPropertySortBy {
   CODE = 'code',
   NAME = 'name',
   QUANTITY = 'quantity',
-  ACCOUNTING_OWNER = 'accountingOwner',
-  CURRENT_CUSTODIAN = 'currentCustodian',
+  DOCUMENT_DATE = 'documentDate',
+  DOCUMENT_NUMBER = 'documentNumber',
+  RECIPIENT = 'recipient',
 }
 
 export enum SortOrder {

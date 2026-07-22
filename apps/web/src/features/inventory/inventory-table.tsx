@@ -42,7 +42,15 @@ export function InventoryTable({
       rows={items.map((item) => {
         const statuses = inventoryItemStatuses(item);
         return [
-          <span className="font-mono font-semibold" key="code">{item.externalCode}</span>,
+          <Button
+            className="font-mono font-semibold"
+            variant="link"
+            key="code"
+            type="button"
+            onClick={() => onView(item)}
+          >
+            {item.externalCode}
+          </Button>,
           <Button
             variant="link"
             key="name"

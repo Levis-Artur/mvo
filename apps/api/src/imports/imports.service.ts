@@ -440,7 +440,7 @@ export class ImportsService {
                 type:
                   batch.type === ImportType.INITIAL_BALANCE
                     ? StockTransactionType.INITIAL_BALANCE
-                    : StockTransactionType.RECEIPT,
+                    : StockTransactionType.IMPORT_RECEIPT,
                 responsiblePersonId: row.responsiblePersonId!,
                 inventoryItemId,
                 quantity: row.parsedQuantity!,
@@ -452,12 +452,8 @@ export class ImportsService {
                     : 'Імпорт надходжень',
                 importBatchId: id,
                 importRowId: row.id,
-                accountingModel: StockAccountingModel.OWNER_CUSTODY,
+                accountingModel: StockAccountingModel.DIRECT_BALANCE,
                 bucketKind: StockSourceKind.DIRECT,
-                accountingOwnerResponsiblePersonId:
-                  row.responsiblePersonId!,
-                sourceCustodianResponsiblePersonId:
-                  row.responsiblePersonId!,
               });
 
             await tx.importRow.update({

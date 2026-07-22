@@ -27,10 +27,7 @@ export function stockQueryFromFilters(
     responsiblePersonId:
       forcedResponsiblePersonId || filters.responsiblePersonId || undefined,
     inventoryItemId: filters.inventoryItemId || undefined,
-    // Backend legacy `onlyPositive` currently checks only the direct bucket.
-    // Fetch all owner rows and apply positivity to totalAccountedQuantity below,
-    // so a fully assigned position is not hidden.
-    onlyPositive: false,
+    onlyPositive: filters.onlyPositive,
   };
 }
 
@@ -39,7 +36,7 @@ export function filterProblematicBalances(
   onlyProblematic?: boolean,
 ) {
   return onlyProblematic
-    ? balances.filter((balance) => !isPositiveQuantity(balance.totalAccountedQuantity ?? balance.quantity))
+    ? balances.filter((balance) => !isPositiveQuantity(balance.quantity))
     : balances;
 }
 
@@ -50,7 +47,7 @@ export function filterVisibleBalances(
   if (filters.onlyProblematic) return filterProblematicBalances(balances, true);
   if (filters.onlyPositive) {
     return balances.filter((balance) =>
-      isPositiveQuantity(balance.totalAccountedQuantity ?? balance.quantity),
+      isPositiveQuantity(balance.quantity),
     );
   }
   return balances;
@@ -89,7 +86,7 @@ export function stockSummary(balances: StockBalance[]) {
       positive.map((balance) => balance.responsiblePerson.id),
     ).size,
     positions: new Set(balances.map((balance) => balance.inventoryItem.id)).size,
-    totalQuantity: addQuantities(balances.map((balance) => balance.totalAccountedQuantity ?? balance.quantity)),
+    totalQuantity: addQuantities(balances.map((balance) => balance.quantity)),
     problematic: balances.length - positive.length,
     updatedAt,
   };

@@ -23,10 +23,6 @@ import {
   StockDocumentAttachmentStorageService,
 } from './stock-document-attachment-storage.service';
 import {
-  assertValidStockSource,
-  StockAccountingInvariantError,
-} from '../stock/stock-accounting.domain';
-import {
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
@@ -111,12 +107,6 @@ export class StockDocumentsService {
         ? [
             { createdByUserId: actor.id },
             { sourceResponsiblePersonId: mvoId },
-            { destinationResponsiblePersonId: mvoId },
-            {
-              lines: {
-                some: { accountingOwnerResponsiblePersonId: mvoId },
-              },
-            },
           ]
         : undefined,
     };
@@ -154,8 +144,14 @@ export class StockDocumentsService {
     context: AuditContext,
   ) {
     this.assertCanWrite(actor);
-    this.assertNotLegacyTransfer(dto.type);
+    this.assertNewDocumentType(dto.type);
     const normalized = this.validateDto(dto, actor);
+    await this.assertActiveTransferRecipient(
+      this.prisma,
+      dto.type,
+      normalized.sourceResponsiblePersonId,
+      normalized.destinationResponsiblePersonId ?? null,
+    );
     const document = await this.prisma.stockDocument.create({
       data: {
         documentNumber:
@@ -188,11 +184,17 @@ export class StockDocumentsService {
   ) {
     this.assertCanWrite(actor);
     const current = await this.findRaw(id);
-    this.assertNotLegacyTransfer(current.type);
-    this.assertNotLegacyTransfer(dto.type);
+    this.assertMutableDocument(current);
+    this.assertNewDocumentType(dto.type);
     this.assertDraft(current.status);
     this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
     const normalized = this.validateDto(dto, actor);
+    await this.assertActiveTransferRecipient(
+      this.prisma,
+      dto.type,
+      normalized.sourceResponsiblePersonId,
+      normalized.destinationResponsiblePersonId ?? null,
+    );
     const document = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.stockDocument.updateMany({
         where: { id, status: StockDocumentStatus.DRAFT },
@@ -226,7 +228,7 @@ export class StockDocumentsService {
   async remove(id: string, actor: CurrentUser, context: AuditContext) {
     this.assertCanWrite(actor);
     const document = await this.findRaw(id);
-    this.assertNotLegacyTransfer(document.type);
+    this.assertMutableDocument(document);
     this.assertDraft(document.status);
     this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
     const attachments = await this.prisma.stockDocumentAttachment.findMany({
@@ -273,6 +275,7 @@ export class StockDocumentsService {
           where: { id },
           select: {
             type: true,
+            accountingModel: true,
             status: true,
             sourceResponsiblePersonId: true,
           },
@@ -281,7 +284,7 @@ export class StockDocumentsService {
           throw new NotFoundException('Документ руху майна не знайдено');
         }
         this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-        this.assertNotLegacyTransfer(current.type);
+        this.assertMutableDocument(current);
         if (current.status === StockDocumentStatus.POSTED) return false;
         this.assertDraft(current.status);
 
@@ -313,17 +316,21 @@ export class StockDocumentsService {
           throw new NotFoundException('Документ руху майна не знайдено');
         }
         this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
+        await this.assertActiveTransferRecipient(
+          tx,
+          document.type,
+          document.sourceResponsiblePersonId,
+          document.destinationResponsiblePersonId,
+        );
         if (!document.lines.length) {
           throw new BadRequestException(
             'Документ повинен містити хоча б один рядок',
           );
         }
         if (document.type === StockDocumentType.ISSUE) {
-          if (
-            document.accountingModel !== StockAccountingModel.OWNER_CUSTODY
-          ) {
+          if (document.accountingModel !== StockAccountingModel.DIRECT_BALANCE) {
             throw new BadRequestException(
-              'Legacy-чернетку видачі потрібно оновити з явним джерелом DIRECT або ASSIGNED',
+              'Legacy-чернетка видачі не містить надійного джерела залишку',
             );
           }
           if (!document.recipientName?.trim()) {
@@ -384,6 +391,7 @@ export class StockDocumentsService {
           where: { id },
           select: {
             type: true,
+            accountingModel: true,
             status: true,
             sourceResponsiblePersonId: true,
           },
@@ -392,7 +400,7 @@ export class StockDocumentsService {
           throw new NotFoundException('Документ руху майна не знайдено');
         }
         this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-        this.assertNotLegacyTransfer(current.type);
+        this.assertMutableDocument(current);
         if (current.status === StockDocumentStatus.CANCELLED) return false;
         if (current.status !== StockDocumentStatus.POSTED) {
           throw new BadRequestException(
@@ -463,83 +471,47 @@ export class StockDocumentsService {
     document: PostingDocument,
     line: PostingLine,
   ) {
-    if (document.type === StockDocumentType.TRANSFER) {
-      await this.postLegacyTransferLine(tx, document, line);
+    if (document.type === StockDocumentType.MVO_TRANSFER) {
+      await this.postDirectBalanceLine(
+        tx,
+        document,
+        line,
+        StockTransactionType.MVO_TRANSFER_OUT,
+      );
       return;
     }
     if (
       document.type === StockDocumentType.ISSUE &&
-      document.accountingModel !== StockAccountingModel.OWNER_CUSTODY
+      document.accountingModel === StockAccountingModel.DIRECT_BALANCE
     ) {
-      await this.postLegacyIssueLine(tx, document, line);
+      await this.postDirectBalanceLine(
+        tx,
+        document,
+        line,
+        StockTransactionType.ISSUE_OUT,
+      );
       return;
     }
-    if (document.type === StockDocumentType.ASSIGNMENT) {
-      await this.postAssignmentLine(tx, document, line);
-      return;
-    }
-    await this.postOwnerCustodyIssueLine(tx, document, line);
+    throw new BadRequestException(
+      'Документ старої моделі доступний лише для перегляду',
+    );
   }
 
-  private async postLegacyTransferLine(
+  private async postDirectBalanceLine(
     tx: Prisma.TransactionClient,
     document: PostingDocument,
     line: PostingLine,
+    type: StockTransactionType,
   ) {
-    await this.stockService.createDecreasingTransactionInTx(tx, {
-      type: StockTransactionType.TRANSFER_OUT,
-      responsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: document.documentDate,
-      sourceDocument: document.documentNumber,
-      comment: document.basis,
-      documentId: document.id,
-      documentLineId: line.id,
-    });
-    await this.stockService.createIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.TRANSFER_IN,
-      responsiblePersonId: document.destinationResponsiblePersonId!,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: document.documentDate,
-      sourceDocument: document.documentNumber,
-      comment: document.basis,
-      documentId: document.id,
-      documentLineId: line.id,
-    });
-  }
-
-  private postLegacyIssueLine(
-    tx: Prisma.TransactionClient,
-    document: PostingDocument,
-    line: PostingLine,
-  ) {
-    return this.stockService.createDecreasingTransactionInTx(tx, {
-      type: StockTransactionType.ISSUE,
-      responsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: document.documentDate,
-      sourceDocument: document.documentNumber,
-      comment: document.basis,
-      documentId: document.id,
-      documentLineId: line.id,
-    });
-  }
-
-  private async postAssignmentLine(
-    tx: Prisma.TransactionClient,
-    document: PostingDocument,
-    line: PostingLine,
-  ) {
-    const ownerId = line.accountingOwnerResponsiblePersonId!;
-    const destinationId = document.destinationResponsiblePersonId!;
-    await this.assertCustodyReference(tx, line, document.sourceResponsiblePersonId);
-
-    if (line.sourceKind === StockSourceKind.DIRECT) {
-      await this.stockService.createDecreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_OUT_DIRECT,
+    await this.assertDirectBalanceReference(
+      tx,
+      line,
+      document.sourceResponsiblePersonId,
+    );
+    const transaction = await this.stockService.createDecreasingTransactionInTx(
+      tx,
+      {
+        type,
         responsiblePersonId: document.sourceResponsiblePersonId,
         inventoryItemId: line.inventoryItemId,
         quantity: line.quantity,
@@ -548,106 +520,16 @@ export class StockDocumentsService {
         comment: document.basis,
         documentId: document.id,
         documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
         bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        sourceCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        destinationCustodianResponsiblePersonId: destinationId,
-      });
-    } else {
-      await this.stockService.createCustodyDecreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_OUT_CUSTODY,
-        accountingOwnerResponsiblePersonId: ownerId,
-        custodianResponsiblePersonId: document.sourceResponsiblePersonId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: document.documentDate,
-        sourceCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        destinationCustodianResponsiblePersonId: destinationId,
-        sourceDocument: document.documentNumber,
-        comment: document.basis,
-        documentId: document.id,
-        documentLineId: line.id,
-      });
-    }
-
-    if (destinationId === ownerId) {
-      await this.stockService.createIncreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_IN_DIRECT,
-        responsiblePersonId: destinationId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: document.documentDate,
-        sourceDocument: document.documentNumber,
-        comment: document.basis,
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
-        bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        sourceCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        destinationCustodianResponsiblePersonId: destinationId,
-      });
-      return;
-    }
-
-    await this.stockService.createCustodyIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.ASSIGNMENT_IN_CUSTODY,
-      accountingOwnerResponsiblePersonId: ownerId,
-      custodianResponsiblePersonId: destinationId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: document.documentDate,
-      sourceCustodianResponsiblePersonId: document.sourceResponsiblePersonId,
-      destinationCustodianResponsiblePersonId: destinationId,
-      sourceDocument: document.documentNumber,
-      comment: document.basis,
-      documentId: document.id,
-      documentLineId: line.id,
-    });
-  }
-
-  private async postOwnerCustodyIssueLine(
-    tx: Prisma.TransactionClient,
-    document: PostingDocument,
-    line: PostingLine,
-  ) {
-    const ownerId = line.accountingOwnerResponsiblePersonId!;
-    await this.assertCustodyReference(tx, line, document.sourceResponsiblePersonId);
-    if (line.sourceKind === StockSourceKind.DIRECT) {
-      await this.stockService.createDecreasingTransactionInTx(tx, {
-        type: StockTransactionType.ISSUE_FROM_DIRECT,
-        responsiblePersonId: document.sourceResponsiblePersonId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: document.documentDate,
-        sourceDocument: document.documentNumber,
-        comment: document.basis,
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
-        bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        sourceCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-      });
-      return;
-    }
-    await this.stockService.createCustodyDecreasingTransactionInTx(tx, {
-      type: StockTransactionType.ISSUE_FROM_CUSTODY,
-      accountingOwnerResponsiblePersonId: ownerId,
-      custodianResponsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: document.documentDate,
-      sourceCustodianResponsiblePersonId: document.sourceResponsiblePersonId,
-      sourceDocument: document.documentNumber,
-      comment: document.basis,
-      documentId: document.id,
-      documentLineId: line.id,
+      },
+    );
+    await tx.stockDocumentLine.update({
+      where: { id: line.id },
+      data: {
+        quantityBefore: transaction.balanceBefore,
+        quantityAfter: transaction.balanceAfter,
+      },
     });
   }
 
@@ -656,213 +538,57 @@ export class StockDocumentsService {
     document: CancellationDocument,
     line: CancellationLine,
   ) {
-    if (document.type === StockDocumentType.TRANSFER) {
-      await this.reverseLegacyTransferLine(tx, document, line);
+    if (document.type === StockDocumentType.MVO_TRANSFER) {
+      await this.reverseDirectBalanceLine(
+        tx,
+        document,
+        line,
+        StockTransactionType.MVO_TRANSFER_OUT,
+        StockTransactionType.MVO_TRANSFER_REVERSAL,
+        'Скасування передачі',
+      );
       return;
     }
     if (
       document.type === StockDocumentType.ISSUE &&
-      document.accountingModel !== StockAccountingModel.OWNER_CUSTODY
+      document.accountingModel === StockAccountingModel.DIRECT_BALANCE
     ) {
-      await this.reverseLegacyIssueLine(tx, document, line);
+      await this.reverseDirectBalanceLine(
+        tx,
+        document,
+        line,
+        StockTransactionType.ISSUE_OUT,
+        StockTransactionType.ISSUE_REVERSAL,
+        'Скасування видачі',
+      );
       return;
     }
-    if (document.type === StockDocumentType.ASSIGNMENT) {
-      await this.reverseAssignmentLine(tx, document, line);
-      return;
-    }
-    await this.reverseOwnerCustodyIssueLine(tx, document, line);
+    throw new BadRequestException(
+      'Документ старої моделі доступний лише для перегляду',
+    );
   }
 
-  private async reverseLegacyTransferLine(
+  private async reverseDirectBalanceLine(
     tx: Prisma.TransactionClient,
     document: CancellationDocument,
     line: CancellationLine,
+    originalType: StockTransactionType,
+    reversalType: StockTransactionType,
+    comment: string,
   ) {
-    await this.stockService.createDecreasingTransactionInTx(tx, {
-      type: StockTransactionType.TRANSFER_REVERSAL_OUT,
-      responsiblePersonId: document.destinationResponsiblePersonId!,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: new Date(),
-      sourceDocument: document.documentNumber,
-      comment: 'Скасування передачі',
-      documentId: document.id,
-      documentLineId: line.id,
-    });
+    const original = this.transactionOfType(line, originalType);
     await this.stockService.createIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.TRANSFER_REVERSAL_IN,
+      type: reversalType,
       responsiblePersonId: document.sourceResponsiblePersonId,
       inventoryItemId: line.inventoryItemId,
       quantity: line.quantity,
       occurredAt: new Date(),
       sourceDocument: document.documentNumber,
-      comment: 'Скасування документа',
+      comment,
       documentId: document.id,
       documentLineId: line.id,
-    });
-  }
-
-  private reverseLegacyIssueLine(
-    tx: Prisma.TransactionClient,
-    document: CancellationDocument,
-    line: CancellationLine,
-  ) {
-    return this.stockService.createIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.ISSUE_REVERSAL,
-      responsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: new Date(),
-      sourceDocument: document.documentNumber,
-      comment: 'Скасування документа',
-      documentId: document.id,
-      documentLineId: line.id,
-    });
-  }
-
-  private async reverseAssignmentLine(
-    tx: Prisma.TransactionClient,
-    document: CancellationDocument,
-    line: CancellationLine,
-  ) {
-    const ownerId = line.accountingOwnerResponsiblePersonId!;
-    const destinationId = document.destinationResponsiblePersonId!;
-    const destinationIsOwner = destinationId === ownerId;
-    const incoming = this.transactionOfType(
-      line,
-      destinationIsOwner
-        ? StockTransactionType.ASSIGNMENT_IN_DIRECT
-        : StockTransactionType.ASSIGNMENT_IN_CUSTODY,
-    );
-    const outgoing = this.transactionOfType(
-      line,
-      line.sourceKind === StockSourceKind.DIRECT
-        ? StockTransactionType.ASSIGNMENT_OUT_DIRECT
-        : StockTransactionType.ASSIGNMENT_OUT_CUSTODY,
-    );
-
-    if (destinationIsOwner) {
-      await this.stockService.createDecreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_REVERSAL,
-        responsiblePersonId: destinationId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: new Date(),
-        sourceDocument: document.documentNumber,
-        comment: 'Скасування передачі',
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
-        bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        sourceCustodianResponsiblePersonId: destinationId,
-        destinationCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        reversalOfTransactionId: incoming.id,
-      });
-    } else {
-      await this.stockService.createCustodyDecreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_REVERSAL,
-        accountingOwnerResponsiblePersonId: ownerId,
-        custodianResponsiblePersonId: destinationId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: new Date(),
-        sourceCustodianResponsiblePersonId: destinationId,
-        destinationCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        sourceDocument: document.documentNumber,
-        comment: 'Скасування передачі',
-        documentId: document.id,
-        documentLineId: line.id,
-        reversalOfTransactionId: incoming.id,
-      });
-    }
-
-    if (line.sourceKind === StockSourceKind.DIRECT) {
-      await this.stockService.createIncreasingTransactionInTx(tx, {
-        type: StockTransactionType.ASSIGNMENT_REVERSAL,
-        responsiblePersonId: document.sourceResponsiblePersonId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: new Date(),
-        sourceDocument: document.documentNumber,
-        comment: 'Скасування передачі',
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
-        bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        sourceCustodianResponsiblePersonId: destinationId,
-        destinationCustodianResponsiblePersonId:
-          document.sourceResponsiblePersonId,
-        reversalOfTransactionId: outgoing.id,
-      });
-      return;
-    }
-
-    await this.stockService.createCustodyIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.ASSIGNMENT_REVERSAL,
-      accountingOwnerResponsiblePersonId: ownerId,
-      custodianResponsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: new Date(),
-      sourceCustodianResponsiblePersonId: destinationId,
-      destinationCustodianResponsiblePersonId:
-        document.sourceResponsiblePersonId,
-      sourceDocument: document.documentNumber,
-      comment: 'Скасування передачі',
-      documentId: document.id,
-      documentLineId: line.id,
-      reversalOfTransactionId: outgoing.id,
-    });
-  }
-
-  private async reverseOwnerCustodyIssueLine(
-    tx: Prisma.TransactionClient,
-    document: CancellationDocument,
-    line: CancellationLine,
-  ) {
-    const ownerId = line.accountingOwnerResponsiblePersonId!;
-    const original = this.transactionOfType(
-      line,
-      line.sourceKind === StockSourceKind.DIRECT
-        ? StockTransactionType.ISSUE_FROM_DIRECT
-        : StockTransactionType.ISSUE_FROM_CUSTODY,
-    );
-    if (line.sourceKind === StockSourceKind.DIRECT) {
-      await this.stockService.createIncreasingTransactionInTx(tx, {
-        type: StockTransactionType.ISSUE_REVERSAL,
-        responsiblePersonId: document.sourceResponsiblePersonId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        occurredAt: new Date(),
-        sourceDocument: document.documentNumber,
-        comment: 'Скасування видачі',
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.OWNER_CUSTODY,
-        bucketKind: StockSourceKind.DIRECT,
-        accountingOwnerResponsiblePersonId: ownerId,
-        reversalOfTransactionId: original.id,
-      });
-      return;
-    }
-    await this.stockService.createCustodyIncreasingTransactionInTx(tx, {
-      type: StockTransactionType.ISSUE_REVERSAL,
-      accountingOwnerResponsiblePersonId: ownerId,
-      custodianResponsiblePersonId: document.sourceResponsiblePersonId,
-      inventoryItemId: line.inventoryItemId,
-      quantity: line.quantity,
-      occurredAt: new Date(),
-      sourceCustodianResponsiblePersonId:
-        document.sourceResponsiblePersonId,
-      sourceDocument: document.documentNumber,
-      comment: 'Скасування видачі',
-      documentId: document.id,
-      documentLineId: line.id,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      bucketKind: StockSourceKind.DIRECT,
       reversalOfTransactionId: original.id,
     });
   }
@@ -880,53 +606,64 @@ export class StockDocumentsService {
     return transaction;
   }
 
-  private async assertCustodyReference(
+  private async assertDirectBalanceReference(
     tx: Prisma.TransactionClient,
     line: PostingLine,
     sourceResponsiblePersonId: string,
   ) {
-    if (
-      line.sourceKind !== StockSourceKind.ASSIGNED ||
-      !line.sourceCustodyBalanceId
-    ) {
-      return;
+    if (!line.sourceBalanceId) {
+      throw new BadRequestException(
+        'Рядок документа не містить посилання на прямий залишок',
+      );
     }
-    const balance = await tx.custodyBalance.findUnique({
-      where: { id: line.sourceCustodyBalanceId },
-      select: {
-        inventoryItemId: true,
-        accountingOwnerResponsiblePersonId: true,
-        custodianResponsiblePersonId: true,
-      },
+    const balance = await tx.stockBalance.findUnique({
+      where: { id: line.sourceBalanceId },
+      select: { responsiblePersonId: true, inventoryItemId: true },
     });
     if (
       !balance ||
-      balance.inventoryItemId !== line.inventoryItemId ||
-      balance.accountingOwnerResponsiblePersonId !==
-        line.accountingOwnerResponsiblePersonId ||
-      balance.custodianResponsiblePersonId !== sourceResponsiblePersonId
+      balance.responsiblePersonId !== sourceResponsiblePersonId ||
+      balance.inventoryItemId !== line.inventoryItemId
     ) {
+      throw new ForbiddenException(
+        'Вибраний залишок не належить МВО-відправнику',
+      );
+    }
+  }
+
+  private async assertActiveTransferRecipient(
+    client: PrismaService | Prisma.TransactionClient,
+    type: StockDocumentType,
+    sourceResponsiblePersonId: string,
+    destinationResponsiblePersonId: string | null,
+  ) {
+    if (type !== StockDocumentType.MVO_TRANSFER) return;
+    if (!destinationResponsiblePersonId) {
       throw new BadRequestException(
-        'Джерело закріпленого майна не відповідає рядку документа',
+        'Для передачі обов’язково вкажіть МВО-одержувача',
+      );
+    }
+    if (destinationResponsiblePersonId === sourceResponsiblePersonId) {
+      throw new BadRequestException(
+        'Відправник і одержувач не можуть бути одним МВО',
+      );
+    }
+    const recipient = await client.responsiblePerson.findUnique({
+      where: { id: destinationResponsiblePersonId },
+      select: { id: true, isActive: true },
+    });
+    if (!recipient?.isActive) {
+      throw new BadRequestException(
+        'МВО-одержувача не знайдено або його деактивовано',
       );
     }
   }
 
   private validateDto(dto: CreateStockDocumentDto, actor: CurrentUser) {
     this.assertMvoOwnSource(actor, dto.sourceResponsiblePersonId);
-    const isAssignment = dto.type === StockDocumentType.ASSIGNMENT;
-    const isTransfer = dto.type === StockDocumentType.TRANSFER;
-    const hasSourceMetadata = dto.lines.some(
-      (line) =>
-        line.sourceKind !== undefined ||
-        line.accountingOwnerResponsiblePersonId !== undefined ||
-        line.sourceCustodianResponsiblePersonId !== undefined ||
-        line.sourceCustodyBalanceId !== undefined,
-    );
-    const usesOwnerCustody =
-      isAssignment || dto.type === StockDocumentType.ISSUE;
+    const isMvoTransfer = dto.type === StockDocumentType.MVO_TRANSFER;
 
-    if (isAssignment || isTransfer) {
+    if (isMvoTransfer) {
       if (!dto.destinationResponsiblePersonId) {
         throw new BadRequestException(
           'Для передачі обов’язково вкажіть МВО-одержувача',
@@ -962,9 +699,12 @@ export class StockDocumentsService {
 
     const seen = new Set<string>();
     const lines = dto.lines.map((line) => {
-      const sourceKey = usesOwnerCustody
-        ? `${line.inventoryItemId}:${line.accountingOwnerResponsiblePersonId ?? ''}`
-        : line.inventoryItemId;
+      if (!line.sourceBalanceId) {
+        throw new BadRequestException(
+          'Для кожного рядка виберіть прямий залишок МВО',
+        );
+      }
+      const sourceKey = line.sourceBalanceId;
       if (seen.has(sourceKey)) {
         throw new BadRequestException(
           'Одне джерело майна не може дублюватися в документі',
@@ -978,58 +718,25 @@ export class StockDocumentsService {
         );
       }
 
-      if (usesOwnerCustody) {
-        if (!line.sourceKind || !line.accountingOwnerResponsiblePersonId) {
-          throw new BadRequestException(
-            'Для кожного рядка вкажіть тип джерела та облікового власника',
-          );
-        }
-        try {
-          assertValidStockSource({
-            sourceKind: line.sourceKind,
-            sourceResponsiblePersonId: dto.sourceResponsiblePersonId,
-            accountingOwnerResponsiblePersonId:
-              line.accountingOwnerResponsiblePersonId,
-            sourceCustodianResponsiblePersonId:
-              line.sourceCustodianResponsiblePersonId,
-            sourceCustodyBalanceId: line.sourceCustodyBalanceId,
-          });
-        } catch (error) {
-          if (error instanceof StockAccountingInvariantError) {
-            throw new BadRequestException(error.message);
-          }
-          throw error;
-        }
-      } else if (hasSourceMetadata) {
-        throw new BadRequestException(
-          'Legacy-документ не може частково містити дані нової моделі обліку',
-        );
-      }
-
       return {
         inventoryItemId: line.inventoryItemId,
         quantity,
-        sourceKind: usesOwnerCustody ? line.sourceKind : null,
-        accountingOwnerResponsiblePersonId: usesOwnerCustody
-          ? line.accountingOwnerResponsiblePersonId
-          : null,
-        sourceCustodianResponsiblePersonId: usesOwnerCustody
-          ? (line.sourceCustodianResponsiblePersonId ?? null)
-          : null,
-        sourceCustodyBalanceId: usesOwnerCustody
-          ? (line.sourceCustodyBalanceId ?? null)
-          : null,
+        sourceKind: null,
+        accountingOwnerResponsiblePersonId: null,
+        sourceCustodianResponsiblePersonId: null,
+        sourceCustodyBalanceId: null,
+        sourceBalanceId: line.sourceBalanceId,
+        quantityBefore: null,
+        quantityAfter: null,
         note: line.note?.trim() || null,
       };
     });
 
     return {
-      accountingModel: usesOwnerCustody
-        ? StockAccountingModel.OWNER_CUSTODY
-        : StockAccountingModel.LEGACY_BALANCE,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
       sourceResponsiblePersonId: dto.sourceResponsiblePersonId,
       destinationResponsiblePersonId:
-        isAssignment || isTransfer
+        isMvoTransfer
           ? dto.destinationResponsiblePersonId
           : null,
       recipientName:
@@ -1088,20 +795,13 @@ export class StockDocumentsService {
     document: {
       createdByUserId: string;
       sourceResponsiblePersonId: string;
-      destinationResponsiblePersonId: string | null;
-      lines: { accountingOwnerResponsiblePersonId: string | null }[];
     },
   ) {
     const responsiblePersonId = actor.responsiblePersonId;
     if (
       actor.role === UserRole.MVO &&
       actor.id !== document.createdByUserId &&
-      responsiblePersonId !== document.sourceResponsiblePersonId &&
-      responsiblePersonId !== document.destinationResponsiblePersonId &&
-      !document.lines.some(
-        (line) =>
-          line.accountingOwnerResponsiblePersonId === responsiblePersonId,
-      )
+      responsiblePersonId !== document.sourceResponsiblePersonId
     ) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
@@ -1115,10 +815,22 @@ export class StockDocumentsService {
     }
   }
 
-  private assertNotLegacyTransfer(type: StockDocumentType) {
-    if (type === StockDocumentType.TRANSFER) {
+  private assertNewDocumentType(type: StockDocumentType) {
+    if (type !== StockDocumentType.MVO_TRANSFER && type !== StockDocumentType.ISSUE) {
       throw new BadRequestException(
-        'Legacy TRANSFER доступний лише для перегляду; створюйте нову передачу як ASSIGNMENT',
+        'Старі документи TRANSFER та ASSIGNMENT доступні лише для перегляду',
+      );
+    }
+  }
+
+  private assertMutableDocument(document: {
+    type: StockDocumentType;
+    accountingModel: StockAccountingModel | null;
+  }) {
+    this.assertNewDocumentType(document.type);
+    if (document.accountingModel !== StockAccountingModel.DIRECT_BALANCE) {
+      throw new BadRequestException(
+        'Документ старої моделі доступний лише для перегляду',
       );
     }
   }
@@ -1141,6 +853,8 @@ export class StockDocumentsService {
       lines: document.lines.map((line) => ({
         ...line,
         quantity: line.quantity.toString(),
+        quantityBefore: line.quantityBefore?.toString() ?? null,
+        quantityAfter: line.quantityAfter?.toString() ?? null,
       })),
       totalPositions: document.lines.length,
       totalQuantity: document.lines

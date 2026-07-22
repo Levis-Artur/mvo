@@ -21,6 +21,7 @@ export type PermissionResource =
   | 'profile'
   | 'ownStock'
   | 'stockDocuments'
+  | 'accountingTransfers'
   | 'administration';
 
 export type AppView =
@@ -38,6 +39,7 @@ export type AppView =
   | 'my-stock'
   | 'my-transactions'
   | 'transfers'
+  | 'accounting-transfers'
   | 'profile';
 
 export type ToolbarActionId =
@@ -98,6 +100,7 @@ const permissions: Record<
     profile: ['read', 'write'],
     administration: ['read'],
     stockDocuments: ['read', 'write'],
+    accountingTransfers: ['read'],
   },
   AUDITOR: {
     dashboard: ['read'],
@@ -110,6 +113,7 @@ const permissions: Record<
     reports: ['read'],
     profile: ['read', 'write'],
     stockDocuments: ['read'],
+    accountingTransfers: ['read'],
   },
   ACCOUNTANT: {
     responsiblePersons: ['read'],
@@ -119,6 +123,7 @@ const permissions: Record<
     transactions: ['read'],
     profile: ['read', 'write'],
     stockDocuments: ['read'],
+    accountingTransfers: ['read'],
   },
   DPP_ADMIN: {
     dashboard: ['read'],
@@ -131,6 +136,7 @@ const permissions: Record<
     mvoUsers: ['read', 'write', 'manage', 'resetPassword', 'revokeSessions'],
     profile: ['read', 'write'],
     stockDocuments: ['read', 'write'],
+    accountingTransfers: ['read'],
   },
   MVO: {
     ownStock: ['read'],
@@ -149,6 +155,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
     nav('Користувачі', '/admin/users', 'users', 'users'),
     nav('Адміністрування', '#', 'administration', 'administration', {
       disabled: true,
@@ -164,6 +171,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
     nav('Звіти', '#', 'reports', 'reports', {
       disabled: true,
       title: UNIMPLEMENTED_TITLE,
@@ -176,6 +184,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
   DPP_ADMIN: [
@@ -187,6 +196,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
     nav('Користувачі МВО', '/mvo-users', 'users', 'mvoUsers'),
   ],
   MVO: [
@@ -311,6 +321,7 @@ const navigationLabels: Record<AppView, string> = {
   transactions: 'Журнал операцій', users: 'Користувачі', reports: 'Звіти',
   administration: 'Адміністрування', 'my-card': 'Моя картка', 'my-stock': 'Моє майно',
   'my-transactions': 'Мої операції', transfers: 'Передачі', profile: 'Профіль',
+  'accounting-transfers': 'Передачі МВО для бухгалтерії',
 };
 
 export function getNavigationItems(user: AuthUser | null) {
@@ -359,6 +370,13 @@ export function canAccessPath(
   pathname: string,
   view: AppView,
 ) {
+  if (
+    view === 'nomenclature' &&
+    pathname.startsWith('/inventory-items/') &&
+    can(user, 'read', 'nomenclature')
+  ) {
+    return true;
+  }
   return getNavigationItems(user).some((item) => {
     if (item.disabled || item.view !== view) {
       return false;

@@ -16,23 +16,23 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { ManualReceiptDto } from './dto/manual-receipt.dto';
-import { assertCustodyPartiesDiffer } from './stock-accounting.domain';
 
 type TransactionClient = Prisma.TransactionClient;
 
-type CustodyMovementInput = {
+type DirectMovementInput = {
   type: StockTransactionType;
-  accountingOwnerResponsiblePersonId: string;
-  custodianResponsiblePersonId: string;
+  responsiblePersonId: string;
   inventoryItemId: string;
   quantity: string | Prisma.Decimal;
   occurredAt: Date;
-  sourceCustodianResponsiblePersonId?: string | null;
-  destinationCustodianResponsiblePersonId?: string | null;
   sourceDocument?: string | null;
   comment?: string | null;
+  importBatchId?: string | null;
+  importRowId?: string | null;
   documentId?: string | null;
   documentLineId?: string | null;
+  accountingModel?: StockAccountingModel | null;
+  bucketKind?: StockSourceKind | null;
   reversalOfTransactionId?: string | null;
 };
 
@@ -80,7 +80,7 @@ const transactionInclude = {
   },
 } satisfies Prisma.StockTransactionInclude;
 
-const custodyCardInclude = {
+const legacyCustodyInclude = {
   inventoryItem: true,
   accountingOwnerResponsiblePerson: true,
   custodianResponsiblePerson: true,
@@ -104,22 +104,8 @@ export class StockService {
       }),
       this.prisma.stockBalance.count({ where }),
     ]);
-    const assignedByOwnerAndItem = await this.assignedQuantities(
-      items.map((item) => ({
-        accountingOwnerResponsiblePersonId: item.responsiblePersonId,
-        inventoryItemId: item.inventoryItemId,
-      })),
-    );
-
     return {
-      items: items.map((item) =>
-        this.serializeBalance(
-          item,
-          assignedByOwnerAndItem.get(
-            this.ownerItemKey(item.responsiblePersonId, item.inventoryItemId),
-          ) ?? new Prisma.Decimal(0),
-        ),
-      ),
+      items: items.map((item) => this.serializeBalance(item)),
       pagination: {
         page,
         limit,
@@ -145,29 +131,14 @@ export class StockService {
       throw new NotFoundException('Залишок не знайдено');
     }
 
-    const assigned = await this.prisma.custodyBalance.aggregate({
-      where: {
-        accountingOwnerResponsiblePersonId: balance.responsiblePersonId,
-        inventoryItemId: balance.inventoryItemId,
-      },
-      _sum: { quantity: true },
-    });
-
-    return this.serializeBalance(
-      balance,
-      assigned._sum.quantity ?? new Prisma.Decimal(0),
-    );
+    return this.serializeBalance(balance);
   }
 
-  async listTransactions(query: ListStockTransactionsQueryDto, user?: CurrentUser) {
+  async listTransactions(query: ListStockTransactionsQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const mvoId =
-      user?.role === UserRole.MVO
-        ? (user.responsiblePersonId ?? '__no_mvo_person__')
-        : undefined;
     const where: Prisma.StockTransactionWhereInput = {
-      responsiblePersonId: mvoId ? undefined : query.responsiblePersonId,
+      responsiblePersonId: query.responsiblePersonId,
       inventoryItemId: query.inventoryItemId,
       type: query.type,
       importBatchId: query.importBatchId,
@@ -175,14 +146,6 @@ export class StockService {
         gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
         lte: query.dateTo ? new Date(query.dateTo) : undefined,
       },
-      OR: mvoId
-        ? [
-            { responsiblePersonId: mvoId },
-            { accountingOwnerResponsiblePersonId: mvoId },
-            { sourceCustodianResponsiblePersonId: mvoId },
-            { destinationCustodianResponsiblePersonId: mvoId },
-          ]
-        : undefined,
     };
 
     const [items, total] = await Promise.all([
@@ -207,23 +170,9 @@ export class StockService {
     };
   }
 
-  async findTransaction(id: string, user?: CurrentUser) {
-    const mvoId =
-      user?.role === UserRole.MVO
-        ? (user.responsiblePersonId ?? '__no_mvo_person__')
-        : undefined;
+  async findTransaction(id: string) {
     const transaction = await this.prisma.stockTransaction.findFirst({
-      where: {
-        id,
-        OR: mvoId
-          ? [
-              { responsiblePersonId: mvoId },
-              { accountingOwnerResponsiblePersonId: mvoId },
-              { sourceCustodianResponsiblePersonId: mvoId },
-              { destinationCustodianResponsiblePersonId: mvoId },
-            ]
-          : undefined,
-      },
+      where: { id },
       include: transactionInclude,
     });
 
@@ -243,28 +192,12 @@ export class StockService {
       occurredAt: new Date(dto.occurredAt),
       sourceDocument: dto.sourceDocument,
       comment: dto.comment,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      bucketKind: StockSourceKind.DIRECT,
     });
   }
 
-  async createIncreasingTransaction(input: {
-    type: StockTransactionType;
-    responsiblePersonId: string;
-    inventoryItemId: string;
-    quantity: string | Prisma.Decimal;
-    occurredAt: Date;
-    sourceDocument?: string | null;
-    comment?: string | null;
-    importBatchId?: string | null;
-    importRowId?: string | null;
-    documentId?: string | null;
-    documentLineId?: string | null;
-    accountingModel?: StockAccountingModel | null;
-    bucketKind?: StockSourceKind | null;
-    accountingOwnerResponsiblePersonId?: string | null;
-    sourceCustodianResponsiblePersonId?: string | null;
-    destinationCustodianResponsiblePersonId?: string | null;
-    reversalOfTransactionId?: string | null;
-  }) {
+  async createIncreasingTransaction(input: DirectMovementInput) {
     const quantity = new Prisma.Decimal(input.quantity);
 
     if (quantity.lte(0)) {
@@ -278,25 +211,7 @@ export class StockService {
 
   async createIncreasingTransactionInTx(
     tx: TransactionClient,
-    input: {
-      type: StockTransactionType;
-      responsiblePersonId: string;
-      inventoryItemId: string;
-      quantity: string | Prisma.Decimal;
-      occurredAt: Date;
-      sourceDocument?: string | null;
-      comment?: string | null;
-      importBatchId?: string | null;
-      importRowId?: string | null;
-      documentId?: string | null;
-      documentLineId?: string | null;
-      accountingModel?: StockAccountingModel | null;
-      bucketKind?: StockSourceKind | null;
-      accountingOwnerResponsiblePersonId?: string | null;
-      sourceCustodianResponsiblePersonId?: string | null;
-      destinationCustodianResponsiblePersonId?: string | null;
-      reversalOfTransactionId?: string | null;
-    },
+    input: DirectMovementInput,
   ) {
     const quantity = new Prisma.Decimal(input.quantity);
 
@@ -375,12 +290,6 @@ export class StockService {
         documentLineId: input.documentLineId,
         accountingModel: input.accountingModel,
         bucketKind: input.bucketKind,
-        accountingOwnerResponsiblePersonId:
-          input.accountingOwnerResponsiblePersonId,
-        sourceCustodianResponsiblePersonId:
-          input.sourceCustodianResponsiblePersonId,
-        destinationCustodianResponsiblePersonId:
-          input.destinationCustodianResponsiblePersonId,
         reversalOfTransactionId: input.reversalOfTransactionId,
       },
       include: transactionInclude,
@@ -389,23 +298,7 @@ export class StockService {
 
   async createDecreasingTransactionInTx(
     tx: TransactionClient,
-    input: {
-      type: StockTransactionType;
-      responsiblePersonId: string;
-      inventoryItemId: string;
-      quantity: string | Prisma.Decimal;
-      occurredAt: Date;
-      sourceDocument?: string | null;
-      comment?: string | null;
-      documentId?: string | null;
-      documentLineId?: string | null;
-      accountingModel?: StockAccountingModel | null;
-      bucketKind?: StockSourceKind | null;
-      accountingOwnerResponsiblePersonId?: string | null;
-      sourceCustodianResponsiblePersonId?: string | null;
-      destinationCustodianResponsiblePersonId?: string | null;
-      reversalOfTransactionId?: string | null;
-    },
+    input: DirectMovementInput,
   ) {
     const quantity = new Prisma.Decimal(input.quantity);
     if (quantity.lte(0)) {
@@ -446,115 +339,6 @@ export class StockService {
     });
   }
 
-  async createCustodyIncreasingTransactionInTx(
-    tx: TransactionClient,
-    input: CustodyMovementInput,
-  ) {
-    const quantity = new Prisma.Decimal(input.quantity);
-    this.validateCustodyMovement(input, quantity);
-
-    await tx.custodyBalance.upsert({
-      where: {
-        inventoryItemId_accountingOwnerResponsiblePersonId_custodianResponsiblePersonId:
-          {
-            inventoryItemId: input.inventoryItemId,
-            accountingOwnerResponsiblePersonId:
-              input.accountingOwnerResponsiblePersonId,
-            custodianResponsiblePersonId: input.custodianResponsiblePersonId,
-          },
-      },
-      update: {},
-      create: {
-        inventoryItemId: input.inventoryItemId,
-        accountingOwnerResponsiblePersonId:
-          input.accountingOwnerResponsiblePersonId,
-        custodianResponsiblePersonId: input.custodianResponsiblePersonId,
-        quantity: new Prisma.Decimal(0),
-      },
-    });
-
-    const locked = await tx.$queryRaw<{ quantity: Prisma.Decimal }[]>`
-      SELECT "quantity"
-      FROM "CustodyBalance"
-      WHERE "inventoryItemId" = ${input.inventoryItemId}::uuid
-        AND "accountingOwnerResponsiblePersonId" = ${input.accountingOwnerResponsiblePersonId}::uuid
-        AND "custodianResponsiblePersonId" = ${input.custodianResponsiblePersonId}::uuid
-      FOR UPDATE
-    `;
-    const balanceBefore = locked[0]?.quantity ?? new Prisma.Decimal(0);
-    const balanceAfter = balanceBefore.plus(quantity);
-
-    await tx.custodyBalance.update({
-      where: {
-        inventoryItemId_accountingOwnerResponsiblePersonId_custodianResponsiblePersonId:
-          {
-            inventoryItemId: input.inventoryItemId,
-            accountingOwnerResponsiblePersonId:
-              input.accountingOwnerResponsiblePersonId,
-            custodianResponsiblePersonId: input.custodianResponsiblePersonId,
-          },
-      },
-      data: { quantity: balanceAfter },
-    });
-
-    return tx.stockTransaction.create({
-      data: this.custodyTransactionData(
-        input,
-        quantity,
-        balanceBefore,
-        balanceAfter,
-      ),
-      include: transactionInclude,
-    });
-  }
-
-  async createCustodyDecreasingTransactionInTx(
-    tx: TransactionClient,
-    input: CustodyMovementInput,
-  ) {
-    const quantity = new Prisma.Decimal(input.quantity);
-    this.validateCustodyMovement(input, quantity);
-
-    const locked = await tx.$queryRaw<{ quantity: Prisma.Decimal }[]>`
-      SELECT "quantity"
-      FROM "CustodyBalance"
-      WHERE "inventoryItemId" = ${input.inventoryItemId}::uuid
-        AND "accountingOwnerResponsiblePersonId" = ${input.accountingOwnerResponsiblePersonId}::uuid
-        AND "custodianResponsiblePersonId" = ${input.custodianResponsiblePersonId}::uuid
-      FOR UPDATE
-    `;
-    const balanceBefore = locked[0]?.quantity;
-    if (!balanceBefore || balanceBefore.lt(quantity)) {
-      throw new BadRequestException(
-        'Недостатньо закріпленого майна для проведення документа',
-      );
-    }
-    const balanceAfter = balanceBefore.minus(quantity);
-
-    await tx.custodyBalance.update({
-      where: {
-        inventoryItemId_accountingOwnerResponsiblePersonId_custodianResponsiblePersonId:
-          {
-            inventoryItemId: input.inventoryItemId,
-            accountingOwnerResponsiblePersonId:
-              input.accountingOwnerResponsiblePersonId,
-            custodianResponsiblePersonId: input.custodianResponsiblePersonId,
-          },
-      },
-      data: { quantity: balanceAfter },
-    });
-
-    return tx.stockTransaction.create({
-      data: this.custodyTransactionData(
-        input,
-        quantity,
-        balanceBefore,
-        balanceAfter,
-      ),
-      include: transactionInclude,
-    });
-  }
-
   async availableToMe(user: CurrentUser) {
     if (user.role !== UserRole.MVO || !user.responsiblePersonId) {
       throw new BadRequestException(
@@ -562,48 +346,20 @@ export class StockService {
       );
     }
     const responsiblePersonId = user.responsiblePersonId;
-    const [directBalances, custodyBalances] = await Promise.all([
-      this.prisma.stockBalance.findMany({
-        where: { responsiblePersonId, quantity: { gt: 0 } },
-        include: balanceInclude,
-        orderBy: { inventoryItem: { name: 'asc' } },
-      }),
-      this.prisma.custodyBalance.findMany({
-        where: {
-          custodianResponsiblePersonId: responsiblePersonId,
-          quantity: { gt: 0 },
-        },
-        include: custodyCardInclude,
-        orderBy: { inventoryItem: { name: 'asc' } },
-      }),
-    ]);
+    const directBalances = await this.prisma.stockBalance.findMany({
+      where: { responsiblePersonId, quantity: { gt: 0 } },
+      include: balanceInclude,
+      orderBy: { inventoryItem: { name: 'asc' } },
+    });
 
-    return [
-      ...directBalances.map((balance) => ({
-        sourceKind: StockSourceKind.DIRECT,
-        inventoryItem: balance.inventoryItem,
-        accountingOwner: this.personReference(balance.responsiblePerson),
-        currentCustodian: this.personReference(balance.responsiblePerson),
-        availableQuantity: balance.quantity.toString(),
-        sourceBalanceId: balance.id,
-        canAssign: true,
-        canIssue: true,
-      })),
-      ...custodyBalances.map((balance) => ({
-        sourceKind: StockSourceKind.ASSIGNED,
-        inventoryItem: balance.inventoryItem,
-        accountingOwner: this.personReference(
-          balance.accountingOwnerResponsiblePerson,
-        ),
-        currentCustodian: this.personReference(
-          balance.custodianResponsiblePerson,
-        ),
-        availableQuantity: balance.quantity.toString(),
-        sourceBalanceId: balance.id,
-        canAssign: true,
-        canIssue: true,
-      })),
-    ];
+    return directBalances.map((balance) => ({
+      inventoryItem: balance.inventoryItem,
+      balanceId: balance.id,
+      availableQuantity: balance.quantity.toString(),
+      unit: balance.inventoryItem.unitOfMeasure,
+      canTransfer: true,
+      canIssue: true,
+    }));
   }
 
   async responsiblePersonAccountingCard(id: string, user: CurrentUser) {
@@ -611,7 +367,7 @@ export class StockService {
       throw new NotFoundException('Картку обліку МВО не знайдено');
     }
 
-    const [directBalances, assignedToOthers, assignedToMe, recentAssignments, recentIssues] =
+    const [directBalances, legacyCustodyArchive, recentTransfers, recentIssues] =
       await Promise.all([
         this.prisma.stockBalance.findMany({
           where: { responsiblePersonId: id, quantity: { gt: 0 } },
@@ -620,27 +376,24 @@ export class StockService {
         }),
         this.prisma.custodyBalance.findMany({
           where: {
-            accountingOwnerResponsiblePersonId: id,
             quantity: { gt: 0 },
+            OR: [
+              { accountingOwnerResponsiblePersonId: id },
+              { custodianResponsiblePersonId: id },
+            ],
           },
-          include: custodyCardInclude,
+          include: legacyCustodyInclude,
           orderBy: { inventoryItem: { name: 'asc' } },
         }),
-        this.prisma.custodyBalance.findMany({
-          where: {
-            custodianResponsiblePersonId: id,
-            quantity: { gt: 0 },
-          },
-          include: custodyCardInclude,
-          orderBy: { inventoryItem: { name: 'asc' } },
-        }),
-        this.recentDocumentsForPerson(id, StockDocumentType.ASSIGNMENT),
-        this.recentDocumentsForPerson(id, StockDocumentType.ISSUE),
+        this.recentDocumentsForPerson(id, [
+          StockDocumentType.MVO_TRANSFER,
+          StockDocumentType.TRANSFER,
+          StockDocumentType.ASSIGNMENT,
+        ]),
+        this.recentDocumentsForPerson(id, [StockDocumentType.ISSUE]),
       ]);
 
     const directTotal = this.sumQuantities(directBalances);
-    const assignedOutTotal = this.sumQuantities(assignedToOthers);
-    const assignedToMeTotal = this.sumQuantities(assignedToMe);
 
     return {
       directBalances: directBalances.map((balance) => ({
@@ -648,109 +401,13 @@ export class StockService {
         inventoryItem: balance.inventoryItem,
         quantity: balance.quantity.toString(),
       })),
-      assignedToOthers: assignedToOthers.map((balance) =>
-        this.serializeCustodyBalance(balance),
+      legacyCustodyArchive: legacyCustodyArchive.map((balance) =>
+        this.serializeLegacyCustodyBalance(balance),
       ),
-      assignedToMe: assignedToMe.map((balance) =>
-        this.serializeCustodyBalance(balance),
-      ),
-      totalOwnedAccountingQuantity: directTotal
-        .plus(assignedOutTotal)
-        .toString(),
-      totalPhysicallyHeldQuantity: directTotal
-        .plus(assignedToMeTotal)
-        .toString(),
-      recentAssignments,
+      totalDirectQuantity: directTotal.toString(),
+      recentTransfers,
       recentIssues,
     };
-  }
-
-  private validateCustodyMovement(
-    input: CustodyMovementInput,
-    quantity: Prisma.Decimal,
-  ): void {
-    if (quantity.lte(0)) {
-      throw new BadRequestException('Кількість має бути більшою за 0');
-    }
-
-    try {
-      assertCustodyPartiesDiffer(
-        input.accountingOwnerResponsiblePersonId,
-        input.custodianResponsiblePersonId,
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Некоректні сторони закріплення',
-      );
-    }
-  }
-
-  private custodyTransactionData(
-    input: CustodyMovementInput,
-    quantity: Prisma.Decimal,
-    balanceBefore: Prisma.Decimal,
-    balanceAfter: Prisma.Decimal,
-  ): Prisma.StockTransactionUncheckedCreateInput {
-    return {
-      type: input.type,
-      responsiblePersonId: input.custodianResponsiblePersonId,
-      inventoryItemId: input.inventoryItemId,
-      quantity,
-      balanceBefore,
-      balanceAfter,
-      occurredAt: input.occurredAt,
-      sourceDocument: input.sourceDocument,
-      comment: input.comment,
-      documentId: input.documentId,
-      documentLineId: input.documentLineId,
-      accountingModel: StockAccountingModel.OWNER_CUSTODY,
-      bucketKind: StockSourceKind.ASSIGNED,
-      accountingOwnerResponsiblePersonId:
-        input.accountingOwnerResponsiblePersonId,
-      sourceCustodianResponsiblePersonId:
-        input.sourceCustodianResponsiblePersonId,
-      destinationCustodianResponsiblePersonId:
-        input.destinationCustodianResponsiblePersonId,
-      reversalOfTransactionId: input.reversalOfTransactionId,
-    };
-  }
-
-  private async assignedQuantities(
-    keys: {
-      accountingOwnerResponsiblePersonId: string;
-      inventoryItemId: string;
-    }[],
-  ) {
-    const result = new Map<string, Prisma.Decimal>();
-    if (!keys.length) return result;
-
-    const rows = await this.prisma.custodyBalance.groupBy({
-      by: ['accountingOwnerResponsiblePersonId', 'inventoryItemId'],
-      where: {
-        accountingOwnerResponsiblePersonId: {
-          in: [...new Set(keys.map((key) => key.accountingOwnerResponsiblePersonId))],
-        },
-        inventoryItemId: {
-          in: [...new Set(keys.map((key) => key.inventoryItemId))],
-        },
-      },
-      _sum: { quantity: true },
-    });
-
-    for (const row of rows) {
-      result.set(
-        this.ownerItemKey(
-          row.accountingOwnerResponsiblePersonId,
-          row.inventoryItemId,
-        ),
-        row._sum.quantity ?? new Prisma.Decimal(0),
-      );
-    }
-    return result;
-  }
-
-  private ownerItemKey(ownerId: string, inventoryItemId: string) {
-    return `${ownerId}:${inventoryItemId}`;
   }
 
   private personReference(person: {
@@ -776,9 +433,9 @@ export class StockService {
     );
   }
 
-  private serializeCustodyBalance(
+  private serializeLegacyCustodyBalance(
     balance: Prisma.CustodyBalanceGetPayload<{
-      include: typeof custodyCardInclude;
+      include: typeof legacyCustodyInclude;
     }>,
   ) {
     return {
@@ -795,11 +452,11 @@ export class StockService {
 
   private async recentDocumentsForPerson(
     responsiblePersonId: string,
-    type: StockDocumentType,
+    types: StockDocumentType[],
   ) {
     const documents = await this.prisma.stockDocument.findMany({
       where: {
-        type,
+        type: { in: types },
         OR: [
           { sourceResponsiblePersonId: responsiblePersonId },
           { destinationResponsiblePersonId: responsiblePersonId },
@@ -889,17 +546,10 @@ export class StockService {
 
   private serializeBalance(
     balance: Prisma.StockBalanceGetPayload<{ include: typeof balanceInclude }>,
-    assignedToOthersQuantity: Prisma.Decimal,
   ) {
-    const directQuantity = balance.quantity;
     return {
       id: balance.id,
-      quantity: directQuantity.toString(),
-      directQuantity: directQuantity.toString(),
-      assignedToOthersQuantity: assignedToOthersQuantity.toString(),
-      totalAccountedQuantity: directQuantity
-        .plus(assignedToOthersQuantity)
-        .toString(),
+      quantity: balance.quantity.toString(),
       createdAt: balance.createdAt,
       updatedAt: balance.updatedAt,
       responsiblePerson: {

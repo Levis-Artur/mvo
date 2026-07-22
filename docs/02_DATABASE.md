@@ -260,38 +260,49 @@ Transaction
 
 ---
 
-# Owner/Custody Accounting Model
+# Direct-balance accounting model
 
-Актуальна модель поточного стану використовує два взаємовиключні bucket-и:
+Поточний стан обліку визначається тільки таблицею `StockBalance`.
+Один рядок з унікальним ключем `responsiblePersonId + inventoryItemId` містить
+актуальну кількість конкретної номенклатури у конкретного МВО.
 
-- `StockBalance` — прямий залишок МВО як accounting owner;
-- `CustodyBalance` — кількість номенклатури accounting owner, що фізично
-  перебуває в іншого custodian.
+- проведений CSV-імпорт збільшує `StockBalance` адресата;
+- `MVO_TRANSFER` зменшує тільки `StockBalance` відправника;
+- одержувач передачі не отримує залишок автоматично;
+- `ISSUE` зменшує тільки прямий залишок МВО;
+- скасування передачі або видачі створює reversal-транзакцію та відновлює
+  прямий залишок джерела;
+- експорт для бухгалтерії не змінює залишків.
 
-`CustodyBalance` має унікальний ключ
-`inventoryItemId + accountingOwnerResponsiblePersonId + custodianResponsiblePersonId`.
-DB check constraints забороняють від’ємну кількість та однакові owner/custodian.
-Нульовий рядок може залишатися як технічний поточний стан, але read models
-повертають активні залишки з `quantity > 0`.
+`StockTransaction` є незмінною історією. Для нових рухів використовуються
+`DIRECT_BALANCE`, `MVO_TRANSFER_OUT`, `MVO_TRANSFER_REVERSAL`, `ISSUE_OUT`,
+`ISSUE_REVERSAL`, `IMPORT_RECEIPT` та посилання на документ/рядок/імпорт.
+`quantityBefore` і `quantityAfter` дозволяють відтворити зміну без перерахунку
+поточного залишку.
 
-`StockDocumentLine` фіксує `sourceKind` (`DIRECT`/`ASSIGNED`), accounting owner,
-source custodian і за потреби `sourceCustodyBalanceId`. Ці поля nullable для
-legacy-рядків. `StockTransaction` зберігає accounting model, bucket, owner,
-source/destination custodian, document/line та self-relation reversal. Старі
-транзакції з nullable metadata залишаються валідними.
+## Legacy owner/custody archive
+
+`CustodyBalance`, `StockSourceKind.ASSIGNED`, тип `ASSIGNMENT` і nullable custody
+поля в `StockDocumentLine`/`StockTransaction` збережені лише для аудиту раніше
+проведених документів. Нові write-path їх не створюють і не змінюють.
+
+Таблиця та зовнішні ключі не видаляються, доки production-перевірка не доведе,
+що дані перенесено в окрему read-only історію і жоден звіт не залежить від них.
+Видалення можливе тільки окремою погодженою міграцією після backup, verification
+queries та перевіреного rollback plan.
 
 `StockDocumentAttachment` містить лише metadata: оригінальну і збережену назву,
 MIME, розмір, SHA-256, storage path, uploader та час. Бінарний файл зберігається
 в окремому volume, не в PostgreSQL.
 
-Картки МВО й номенклатури обчислюють підсумки з тих самих таблиць:
+Поточні підсумки карток обчислюються лише зі `StockBalance`:
 
 ```text
-totalAccounted = SUM(StockBalance.quantity) + SUM(CustodyBalance.quantity)
+currentQuantity = SUM(StockBalance.quantity)
 ```
 
-`assignedToMe` використовується тільки для фізично утримуваного майна і не
-додається до own/direct balance.
+Legacy custody-рядки можуть показуватися окремою секцією «Архів старої моделі»,
+але ніколи не додаються до поточного залишку.
 
 ## Additive migrations
 
@@ -301,8 +312,38 @@ totalAccounted = SUM(StockBalance.quantity) + SUM(CustodyBalance.quantity)
   custody до direct accounting owner;
 - `20260720000300_add_import_action_audit_event` — окремий тип audit event для
   імпортних мутацій.
+- `20260721000200_add_mvo_transfer_direct_balance` — новий `MVO_TRANSFER`,
+  direct-balance transaction types і snapshot кількості в рядках;
+- `20260721000300_add_accounting_transfer_exports` — бухгалтерські export batch
+  без впливу на залишки.
 
-Міграції не перераховують і не видаляють legacy `TRANSFER`.
+Міграції не перераховують і не видаляють legacy `TRANSFER`, `ASSIGNMENT` або
+`CustodyBalance`.
+
+## Production verification queries
+
+Перед майбутнім вилученням legacy-схеми потрібно зафіксувати результати:
+
+```sql
+SELECT COUNT(*) AS rows,
+       COUNT(*) FILTER (WHERE quantity <> 0) AS non_zero_rows
+FROM "CustodyBalance";
+
+SELECT type, status, COUNT(*)
+FROM "StockDocument"
+WHERE type IN ('TRANSFER', 'ASSIGNMENT')
+   OR "accountingModel" = 'OWNER_CUSTODY'
+GROUP BY type, status;
+
+SELECT COUNT(*)
+FROM "StockTransaction"
+WHERE "accountingModel" = 'OWNER_CUSTODY'
+   OR "bucketKind" = 'ASSIGNED';
+```
+
+Ненульовий результат не є помилкою і не дає дозволу на delete: це сигнал, що
+legacy adapter і таблиці треба залишити. У цьому релізі destructive migration
+відсутня.
 
 - партиціонування великих таблиць;
 - архівування історичних даних;

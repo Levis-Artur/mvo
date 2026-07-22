@@ -124,17 +124,13 @@ Version: 1.0
 
 # Stock
 
-`StockBalance` — прямий залишок майна accounting owner, який фізично перебуває
-у нього. Він не включає чуже майно, закріплене за цим МВО.
+`StockBalance` — єдиний актуальний залишок номенклатури у конкретного МВО.
+Кількість збільшується офіційним імпортом і зменшується проведеною передачею
+або видачею. Від’ємний залишок заборонений.
 
-`CustodyBalance` — поточна кількість майна одного accounting owner, закріплена
-за іншим custodian. Accounting owner і custodian не можуть збігатися.
-
-- `direct quantity` — `StockBalance.quantity`;
-- `assigned quantity` — сума `CustodyBalance` accounting owner;
-- `assigned to me` — custody, де МВО є custodian; це не його own balance;
-- `total accounted quantity` — direct + assigned to others;
-- `issued quantity` — остаточно вибула й не входить до поточного стану.
+`CustodyBalance` — legacy archive старої owner/custody-моделі. Нові операції не
+створюють і не змінюють ці записи. Вони можуть читатися окремим audit adapter,
+але не входять до поточних підсумків.
 
 ---
 
@@ -166,18 +162,20 @@ Version: 1.0
 
 # Transfer
 
-У UI — передача майна новому фактичному утримувачу. Нові документи мають тип
-`ASSIGNMENT`; accounting owner не змінюється, а own balance одержувача не
-збільшується. `TRANSFER` — назва legacy-типу старої balance-to-balance моделі;
-такі документи зберігаються як read-only історія.
+У UI — «Передача», у новій моделі — `MVO_TRANSFER`. Проведення зменшує прямий
+`StockBalance` відправника та не змінює `StockBalance` одержувача. Майбутній
+прихід одержувачу можливий лише незалежним CSV-імпортом.
+
+`TRANSFER` і `ASSIGNMENT` — legacy-типи. Вони зберігаються як read-only історія
+та не можуть використовуватися для нових чернеток, posting або cancellation.
 
 ---
 
 # Issue
 
-Остаточне вибуття з `DIRECT` або `ASSIGNED`. Проведення зменшує total accounted
-accounting owner і вимагає фото/скан накладної. Скасування повертає кількість у
-точний source bucket через reversal.
+Остаточне вибуття з прямого `StockBalance` МВО. Проведення створює `ISSUE_OUT`,
+вимагає фото/скан накладної та зменшує тільки джерело. Скасування створює
+`ISSUE_REVERSAL` і повертає кількість у той самий прямий залишок.
 
 ---
 

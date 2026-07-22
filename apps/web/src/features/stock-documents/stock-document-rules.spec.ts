@@ -41,25 +41,20 @@ const target = (id: string): TransferTarget => ({
   service: { id: 'service-1', name: 'Служба забезпечення' },
   unit: null,
 });
-const source = (id: string, quantity: string, kind: 'DIRECT' | 'ASSIGNED' = 'DIRECT'): AvailableStockSource => ({
-  sourceKind: kind,
+const source = (id: string, quantity: string): AvailableStockSource => ({
   inventoryItem: { id, externalCode: id, name: id, unitOfMeasure: 'шт' },
-  accountingOwner: { id: 'owner-1', fullName: 'Власник Один', personnelNumber: '001' },
-  currentCustodian: { id: 'person-1', fullName: 'Утримувач Один', personnelNumber: '002' },
   availableQuantity: quantity,
-  sourceBalanceId: `${kind}-${id}`,
-  canAssign: true,
+  balanceId: `balance-${id}`,
+  unit: 'шт',
+  canTransfer: true,
   canIssue: true,
 });
-const line = (kind: 'DIRECT' | 'ASSIGNED' = 'DIRECT') => ({
-  inventoryItemId: 'item-1', quantity: '2', sourceKind: kind,
-  accountingOwnerResponsiblePersonId: 'owner-1',
-  sourceCustodianResponsiblePersonId: kind === 'ASSIGNED' ? 'person-1' : undefined,
-  sourceCustodyBalanceId: kind === 'ASSIGNED' ? 'ASSIGNED-item-1' : undefined,
+const line = () => ({
+  inventoryItemId: 'item-1', quantity: '2', sourceBalanceId: 'balance-item-1',
 });
 const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => ({
-  type: 'ASSIGNMENT', documentDate: '2026-07-16T00:00:00.000Z',
-  sourceResponsiblePersonId: 'person-1', destinationResponsiblePersonId: 'person-2',
+  type: 'ISSUE', documentDate: '2026-07-16T00:00:00.000Z',
+  sourceResponsiblePersonId: 'person-1', recipientName: 'Одержувач', basis: 'Підстава',
   lines: [line()], ...patch,
 });
 
@@ -85,22 +80,24 @@ describe('stock document frontend rules', () => {
     expect(filterRecipientOptions([arthur], 'person-1', 'забезпечення')).toEqual([arthur]);
   });
 
-  it('ISSUE використовує зовнішнього одержувача, ASSIGNMENT — нового holder', () => {
+  it('ISSUE використовує зовнішнього одержувача, MVO_TRANSFER — МВО-одержувача', () => {
     expect(documentRecipientMode('ISSUE')).toBe('EXTERNAL');
-    expect(documentRecipientMode('ASSIGNMENT')).toBe('MVO');
+    expect(documentRecipientMode('MVO_TRANSFER')).toBe('MVO');
   });
 
-  it('не змішує DIRECT і ASSIGNED та дозволяє передати assigned item далі', () => {
-    expect(validateDocumentInput(input({ lines: [line('ASSIGNED')] }), [source('item-1', '3', 'ASSIGNED')])).toBe('');
+  it('дозволяє лише прямий залишок і відхиляє ASSIGNED source', () => {
+    expect(validateDocumentInput(input(), [source('item-1', '3')])).toBe('');
+    expect(validateDocumentInput(input({ lines: [{ ...line(), sourceKind: 'ASSIGNED' }] }), [source('item-1', '3')]))
+      .toBe('Для нового документа можна вибирати лише власний поточний залишок');
   });
 
-  it('забороняє кількість понад доступне джерело та legacy TRANSFER', () => {
+  it('забороняє кількість понад доступне джерело та обидва legacy типи передач', () => {
     expect(validateDocumentInput(input(), [source('item-1', '1')])).toBe('Кількість не може перевищувати доступний залишок');
-    expect(validateDocumentInput(input({ type: 'TRANSFER' }), [source('item-1', '5')])).toBe('Нові документи старого типу TRANSFER створювати не можна');
+    expect(validateDocumentInput(input({ type: 'TRANSFER' }), [source('item-1', '5')])).toBe('Старі типи передач доступні лише для перегляду');
+    expect(validateDocumentInput(input({ type: 'ASSIGNMENT' }), [source('item-1', '5')])).toBe('Старі типи передач доступні лише для перегляду');
   });
 
-  it('перевіряє поля ASSIGNMENT та ISSUE', () => {
-    expect(validateDocumentInput(input({ destinationResponsiblePersonId: undefined }), [source('item-1', '5')])).toBe('Виберіть нового фактичного утримувача');
+  it('перевіряє обов’язкові поля ISSUE', () => {
     expect(validateDocumentInput(input({ type: 'ISSUE', destinationResponsiblePersonId: undefined, recipientName: '' }), [source('item-1', '5')])).toBe('Вкажіть одержувача');
     expect(validateDocumentInput(input({ type: 'ISSUE', destinationResponsiblePersonId: undefined, recipientName: 'Одержувач', basis: '' }), [source('item-1', '5')])).toBe('Вкажіть мету або підставу видачі');
   });
@@ -110,17 +107,28 @@ describe('stock document frontend rules', () => {
     expect(documentPostingBlocker({ type: 'ISSUE', attachments: [{ id: 'file-1' }] as StockDocument['attachments'] })).toBe('');
   });
 
-  it('legacy transfer завжди read-only, POSTED ASSIGNMENT можна лише скасувати', () => {
+  it('обидва старі типи передач завжди read-only', () => {
     expect(lifecycleActions({ type: 'TRANSFER', status: 'DRAFT', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
-    expect(lifecycleActions({ type: 'ASSIGNMENT', status: 'POSTED', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: true });
+    expect(lifecycleActions({ type: 'ASSIGNMENT', status: 'POSTED', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+  });
+
+  it('дозволяє редагувати нову видачу та MVO_TRANSFER лише з sourceBalanceId', () => {
+    expect(lifecycleActions({
+      type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
+      lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
+    }, mvoUser).edit).toBe(true);
+    expect(lifecycleActions({
+      type: 'MVO_TRANSFER', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
+      lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
+    }, mvoUser).edit).toBe(true);
   });
 
   it('показує точний action error і розрізняє типи документів', () => {
     expect(documentActionState('Недостатній залишок для reversal', false).error).toBe('Недостатній залишок для reversal');
     const document = { type: 'ASSIGNMENT', destinationResponsiblePersonId: 'person-1' } as StockDocument;
-    expect(documentDirection(document, mvoUser)).toBe('Вхідна передача');
-    expect(documentDirection({ ...document, type: 'ISSUE' }, mvoUser)).toBe('Видача');
-    expect(documentDirection({ ...document, type: 'TRANSFER' }, mvoUser)).toBe('Стара логіка');
+    expect(documentDirection(document)).toBe('Стара логіка');
+    expect(documentDirection({ ...document, type: 'ISSUE' })).toBe('Видача');
+    expect(documentDirection({ ...document, type: 'TRANSFER' })).toBe('Стара логіка');
   });
 
   it('оформлює статуси документа стабільно', () => {
@@ -132,7 +140,7 @@ describe('stock document frontend rules', () => {
   });
 
   it('не показує технічні типи та формує послідовний номер документа', () => {
-    expect(documentTypeLabel('ASSIGNMENT')).toBe('Передача');
+    expect(documentTypeLabel('ASSIGNMENT')).toBe('Стара передача');
     expect(documentTypeLabel('ISSUE')).toBe('Видача');
     expect(documentTypeLabel('TRANSFER')).toBe('Стара передача');
     expect(documentNumberLabel(1)).toBe('№ 1');
@@ -157,7 +165,7 @@ describe('stock document frontend rules', () => {
 
   it('формує людський підсумок успішної передачі', () => {
     const document = {
-      type: 'ASSIGNMENT', totalQuantity: '2', recipientName: null,
+      type: 'MVO_TRANSFER', totalQuantity: '2', recipientName: null,
       destinationResponsiblePerson: person('person-2'),
       lines: [{ inventoryItem: { name: 'Клавіатура' } }],
     } as StockDocument;

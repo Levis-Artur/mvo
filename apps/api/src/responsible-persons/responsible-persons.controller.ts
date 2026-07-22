@@ -96,11 +96,10 @@ export class ResponsiblePersonsController {
   stockTransactions(
     @Param('id') id: string,
     @Query() query: ListStockTransactionsQueryDto,
-    @CurrentUserParam() user: CurrentUser,
   ) {
     return this.stockService.listTransactions({
       ...query,
       responsiblePersonId: id,
-    }, user);
+    });
   }
 }

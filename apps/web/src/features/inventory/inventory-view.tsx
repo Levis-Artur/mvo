@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { inventoryService as apiClient } from './inventory.service';
 import { useAuth } from '@/app/ui/auth-context';
 import { can } from '@/lib/authz';
@@ -20,7 +21,7 @@ import { DestructiveActionModal } from '@/features/admin/destructive-action-moda
 import { canShowDestructiveActions } from '@/features/admin/destructive-actions';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 import { InventoryItemForm } from './inventory-item-form';
-import { InventoryItemDetailsModal } from './inventory-item-details-modal';
+import { InventoryItemAccountingCardView } from './inventory-item-accounting-card-view';
 import { InventoryTable } from './inventory-table';
 import {
   EMPTY_INVENTORY_FILTERS,
@@ -30,7 +31,25 @@ import {
 
 const INITIAL_QUERY: InventoryItemsQuery = { page: 1, limit: 20 };
 
-export function NomenclatureView() {
+export function NomenclatureView({
+  initialInventoryItemId,
+}: {
+  initialInventoryItemId?: string;
+}) {
+  const router = useRouter();
+  if (initialInventoryItemId) {
+    return (
+      <InventoryItemAccountingCardView
+        inventoryItemId={initialInventoryItemId}
+        onBack={() => router.push('/nomenclature')}
+      />
+    );
+  }
+  return <NomenclatureListView />;
+}
+
+function NomenclatureListView() {
+  const router = useRouter();
   const { user } = useAuth();
   const canWrite = can(user, 'write', 'nomenclature');
   const canDelete = canShowDestructiveActions(user?.role);
@@ -49,7 +68,6 @@ export function NomenclatureView() {
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [detailsItem, setDetailsItem] = useState<InventoryItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
   const [toast, setToast] = useState('');
 
@@ -86,7 +104,6 @@ export function NomenclatureView() {
   }, [canWrite, load]);
 
   function openEdit(item: InventoryItem) {
-    setDetailsItem(null);
     setEditingItem(item);
     setFormOpen(true);
   }
@@ -184,7 +201,7 @@ export function NomenclatureView() {
         onDelete={setDeletingItem}
         onEdit={openEdit}
         onToggleArchive={(item) => void toggleArchive(item)}
-        onView={setDetailsItem}
+        onView={(item) => router.push(`/inventory-items/${item.id}`)}
       />
       <Pagination
         limit={pagination.limit}
@@ -195,14 +212,6 @@ export function NomenclatureView() {
         onPage={(page) => setQuery((current) => ({ ...current, page }))}
       />
 
-      {detailsItem ? (
-        <InventoryItemDetailsModal
-          canEdit={canWrite}
-          item={detailsItem}
-          onClose={() => setDetailsItem(null)}
-          onEdit={() => openEdit(detailsItem)}
-        />
-      ) : null}
       {formOpen ? (
         <InventoryItemForm
           item={editingItem}

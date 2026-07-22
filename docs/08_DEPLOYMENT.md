@@ -59,23 +59,37 @@ GET /api/stock-documents/maintenance/attachment-orphans
 Непорожні `metadataWithoutFile` або `filesWithoutMetadata` означають, що
 сховище потребує ручної перевірки. Endpoint нічого не видаляє автоматично.
 
-## Production rollout owner/custody model
+## Production rollout direct-balance model
 
-1. Створити перевірену пару backup БД + attachments і перевірити вільне місце.
-2. Розгорнути образи без зупинки PostgreSQL, але не направляти користувачів на
-   новий API до завершення міграцій.
-3. Виконати `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`.
-   Міграції additive: legacy `TRANSFER` не перераховується.
-4. Запустити API та перевірити `GET /api/health`, потім web і nginx.
-5. Виконати smoke checks під ролями OWNER, ACCOUNTANT, AUDITOR та MVO:
-   імпорт у DIRECT, перегляд карток, draft ASSIGNMENT/ISSUE, upload/download
-   attachment. Не проводити тестові документи на production без погодження.
-6. Перевірити attachment-orphans, audit events з requestId та формулу
-   `totalAccounted = direct + assigned` на контрольній номенклатурі.
-7. Залишити legacy `TRANSFER` тільки для читання. Нові передачі створюються як
-   `ASSIGNMENT`, хоча в UI називаються «Передача».
+1. Увімкнути maintenance window для write-операцій та зафіксувати версії
+   поточних API/web images.
+2. Створити узгоджену пару backup PostgreSQL + archive attachments через
+   `backup.sh`; перевірити checksum, розмір і тестове читання архівів.
+3. До deployment виконати read-only verification queries з
+   `docs/02_DATABASE.md`. Ненульовий `CustodyBalance` очікуваний і не повинен
+   видалятися або перераховуватися.
+4. Виконати:
 
-Rollback application release виконується поверненням попередніх образів.
-Схему не слід downgrade вручну: нові таблиці/nullable поля сумісні зі старими
-даними. Якщо потрібне повне відновлення, використовується лише узгоджена пара
-SQL та attachments archive через `restore.sh`.
+   ```bash
+   npx prisma validate --schema apps/api/prisma/schema.prisma
+   npx prisma migrate status --schema apps/api/prisma/schema.prisma
+   npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+   ```
+
+5. Розгорнути API, перевірити `GET /api/health`, потім web і nginx. Каталог
+   attachments не публікувати через nginx.
+6. Виконати smoke checks без production-мутацій: legacy-документи читаються,
+   бухгалтерський register/export відкривається, картка номенклатури показує
+   `StockBalance` та окремі рухи.
+7. У погодженому тестовому контурі перевірити ланцюжок: import +10 A →
+   `MVO_TRANSFER` −2 A (B без змін) → import +5 B → `ISSUE` −1 A → reversal
+   передачі +2 A. Перевірити attachment і audit/requestId.
+8. Після спостереження відкрити write traffic та контролювати 4xx/5xx,
+   від’ємні залишки, повторні posting/cancel і orphan attachments.
+
+Rollback application release виконується поверненням попередніх API/web images,
+без ручного downgrade схеми. Якщо новий код уже створив документи, write traffic
+спочатку зупиняють і перевіряють їх статуси; часткове відновлення БД заборонене.
+Повне відновлення виконується тільки узгодженою парою SQL + attachments archive.
+Legacy `CustodyBalance`, FKs і nullable custody metadata залишаються в схемі,
+тому цей rollout не має destructive database-кроків.

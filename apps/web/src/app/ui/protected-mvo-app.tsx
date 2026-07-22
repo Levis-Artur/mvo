@@ -14,6 +14,8 @@ import { LoadingState } from '@/components/ui';
 type ProtectedMvoAppProps = {
   initialView?: AppView;
   initialImportId?: string;
+  initialAccountingTab?: 'register' | 'exports';
+  initialInventoryItemId?: string;
 };
 
 export function ProtectedMvoApp(props: ProtectedMvoAppProps) {

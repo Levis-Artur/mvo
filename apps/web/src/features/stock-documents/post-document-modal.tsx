@@ -29,7 +29,7 @@ export function PostDocumentModal({ document, loading, error, onConfirm, onClose
         </dl>
       </Card>
       {postingBlocker ? <ErrorState message={postingBlocker} /> : null}
-      {document.type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status">Майно залишиться у вашому обліку, але буде позначене як таке, що знаходиться в обраного МВО.</div> : null}
+      {document.type === 'MVO_TRANSFER' ? <div className="ui-alert" data-tone="info" role="status">Після проведення кількість буде списана із залишку відправника. Одержувачу майно автоматично не оприбутковується.</div> : null}
       {document.type === 'ISSUE' ? <div className="ui-alert" data-tone="warning" role="status">Після проведення документа вказана кількість буде списана з обліку.</div> : null}
       <div className="ui-alert" data-tone="warning" role="status">
         <strong>Після проведення документ не можна редагувати</strong>

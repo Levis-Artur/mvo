@@ -30,19 +30,19 @@ describe('AppShell presentation model', () => {
 
     expect(paths('OWNER')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers', '/admin/users', '/admin',
+      '/transactions', '/transfers', '/accounting/mvo-transfers', '/admin/users', '/admin',
     ]);
     expect(paths('DPP_ADMIN')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers', '/mvo-users',
+      '/transactions', '/transfers', '/accounting/mvo-transfers', '/mvo-users',
     ]);
     expect(paths('AUDITOR')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers',
+      '/transactions', '/transfers', '/accounting/mvo-transfers',
     ]);
     expect(paths('ACCOUNTANT')).toEqual([
       '/persons', '/nomenclature', '/stock', '/imports', '/transactions',
-      '/transfers', '/profile',
+      '/transfers', '/accounting/mvo-transfers', '/profile',
     ]);
     expect(paths('MVO')).toEqual([
       '/my-stock', '/transfers', '/profile',

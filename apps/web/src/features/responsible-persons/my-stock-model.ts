@@ -8,24 +8,30 @@ import type {
 
 export const MY_PROPERTY_SECTION_LABELS: Record<MyPropertySection, string> = {
   DIRECT: 'У мене',
-  ASSIGNED_OUT: 'Передано іншим МВО',
-  ASSIGNED_TO_ME: 'Отримано від інших МВО',
+  TRANSFERRED: 'Передано іншим МВО',
 };
 
 export const MY_PROPERTY_SECTION_DESCRIPTIONS: Record<MyPropertySection, string> = {
-  DIRECT: 'Майно, яке зараз знаходиться безпосередньо у вас.',
-  ASSIGNED_OUT: 'Ваше майно, яке зараз знаходиться в інших матеріально відповідальних осіб.',
-  ASSIGNED_TO_ME: 'Майно інших МВО, яке зараз знаходиться у вас.',
+  DIRECT: 'Поточний залишок майна за даними обліку.',
+  TRANSFERRED: 'Історія проведених і скасованих документів передачі іншим МВО.',
 };
 
-export function myPropertySortOptions(section: MyPropertySection): { value: MyPropertySortBy; label: string }[] {
+export function myPropertySortOptions(
+  section: MyPropertySection,
+): { value: MyPropertySortBy; label: string }[] {
   const common: { value: MyPropertySortBy; label: string }[] = [
     { value: 'code', label: 'Код' },
     { value: 'name', label: 'Назва' },
     { value: 'quantity', label: 'Кількість' },
   ];
-  if (section === 'ASSIGNED_OUT') return [...common, { value: 'currentCustodian', label: 'У кого знаходиться' }];
-  if (section === 'ASSIGNED_TO_ME') return [...common, { value: 'accountingOwner', label: 'Від кого отримано' }];
+  if (section === 'TRANSFERRED') {
+    return [
+      ...common,
+      { value: 'documentDate', label: 'Дата передачі' },
+      { value: 'documentNumber', label: 'Номер документа' },
+      { value: 'recipient', label: 'Кому передано' },
+    ];
+  }
   return common;
 }
 

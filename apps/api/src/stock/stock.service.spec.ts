@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   Prisma,
-  StockSourceKind,
+  StockAccountingModel,
   StockTransactionType,
   UserRole,
 } from '@prisma/client';
@@ -118,49 +118,7 @@ describe('StockService', () => {
     expect(tx.stockBalance.update).not.toHaveBeenCalled();
   });
 
-  it('updates a custody bucket with Decimal precision and immutable history', async () => {
-    const service = new StockService({} as never);
-    const tx = {
-      custodyBalance: {
-        upsert: jest.fn().mockResolvedValue({}),
-        update: jest.fn().mockResolvedValue({}),
-      },
-      stockTransaction: {
-        create: jest.fn().mockResolvedValue({ id: 'transaction' }),
-      },
-      $queryRaw: jest
-        .fn()
-        .mockResolvedValue([{ quantity: new Prisma.Decimal('1.1250') }]),
-    };
-
-    await service.createCustodyIncreasingTransactionInTx(tx as never, {
-      type: StockTransactionType.ASSIGNMENT_IN_CUSTODY,
-      accountingOwnerResponsiblePersonId:
-        '11111111-1111-4111-8111-111111111111',
-      custodianResponsiblePersonId:
-        '22222222-2222-4222-8222-222222222222',
-      inventoryItemId: '33333333-3333-4333-8333-333333333333',
-      quantity: '0.3750',
-      occurredAt: new Date('2026-01-01'),
-    });
-
-    expect(tx.custodyBalance.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: { quantity: new Prisma.Decimal('1.5000') },
-      }),
-    );
-    expect(tx.stockTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          bucketKind: StockSourceKind.ASSIGNED,
-          balanceBefore: new Prisma.Decimal('1.1250'),
-          balanceAfter: new Prisma.Decimal('1.5000'),
-        }),
-      }),
-    );
-  });
-
-  it('returns direct and assigned holdings as separate available sources', async () => {
+  it('returns only positive direct balances as available sources', async () => {
     const person = {
       id: '11111111-1111-4111-8111-111111111111',
       lastName: 'Левіс',
@@ -190,20 +148,6 @@ describe('StockService', () => {
           },
         ]),
       },
-      custodyBalance: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'custody-id',
-            quantity: new Prisma.Decimal('1.5'),
-            inventoryItem: item,
-            accountingOwnerResponsiblePerson: {
-              ...person,
-              id: '22222222-2222-4222-8222-222222222222',
-            },
-            custodianResponsiblePerson: person,
-          },
-        ]),
-      },
     };
     const service = new StockService(prisma as never);
 
@@ -216,21 +160,18 @@ describe('StockService', () => {
       responsiblePersonId: person.id,
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({
-        sourceKind: StockSourceKind.DIRECT,
-        availableQuantity: '2',
-        sourceBalanceId: 'direct-id',
-      }),
-      expect.objectContaining({
-        sourceKind: StockSourceKind.ASSIGNED,
-        availableQuantity: '1.5',
-        sourceBalanceId: 'custody-id',
-      }),
-    ]);
+    expect(result).toEqual([{
+      inventoryItem: item,
+      balanceId: 'direct-id',
+      availableQuantity: '2',
+      unit: 'шт',
+      canTransfer: true,
+      canIssue: true,
+    }]);
+    expect(prisma).not.toHaveProperty('custodyBalance');
   });
 
-  it('builds an MVO accounting card without mixing owned and held totals', async () => {
+  it('builds an MVO accounting card from direct balances and exposes custody only as legacy archive', async () => {
     const person = {
       id: '11111111-1111-4111-8111-111111111111',
       lastName: 'Левіс',
@@ -246,30 +187,17 @@ describe('StockService', () => {
         ]),
       },
       custodyBalance: {
-        findMany: jest
-          .fn()
-          .mockResolvedValueOnce([
-            {
-              id: 'assigned-out',
-              quantity: new Prisma.Decimal(2),
-              inventoryItem: item,
-              accountingOwnerResponsiblePerson: person,
-              custodianResponsiblePerson: { ...person, id: 'other' },
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          ])
-          .mockResolvedValueOnce([
-            {
-              id: 'assigned-in',
-              quantity: new Prisma.Decimal(1),
-              inventoryItem: item,
-              accountingOwnerResponsiblePerson: { ...person, id: 'owner-2' },
-              custodianResponsiblePerson: person,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          ]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'legacy-custody',
+            quantity: new Prisma.Decimal(2),
+            inventoryItem: item,
+            accountingOwnerResponsiblePerson: person,
+            custodianResponsiblePerson: { ...person, id: 'other' },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
       },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
     };
@@ -284,14 +212,17 @@ describe('StockService', () => {
       responsiblePersonId: null,
     });
 
-    expect(result.totalOwnedAccountingQuantity).toBe('4');
-    expect(result.totalPhysicallyHeldQuantity).toBe('3');
+    expect(result.totalDirectQuantity).toBe('2');
     expect(result.directBalances).toHaveLength(1);
-    expect(result.assignedToOthers).toHaveLength(1);
-    expect(result.assignedToMe).toHaveLength(1);
+    expect(result.legacyCustodyArchive).toHaveLength(1);
+    expect(prisma.custodyBalance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ quantity: { gt: 0 } }),
+      }),
+    );
   });
 
-  it('adds direct, assigned-out and total quantities to balance rows', async () => {
+  it('returns direct StockBalance quantities without custody aggregation', async () => {
     const responsiblePerson = {
       id: '11111111-1111-4111-8111-111111111111',
       lastName: 'Левіс',
@@ -324,15 +255,6 @@ describe('StockService', () => {
         ]),
         count: jest.fn().mockResolvedValue(1),
       },
-      custodyBalance: {
-        groupBy: jest.fn().mockResolvedValue([
-          {
-            accountingOwnerResponsiblePersonId: responsiblePerson.id,
-            inventoryItemId: inventoryItem.id,
-            _sum: { quantity: new Prisma.Decimal(2) },
-          },
-        ]),
-      },
     };
     const service = new StockService(prisma as never);
 
@@ -340,9 +262,27 @@ describe('StockService', () => {
 
     expect(result.items[0]).toEqual(
       expect.objectContaining({
-        directQuantity: '2',
-        assignedToOthersQuantity: '2',
-        totalAccountedQuantity: '4',
+        quantity: '2',
+      }),
+    );
+    expect(prisma).not.toHaveProperty('custodyBalance');
+  });
+
+  it('marks manual receipts as direct-balance movements', async () => {
+    const createIncreasingTransaction = jest.fn().mockResolvedValue({});
+    const service = new StockService({} as never);
+    service.createIncreasingTransaction = createIncreasingTransaction;
+
+    await service.manualReceipt({
+      responsiblePersonId: '11111111-1111-4111-8111-111111111111',
+      inventoryItemId: '22222222-2222-4222-8222-222222222222',
+      quantity: '1',
+      occurredAt: '2026-01-01',
+    });
+
+    expect(createIncreasingTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
       }),
     );
   });

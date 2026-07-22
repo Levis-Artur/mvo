@@ -133,7 +133,7 @@ describe('owner/custody API URLs', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('loads available DIRECT and ASSIGNED sources from available-to-me', async () => {
+  it('loads the current MVO direct sources from available-to-me', async () => {
     await apiClient.availableStockToMe();
     expect(fetch).toHaveBeenCalledWith(
       '/api/stock/available-to-me',
@@ -144,14 +144,14 @@ describe('owner/custody API URLs', () => {
   it('sends scoped search, section, sorting and safe pagination to my-property', async () => {
     await apiClient.myProperty({
       search: 'клавіатура',
-      section: 'ASSIGNED_TO_ME',
+      section: 'TRANSFERRED',
       page: 2,
       limit: 100,
-      sortBy: 'accountingOwner',
+      sortBy: 'recipient',
       sortOrder: 'desc',
     });
     expect(fetch).toHaveBeenCalledWith(
-      '/api/stock/my-property?search=%D0%BA%D0%BB%D0%B0%D0%B2%D1%96%D0%B0%D1%82%D1%83%D1%80%D0%B0&section=ASSIGNED_TO_ME&page=2&limit=100&sortBy=accountingOwner&sortOrder=desc',
+      '/api/stock/my-property?search=%D0%BA%D0%BB%D0%B0%D0%B2%D1%96%D0%B0%D1%82%D1%83%D1%80%D0%B0&section=TRANSFERRED&page=2&limit=100&sortBy=recipient&sortOrder=desc',
       expect.objectContaining({ credentials: 'include' }),
     );
   });
@@ -187,10 +187,37 @@ describe('owner/custody API URLs', () => {
   });
 
   it('loads inventory and responsible-person accounting cards', async () => {
-    await apiClient.inventoryItemAccountingCard('item-1');
+    await apiClient.inventoryItemAccountingCard('item-1', {
+      movementPage: 2,
+      movementLimit: 100,
+      movementType: 'MVO_TRANSFER',
+    });
     await apiClient.responsiblePersonAccountingCard('person-1');
-    expect(fetch).toHaveBeenNthCalledWith(1, '/api/inventory-items/item-1/accounting-card', expect.any(Object));
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/inventory-items/item-1/accounting-card?movementPage=2&movementLimit=100&movementType=MVO_TRANSFER', expect.any(Object));
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/responsible-persons/person-1/accounting-card', expect.any(Object));
+  });
+
+  it('exports all filtered inventory movement history from the dedicated endpoint', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(
+      new Response('\uFEFF"Тип операції"\r\n', {
+        status: 200,
+        headers: {
+          'content-disposition':
+            'attachment; filename="inventory-history-KB-1.csv"',
+        },
+      }),
+    );
+
+    const result = await apiClient.exportInventoryItemHistoryCsv('item-1', {
+      movementType: 'IMPORT',
+      documentNumber: 'CSV-7',
+    });
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/inventory-items/item-1/accounting-card/movements/export.csv?movementType=IMPORT&documentNumber=CSV-7',
+      { credentials: 'include' },
+    );
+    expect(result.filename).toBe('inventory-history-KB-1.csv');
   });
 
   it('uses authorized attachment endpoints without serializing the file as JSON', async () => {

@@ -40,13 +40,11 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
   return <section className={`stock-documents-page grid min-w-0 gap-4 ${user.role === 'MVO' ? 'stock-documents-page--mvo' : ''}`}>
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
-        {writable ? <>
-          <Button icon="transfer" type="button" onClick={() => controller.openCreate('ASSIGNMENT')}>Нова передача</Button>
-          <Button variant="outline" type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button>
-        </> : null}
+        {writable ? <Button type="button" onClick={() => controller.openCreate('MVO_TRANSFER')}>Нова передача</Button> : null}
+        {writable ? <Button type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button> : null}
         {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}
-      description="Документи передачі майна між МВО та видачі зовнішнім одержувачам."
+      description="Історія передач майна між МВО та оформлення видач зовнішнім одержувачам."
       icon="transfer"
       title="Передачі та видачі"
     />
@@ -70,7 +68,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onSearchChange={(search) => controller.setDraftFilters((current) => ({ ...current, search }))}
     >
       <FilterField label="Тип"><Select value={controller.draftFilters.type} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, type: event.target.value as typeof current.type }))}>
-        <option value="">Усі типи</option><option value="ASSIGNMENT">Передача</option><option value="ISSUE">Видача</option><option value="TRANSFER">Стара передача</option>
+        <option value="">Усі типи</option><option value="MVO_TRANSFER">Передача</option><option value="ISSUE">Видача</option><option value="ASSIGNMENT">Передача (стара логіка)</option><option value="TRANSFER">Архівна передача</option>
       </Select></FilterField>
       <FilterField label="Статус"><Select value={controller.draftFilters.status} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, status: event.target.value as typeof current.status }))}>
         <option value="">Усі статуси</option><option value="DRAFT">Чернетки</option><option value="POSTED">Проведені</option><option value="CANCELLED">Скасовані</option>
@@ -111,10 +109,10 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       loadingSources={controller.loadingSources}
       loadingTargets={controller.loadingTargets}
       persons={controller.persons}
+      transferTargets={controller.transferTargets}
       saving={controller.saving}
       sourcesError={controller.sourcesError}
       targetsError={controller.targetsError}
-      transferTargets={controller.transferTargets}
       type={controller.formType}
       user={user}
       onClose={() => controller.setFormType(null)}

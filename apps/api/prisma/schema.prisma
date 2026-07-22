@@ -49,11 +49,16 @@ enum StockTransactionType {
   ISSUE_FROM_DIRECT
   ISSUE_FROM_CUSTODY
   ASSIGNMENT_REVERSAL
+  MVO_TRANSFER_OUT
+  MVO_TRANSFER_REVERSAL
+  ISSUE_OUT
+  IMPORT_RECEIPT
 }
 
 enum StockDocumentType {
   TRANSFER
   ASSIGNMENT
+  MVO_TRANSFER
   ISSUE
 }
 
@@ -65,12 +70,18 @@ enum StockSourceKind {
 enum StockAccountingModel {
   LEGACY_BALANCE
   OWNER_CUSTODY
+  DIRECT_BALANCE
 }
 
 enum StockDocumentStatus {
   DRAFT
   POSTED
   CANCELLED
+}
+
+enum AccountingExportState {
+  NOT_EXPORTED
+  EXPORTED
 }
 
 enum InventoryItemReviewStatus {
@@ -225,6 +236,7 @@ model User {
   postedStockDocuments    StockDocument[]  @relation("StockDocumentPostedBy")
   cancelledStockDocuments StockDocument[]  @relation("StockDocumentCancelledBy")
   uploadedStockDocumentAttachments StockDocumentAttachment[]
+  accountingTransferExportBatches AccountingTransferExportBatch[]
 
   @@index([role])
   @@index([isActive])
@@ -302,6 +314,7 @@ model StockBalance {
   updatedAt           DateTime          @updatedAt
   responsiblePerson   ResponsiblePerson @relation(fields: [responsiblePersonId], references: [id], onDelete: Restrict)
   inventoryItem       InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  sourceDocumentLines StockDocumentLine[] @relation("StockDocumentLineSourceBalance")
 
   @@unique([responsiblePersonId, inventoryItemId])
   @@index([responsiblePersonId])
@@ -385,6 +398,7 @@ model StockDocument {
   type                           StockDocumentType
   accountingModel                StockAccountingModel?
   status                         StockDocumentStatus @default(DRAFT)
+  accountingExportState          AccountingExportState @default(NOT_EXPORTED)
   sourceResponsiblePersonId      String              @db.Uuid
   destinationResponsiblePersonId String?             @db.Uuid
   recipientName                  String?
@@ -406,6 +420,7 @@ model StockDocument {
   lines                          StockDocumentLine[]
   transactions                   StockTransaction[]
   attachments                    StockDocumentAttachment[]
+  accountingExportBatches        AccountingTransferExportBatchDocument[]
 
   @@index([type])
   @@index([status])
@@ -414,6 +429,7 @@ model StockDocument {
   @@index([destinationResponsiblePersonId])
   @@index([createdByUserId])
   @@index([accountingModel])
+  @@index([accountingExportState])
 }
 
 model StockDocumentLine {
@@ -424,6 +440,9 @@ model StockDocumentLine {
   accountingOwnerResponsiblePersonId String? @db.Uuid
   sourceCustodianResponsiblePersonId String? @db.Uuid
   sourceCustodyBalanceId String?      @db.Uuid
+  sourceBalanceId String?             @db.Uuid
+  quantityBefore Decimal?             @db.Decimal(18, 4)
+  quantityAfter  Decimal?             @db.Decimal(18, 4)
   quantity        Decimal            @db.Decimal(18, 4)
   note            String?
   createdAt       DateTime           @default(now())
@@ -432,6 +451,7 @@ model StockDocumentLine {
   accountingOwnerResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
   sourceCustodianResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineSourceCustodian", fields: [sourceCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
   sourceCustodyBalance CustodyBalance? @relation(fields: [sourceCustodyBalanceId], references: [id], onDelete: Restrict)
+  sourceBalance StockBalance?          @relation("StockDocumentLineSourceBalance", fields: [sourceBalanceId], references: [id], onDelete: Restrict)
   transactions    StockTransaction[]
 
   @@index([documentId])
@@ -439,6 +459,7 @@ model StockDocumentLine {
   @@index([accountingOwnerResponsiblePersonId])
   @@index([sourceCustodianResponsiblePersonId])
   @@index([sourceCustodyBalanceId])
+  @@index([sourceBalanceId])
 }
 
 model StockDocumentAttachment {
@@ -458,6 +479,60 @@ model StockDocumentAttachment {
   @@index([documentId])
   @@index([uploadedByUserId])
   @@index([sha256])
+}
+
+model AccountingTransferExportBatch {
+  id              String    @id @default(uuid()) @db.Uuid
+  createdByUserId String    @db.Uuid
+  filters         Json
+  filename        String
+  sha256          String
+  documentCount   Int
+  rowCount        Int
+  createdAt       DateTime  @default(now())
+  createdByUser   User      @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  documents       AccountingTransferExportBatchDocument[]
+  rows            AccountingTransferExportRow[]
+
+  @@index([createdByUserId])
+  @@index([createdAt])
+}
+
+model AccountingTransferExportBatchDocument {
+  batchId    String   @db.Uuid
+  documentId String   @db.Uuid
+  batch      AccountingTransferExportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  document   StockDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@id([batchId, documentId])
+  @@index([documentId])
+}
+
+model AccountingTransferExportRow {
+  id                         String              @id @default(uuid()) @db.Uuid
+  batchId                    String              @db.Uuid
+  documentId                 String              @db.Uuid
+  documentLineId             String              @db.Uuid
+  documentNumber             String
+  documentDate               DateTime
+  sourcePersonnelNumber      String
+  sourceFullName             String
+  sourceManagementName       String
+  destinationPersonnelNumber String
+  destinationFullName        String
+  destinationManagementName  String
+  inventoryCode              String
+  inventoryName              String
+  unitOfMeasure              String?
+  quantity                   Decimal             @db.Decimal(18, 4)
+  documentStatus             StockDocumentStatus
+  postedAt                   DateTime?
+  rowOrder                   Int
+  batch                      AccountingTransferExportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowOrder])
+  @@index([batchId])
+  @@index([documentId])
 }
 
 model ImportBatch {

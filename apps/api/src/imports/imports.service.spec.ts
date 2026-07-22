@@ -281,10 +281,8 @@ describe('ImportsService', () => {
     expect(stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
       tx,
       expect.objectContaining({
-        accountingModel: 'OWNER_CUSTODY',
+        accountingModel: 'DIRECT_BALANCE',
         bucketKind: 'DIRECT',
-        accountingOwnerResponsiblePersonId: 'person',
-        sourceCustodianResponsiblePersonId: 'person',
       }),
     );
     expect(tx.importRow.update).toHaveBeenCalledTimes(2);

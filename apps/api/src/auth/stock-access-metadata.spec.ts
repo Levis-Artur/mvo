@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client';
 import { ResponsiblePersonsController } from '../responsible-persons/responsible-persons.controller';
 import { StockController } from '../stock/stock.controller';
 import { StockDocumentsController } from '../stock-documents/stock-documents.controller';
+import { InventoryItemsController } from '../inventory-items/inventory-items.controller';
 import { ROLES_KEY } from './roles.decorator';
 
 function roles(target: object) {
@@ -43,5 +44,22 @@ describe('stock route role metadata', () => {
     expect(roles(StockController.prototype.listTransactions)).toEqual(
       expect.arrayContaining([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR]),
     );
+  });
+
+  it('keeps the global inventory accounting card read-only and closed to MVO', () => {
+    const cardRoles = roles(InventoryItemsController.prototype.accountingCard);
+    const exportRoles = roles(
+      InventoryItemsController.prototype.exportAccountingCardMovements,
+    );
+    expect(cardRoles).toEqual(
+      expect.arrayContaining([
+        UserRole.OWNER,
+        UserRole.DPP_ADMIN,
+        UserRole.ACCOUNTANT,
+        UserRole.AUDITOR,
+      ]),
+    );
+    expect(cardRoles).not.toContain(UserRole.MVO);
+    expect(exportRoles).toEqual(cardRoles);
   });
 });

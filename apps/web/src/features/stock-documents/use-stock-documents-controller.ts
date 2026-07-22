@@ -15,12 +15,9 @@ import type {
   TransferTarget,
 } from '@/lib/types';
 import { stockDocumentsService } from './stock-documents.service';
-import {
-  formLoadPolicy,
-  shouldLoadGlobalResponsiblePersons,
-} from './stock-document-loading-policy';
-import { loadTransferTargets } from './transfer-targets';
+import { shouldLoadGlobalResponsiblePersons } from './stock-document-loading-policy';
 import { successfulDocumentActionMessage } from './stock-document-rules';
+import { loadTransferTargets } from './transfer-targets';
 
 export type DocumentFilters = {
   search: string;
@@ -41,8 +38,8 @@ export function useStockDocumentsController(user: AuthUser) {
   const errorMessage = user.role === 'MVO' ? getMvoErrorMessage : getErrorMessage;
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
-  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
   const [availableSources, setAvailableSources] = useState<AvailableStockSource[]>([]);
+  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
   const [pagination, setPagination] = useState(emptyPagination);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -60,8 +57,8 @@ export function useStockDocumentsController(user: AuthUser) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState('');
   const [personsError, setPersonsError] = useState('');
-  const [targetsError, setTargetsError] = useState('');
   const [sourcesError, setSourcesError] = useState('');
+  const [targetsError, setTargetsError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState('');
   const [success, setSuccess] = useState<{ document: StockDocument; mode: 'draft' | 'post' } | null>(null);
@@ -102,18 +99,6 @@ export function useStockDocumentsController(user: AuthUser) {
     }
   }, [errorMessage, user.role]);
 
-  const loadTargets = useCallback(async () => {
-    setTargetsError(''); setLoadingTargets(true);
-    try {
-      setTransferTargets(await loadTransferTargets(stockDocumentsService.transferTargets));
-    } catch (reason) {
-      setTransferTargets([]);
-      setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${errorMessage(reason)}`);
-    } finally {
-      setLoadingTargets(false);
-    }
-  }, [errorMessage]);
-
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadReferences(); }, [loadReferences]);
 
@@ -135,37 +120,15 @@ export function useStockDocumentsController(user: AuthUser) {
       if (user.role === 'MVO') {
         setAvailableSources(await stockDocumentsService.availableToMe());
       } else {
-        const [person, card] = await Promise.all([
-          stockDocumentsService.person(id),
-          stockDocumentsService.personAccountingCard(id),
-        ]);
-        const holder = {
-          id: person.id,
-          fullName: [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' '),
-          personnelNumber: person.personnelNumber,
-        };
-        setAvailableSources([
-          ...card.directBalances.map((balance) => ({
-            sourceKind: 'DIRECT' as const,
-            inventoryItem: balance.inventoryItem,
-            accountingOwner: holder,
-            currentCustodian: holder,
-            availableQuantity: balance.quantity,
-            sourceBalanceId: balance.id,
-            canAssign: true,
-            canIssue: true,
-          })),
-          ...card.assignedToMe.map((balance) => ({
-            sourceKind: 'ASSIGNED' as const,
-            inventoryItem: balance.inventoryItem,
-            accountingOwner: balance.accountingOwner,
-            currentCustodian: balance.custodian,
-            availableQuantity: balance.quantity,
-            sourceBalanceId: balance.id,
-            canAssign: true,
-            canIssue: true,
-          })),
-        ]);
+        const card = await stockDocumentsService.personAccountingCard(id);
+        setAvailableSources(card.directBalances.map((balance) => ({
+          inventoryItem: balance.inventoryItem,
+          balanceId: balance.id,
+          availableQuantity: balance.quantity,
+          unit: balance.inventoryItem.unitOfMeasure,
+          canTransfer: true,
+          canIssue: true,
+        })));
       }
     } catch (reason) {
       setSourcesError(`Не вдалося завантажити доступне майно: ${errorMessage(reason)}`);
@@ -174,14 +137,25 @@ export function useStockDocumentsController(user: AuthUser) {
     }
   }
 
+  async function loadTargets() {
+    setTargetsError('');
+    setLoadingTargets(true);
+    try {
+      setTransferTargets(await loadTransferTargets(stockDocumentsService.transferTargets));
+    } catch (reason) {
+      setTargetsError(`Не вдалося завантажити МВО-одержувачів: ${errorMessage(reason)}`);
+    } finally {
+      setLoadingTargets(false);
+    }
+  }
+
   function openCreate(nextType: StockDocumentType) {
+    if (nextType !== 'ISSUE' && nextType !== 'MVO_TRANSFER') return;
     setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : '';
     setFormSourceId(source); setFormType(nextType);
-    const policy = formLoadPolicy(nextType);
-    if (policy.transferTargets) void loadTargets();
-    else { setTransferTargets([]); setTargetsError(''); }
-    if (policy.availableSources) void loadSources(source);
+    void loadSources(source);
+    if (nextType === 'MVO_TRANSFER') void loadTargets();
   }
 
   async function openDetails(document: StockDocument) {
@@ -191,12 +165,16 @@ export function useStockDocumentsController(user: AuthUser) {
   }
 
   async function openEdit(document: StockDocument) {
+    if (
+      (document.type !== 'ISSUE' && document.type !== 'MVO_TRANSFER') ||
+      document.lines.some((line) => !line.sourceBalanceId)
+    ) {
+      return;
+    }
     setSelected(null); setEditing(document); setFormSourceId(document.sourceResponsiblePersonId);
     setFormType(document.type); setActionError('');
-    await Promise.all([
-      loadSources(document.sourceResponsiblePersonId),
-      document.type === 'ASSIGNMENT' ? loadTargets() : Promise.resolve(),
-    ]);
+    await loadSources(document.sourceResponsiblePersonId);
+    if (document.type === 'MVO_TRANSFER') await loadTargets();
   }
 
   async function save(input: StockDocumentInput, files: File[]) {
@@ -283,8 +261,8 @@ export function useStockDocumentsController(user: AuthUser) {
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
     selected, setSelected, formType, setFormType, formSourceId, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
-    actionLoading, error, personsError, targetsError, sourcesError, actionError, toast, setToast, success, setSuccess,
-    load, loadReferences, loadTargets, loadSources, openCreate, openDetails, openEdit, save, removeAttachment, perform,
+    actionLoading, error, personsError, sourcesError, targetsError, actionError, toast, setToast, success, setSuccess,
+    load, loadReferences, loadSources, loadTargets, openCreate, openDetails, openEdit, save, removeAttachment, perform,
     openConfirmation, closeConfirmation,
   };
 }

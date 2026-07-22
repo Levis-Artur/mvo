@@ -52,15 +52,13 @@ function personSearchText(person: TransferTarget) {
 }
 
 export function documentLineError(
-  line: StockDocumentInput['lines'][number] & Partial<Pick<DocumentFormLine, 'sourceBalanceId'>>,
+  line: StockDocumentInput['lines'][number] &
+    Partial<Pick<DocumentFormLine, 'sourceBalanceId'>>,
   sources: AvailableStockSource[],
 ) {
   const source = sources.find((item) =>
     item.inventoryItem.id === line.inventoryItemId &&
-    item.sourceKind === line.sourceKind &&
-    item.accountingOwner.id === line.accountingOwnerResponsiblePersonId &&
-    (!line.sourceBalanceId || item.sourceBalanceId === line.sourceBalanceId) &&
-    (line.sourceKind === 'DIRECT' || item.sourceBalanceId === line.sourceCustodyBalanceId),
+    (!line.sourceBalanceId || item.balanceId === line.sourceBalanceId),
   );
   const quantity = Number(line.quantity);
   if (!Number.isFinite(quantity) || quantity <= 0) return 'Кількість повинна бути більшою за 0';
@@ -70,16 +68,33 @@ export function documentLineError(
 
 export function validateDocumentInput(input: StockDocumentInput, sources: AvailableStockSource[]) {
   if (!input.sourceResponsiblePersonId) return 'Виберіть МВО-відправника';
-  if (input.type === 'TRANSFER') return 'Нові документи старого типу TRANSFER створювати не можна';
-  if (input.type === 'ASSIGNMENT' && !input.destinationResponsiblePersonId) return 'Виберіть нового фактичного утримувача';
+  if (input.type === 'TRANSFER' || input.type === 'ASSIGNMENT') {
+    return 'Старі типи передач доступні лише для перегляду';
+  }
+  if (input.type === 'MVO_TRANSFER' && !input.destinationResponsiblePersonId) {
+    return 'Виберіть МВО-одержувача';
+  }
+  if (
+    input.type === 'MVO_TRANSFER' &&
+    input.destinationResponsiblePersonId === input.sourceResponsiblePersonId
+  ) {
+    return 'Відправник і одержувач не можуть бути одним МВО';
+  }
   if (input.type === 'ISSUE' && !input.recipientName?.trim()) return 'Вкажіть одержувача';
   if (input.type === 'ISSUE' && !input.basis?.trim()) return 'Вкажіть мету або підставу видачі';
   if (!input.lines.length) return 'Додайте хоча б одну позицію';
   const sourceKeys = new Set<string>();
   for (const line of input.lines) {
-    const sourceKey = line.sourceKind === 'ASSIGNED' && line.sourceCustodyBalanceId
-      ? `${line.sourceKind}:${line.sourceCustodyBalanceId}`
-      : `${line.sourceKind}:${line.accountingOwnerResponsiblePersonId}:${line.inventoryItemId}`;
+    const untrustedLine = line as typeof line & Record<string, unknown>;
+    if (
+      untrustedLine.sourceKind !== undefined ||
+      untrustedLine.accountingOwnerResponsiblePersonId !== undefined ||
+      untrustedLine.sourceCustodyBalanceId !== undefined
+    ) {
+      return 'Для нового документа можна вибирати лише власний поточний залишок';
+    }
+    if (!line.sourceBalanceId) return 'Виберіть залишок для кожного рядка';
+    const sourceKey = line.sourceBalanceId;
     if (sourceKeys.has(sourceKey)) return 'Одне джерело майна не можна додавати двічі';
     sourceKeys.add(sourceKey);
     const error = documentLineError(line, sources);
@@ -88,29 +103,25 @@ export function validateDocumentInput(input: StockDocumentInput, sources: Availa
   return '';
 }
 
-export function documentDirection(document: StockDocument, user: Pick<AuthUser, 'role' | 'responsiblePersonId'>) {
+export function documentDirection(document: StockDocument) {
   if (document.type === 'ISSUE') return 'Видача';
-  if (document.type === 'TRANSFER') return 'Стара логіка';
-  if (user.role === 'MVO' && document.destinationResponsiblePersonId === user.responsiblePersonId) {
-    return 'Вхідна передача';
-  }
-  return 'Вихідна передача';
+  if (document.type === 'MVO_TRANSFER') return 'Передача';
+  return 'Стара логіка';
 }
 
 export function documentDirectionPresentation(
   document: StockDocument,
-  user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
 ): { label: string; tone: StatusTone } {
-  const label = documentDirection(document, user);
+  const label = documentDirection(document);
   return {
     label,
-    tone: label === 'Вхідна передача' ? 'success' : label === 'Видача' ? 'warning' : label === 'Стара логіка' ? 'neutral' : 'info',
+    tone: label === 'Видача' ? 'warning' : label === 'Передача' ? 'info' : 'neutral',
   };
 }
 
 export function documentTypeLabel(type: StockDocumentType) {
-  if (type === 'ASSIGNMENT') return 'Передача';
   if (type === 'ISSUE') return 'Видача';
+  if (type === 'MVO_TRANSFER') return 'Передача';
   return 'Стара передача';
 }
 
@@ -171,7 +182,8 @@ const statusPresentation: Record<StockDocumentStatus, { label: string; tone: Sta
 };
 
 export const documentStatusPresentation = (status: StockDocumentStatus) => statusPresentation[status];
-export const documentRecipientMode = (type: StockDocumentType) => type === 'ISSUE' ? 'EXTERNAL' : 'MVO';
+export const documentRecipientMode = (type: StockDocumentType) =>
+  type === 'MVO_TRANSFER' ? 'MVO' : 'EXTERNAL';
 
 export function documentActionState(error: string, loading: boolean) {
   return { error, loading, disabled: loading };
@@ -190,10 +202,14 @@ export function documentPostingBlocker(
 }
 
 export function lifecycleActions(
-  document: Pick<StockDocument, 'status' | 'sourceResponsiblePersonId' | 'type'>,
+  document: Pick<StockDocument, 'status' | 'sourceResponsiblePersonId' | 'type'> &
+    Partial<Pick<StockDocument, 'lines'>>,
   user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
 ) {
-  const writable = document.type !== 'TRANSFER' && canChangeStockDocuments(user) && (
+  const directDocument =
+    (document.type === 'ISSUE' || document.type === 'MVO_TRANSFER') &&
+    !document.lines?.some((line) => !line.sourceBalanceId);
+  const writable = directDocument && canChangeStockDocuments(user) && (
     user.role !== 'MVO' || document.sourceResponsiblePersonId === user.responsiblePersonId
   );
   return {

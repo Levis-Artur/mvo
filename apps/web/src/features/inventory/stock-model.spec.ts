@@ -15,7 +15,7 @@ const balances = [
 
 describe('stock presentation model', () => {
   it('applies the positive-only filter through the API query', () => {
-    expect(stockQueryFromFilters({ onlyPositive: true }).onlyPositive).toBe(false);
+    expect(stockQueryFromFilters({ onlyPositive: true }).onlyPositive).toBe(true);
     expect(filterProblematicBalances(balances, true)).toEqual([balances[1]]);
     expect(filterVisibleBalances(balances, { onlyPositive: true })).toEqual([balances[0]]);
   });

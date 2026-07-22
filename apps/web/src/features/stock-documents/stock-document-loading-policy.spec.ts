@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   canUseGlobalResponsiblePersonFilters,
-  formLoadPolicy,
   shouldLoadGlobalResponsiblePersons,
 } from './stock-document-loading-policy';
 
@@ -14,18 +13,7 @@ describe('stock document lazy loading policy', () => {
     expect(canUseGlobalResponsiblePersonFilters('OWNER')).toBe(true);
   });
 
-  it('loads transfer targets and available-to-me only when the form needs them', () => {
-    expect(formLoadPolicy('ASSIGNMENT')).toEqual({
-      transferTargets: true,
-      availableSources: true,
-    });
-    expect(formLoadPolicy('ISSUE')).toEqual({
-      transferTargets: false,
-      availableSources: true,
-    });
-  });
-
-  it('keeps target and source errors inside the form instead of the list page', () => {
+  it('loads transfer targets only when the MVO_TRANSFER form is opened', () => {
     const view = readFileSync(
       join(__dirname, 'stock-documents-view.tsx'),
       'utf8',
@@ -35,22 +23,30 @@ describe('stock document lazy loading policy', () => {
       'utf8',
     );
 
-    expect(view).not.toContain(
-      '<ErrorState message={controller.targetsError}',
-    );
+    expect(view).toContain('controller.targetsError');
+    expect(view).toContain('controller.transferTargets');
+    expect(view).toContain('controller.loadingTargets');
     expect(view).not.toContain(
       '<ErrorState message={controller.personsError}',
     );
-    expect(controller).not.toMatch(
-      /useEffect\(\(\) => \{ void loadTargets\(\);/,
-    );
-    expect(controller).toContain(
-      'if (policy.transferTargets) void loadTargets();',
-    );
-    expect(controller).toContain(
-      'if (policy.availableSources) void loadSources(source);',
-    );
+    expect(controller).toContain("if (nextType === 'MVO_TRANSFER') void loadTargets();");
+    expect(controller).toContain('loadTransferTargets(stockDocumentsService.transferTargets)');
+    expect(controller).not.toContain('card.assignedToMe');
+    expect(controller).toContain("if (nextType !== 'ISSUE' && nextType !== 'MVO_TRANSFER') return;");
+    expect(controller).toContain('void loadSources(source);');
     expect(controller).not.toMatch(/useEffect\(\(\) => \{ void loadSources\(/);
+  });
+
+  it('creates MVO_TRANSFER while keeping legacy transfers read-only', () => {
+    const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
+    const details = readFileSync(join(__dirname, 'stock-document-details-modal.tsx'), 'utf8');
+    const rules = readFileSync(join(__dirname, 'stock-document-rules.ts'), 'utf8');
+
+    expect(view).toContain("controller.openCreate('MVO_TRANSFER')");
+    expect(view).toContain('Передача (стара логіка)');
+    expect(details).toContain("document.type === 'TRANSFER' || document.type === 'ASSIGNMENT'");
+    expect(details).toContain('доступний лише для перегляду');
+    expect(rules).toContain("document.type === 'ISSUE' || document.type === 'MVO_TRANSFER'");
   });
 
   it('uses a compact MVO list without technical status labels', () => {

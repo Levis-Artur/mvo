@@ -6,18 +6,23 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
-import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
-import type { CurrentUser } from '../auth/auth.types';
 import {
-  ACCOUNTING_CARD_READ_ROLES,
+  INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES,
   REFERENCE_DATA_READ_ROLES,
 } from '../auth/access-policy';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import { ListInventoryItemsQueryDto } from './dto/list-inventory-items-query.dto';
 import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto';
+import {
+  InventoryItemAccountingCardQueryDto,
+  InventoryMovementFiltersDto,
+} from './dto/inventory-item-accounting-card-query.dto';
 import { InventoryItemsService } from './inventory-items.service';
 
 @Controller('inventory-items')
@@ -26,25 +31,42 @@ export class InventoryItemsController {
   constructor(private readonly inventoryItemsService: InventoryItemsService) {}
 
   @Get()
-  findAll(
-    @Query() query: ListInventoryItemsQueryDto,
-    @CurrentUserParam() user: CurrentUser,
-  ) {
-    return this.inventoryItemsService.findAll(query, user);
+  findAll(@Query() query: ListInventoryItemsQueryDto) {
+    return this.inventoryItemsService.findAll(query);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUserParam() user: CurrentUser) {
-    return this.inventoryItemsService.findOne(id, user);
+  findOne(@Param('id') id: string) {
+    return this.inventoryItemsService.findOne(id);
   }
 
   @Get(':id/accounting-card')
-  @Roles(...ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES)
   accountingCard(
     @Param('id') id: string,
-    @CurrentUserParam() user: CurrentUser,
+    @Query() query: InventoryItemAccountingCardQueryDto,
   ) {
-    return this.inventoryItemsService.accountingCard(id, user);
+    return this.inventoryItemsService.accountingCard(id, query);
+  }
+
+  @Get(':id/accounting-card/movements/export.csv')
+  @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES)
+  async exportAccountingCardMovements(
+    @Param('id') id: string,
+    @Query() query: InventoryMovementFiltersDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const exported =
+      await this.inventoryItemsService.exportAccountingCardMovements(
+        id,
+        query,
+      );
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(Buffer.from(exported.csv, 'utf8'), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="${exported.filename}"`,
+    });
   }
 
   @Post()

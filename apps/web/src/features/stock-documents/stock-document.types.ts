@@ -10,11 +10,7 @@ import type {
 
 export type DocumentFormLine = {
   inventoryItemId: string;
-  sourceKind: 'DIRECT' | 'ASSIGNED';
   sourceBalanceId: string;
-  accountingOwnerResponsiblePersonId: string;
-  sourceCustodianResponsiblePersonId?: string;
-  sourceCustodyBalanceId?: string;
   quantity: string;
   note: string;
 };

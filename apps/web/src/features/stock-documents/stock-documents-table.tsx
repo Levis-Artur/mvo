@@ -42,7 +42,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         const volume = documentVolumePresentation(document.totalPositions, document.totalQuantity);
         return [
           new Date(document.documentDate).toLocaleDateString('uk-UA'),
-          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'TRANSFER' ? 'neutral' : 'info'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button></div>,
+          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'MVO_TRANSFER' ? 'info' : 'neutral'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button></div>,
           <span className="stock-documents-table__person-text" key="counterparty" title={counterparty}>{counterparty}</span>,
           <span aria-label={volume.full} className="stock-documents-table__volume-text" key="volume" title={volume.full}>{volume.compact}</span>,
           <StockDocumentStatusBadge key="status" status={document.status} />,
@@ -62,7 +62,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
     emptyMessage="Документи за вказаними фільтрами не знайдено."
     loading={loading}
     rows={documents.map((document) => {
-      const direction = documentDirectionPresentation(document, user);
+      const direction = documentDirectionPresentation(document);
       const actions = lifecycleActions(document, user);
       const recipient = document.destinationResponsiblePerson
         ? fullName(document.destinationResponsiblePerson)

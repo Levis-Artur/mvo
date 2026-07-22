@@ -22,10 +22,10 @@ const labels: Record<StockTransactionType, string> = {
   MANUAL_RECEIPT: 'Ручне надходження',
   ADJUSTMENT_INCREASE: 'Коригування: збільшення',
   ADJUSTMENT_DECREASE: 'Коригування: зменшення',
-  TRANSFER_OUT: 'Legacy transfer: вибуття',
-  TRANSFER_IN: 'Legacy transfer: надходження',
-  ISSUE: 'Legacy видача',
-  DOCUMENT_REVERSAL: 'Legacy reversal',
+  TRANSFER_OUT: 'Стара передача: вибуття',
+  TRANSFER_IN: 'Стара передача: надходження',
+  ISSUE: 'Стара видача',
+  DOCUMENT_REVERSAL: 'Скасування старої операції',
   ASSIGNMENT_OUT_DIRECT: 'Передача з прямого залишку',
   ASSIGNMENT_OUT_CUSTODY: 'Передача із закріпленого майна',
   ASSIGNMENT_IN_DIRECT: 'Повернення у прямий залишок',
@@ -34,12 +34,17 @@ const labels: Record<StockTransactionType, string> = {
   ISSUE_FROM_CUSTODY: 'Видача із закріпленого майна',
   ASSIGNMENT_REVERSAL: 'Скасування передачі',
   ISSUE_REVERSAL: 'Скасування видачі',
+  MVO_TRANSFER_OUT: 'Передача іншому МВО',
+  MVO_TRANSFER_REVERSAL: 'Скасування передачі МВО',
+  ISSUE_OUT: 'Видача майна',
+  IMPORT_RECEIPT: 'Прихід через імпорт',
 };
 
 export const transactionTypeLabel = (type: StockTransactionType) => labels[type];
 export const transactionDirection = (type: StockTransactionType) =>
   ['ADJUSTMENT_DECREASE', 'TRANSFER_OUT', 'ISSUE', 'ASSIGNMENT_OUT_DIRECT',
-    'ASSIGNMENT_OUT_CUSTODY', 'ISSUE_FROM_DIRECT', 'ISSUE_FROM_CUSTODY']
+    'ASSIGNMENT_OUT_CUSTODY', 'ISSUE_FROM_DIRECT', 'ISSUE_FROM_CUSTODY',
+    'MVO_TRANSFER_OUT', 'ISSUE_OUT']
     .includes(type) ? 'Зменшення' : 'Збільшення';
 export const transactionSource = (item: StockTransaction) =>
   item.sourceDocument || (item.importBatchId ? `Імпорт ${item.importBatchId}` : 'Системна операція');

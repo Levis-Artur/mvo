@@ -1,5 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
-import { Prisma, UserRole } from '@prisma/client';
+import {
+  Prisma,
+  StockDocumentStatus,
+  StockDocumentType,
+  UserRole,
+} from '@prisma/client';
 import type { CurrentUser } from '../auth/auth.types';
 import {
   ExportMyPropertyQueryDto,
@@ -22,27 +27,6 @@ const user: CurrentUser = {
   mustChangePassword: false,
   responsiblePersonId: mvoId,
 };
-
-const organization = { name: 'Управління забезпечення' };
-const service = { name: 'Служба майна' };
-const unit = { name: 'Підрозділ 1' };
-const mvoPerson = {
-  id: mvoId,
-  lastName: 'Левіс',
-  firstName: 'Артур',
-  middleName: 'Сергійович',
-  personnelNumber: '002',
-  management: organization,
-  service,
-  unit,
-};
-const otherPerson = {
-  ...mvoPerson,
-  id: otherId,
-  lastName: 'Інший',
-  firstName: 'Утримувач',
-  personnelNumber: '003',
-};
 const item = {
   id: itemId,
   externalCode: 'KB-001',
@@ -54,15 +38,25 @@ const directRow = {
   quantity: new Prisma.Decimal('4.5000'),
   updatedAt: new Date('2026-07-20T10:00:00.000Z'),
   inventoryItem: item,
-  responsiblePerson: mvoPerson,
 };
-const custodyRow = {
+const transferRow = {
   id: '66666666-6666-4666-8666-666666666666',
   quantity: new Prisma.Decimal('2.2500'),
-  updatedAt: new Date('2026-07-20T11:00:00.000Z'),
   inventoryItem: item,
-  accountingOwnerResponsiblePerson: mvoPerson,
-  custodianResponsiblePerson: otherPerson,
+  document: {
+    id: '77777777-7777-4777-8777-777777777777',
+    displayNumber: 7,
+    documentDate: new Date('2026-07-20T11:00:00.000Z'),
+    type: StockDocumentType.ASSIGNMENT,
+    status: StockDocumentStatus.POSTED,
+    destinationResponsiblePerson: {
+      id: otherId,
+      lastName: 'Інший',
+      firstName: 'Одержувач',
+      middleName: null,
+      personnelNumber: '003',
+    },
+  },
 };
 
 function createService() {
@@ -70,18 +64,10 @@ function createService() {
     stockBalance: {
       findMany: jest.fn().mockResolvedValue([directRow]),
       count: jest.fn().mockResolvedValue(1),
-      aggregate: jest.fn().mockResolvedValue({
-        _sum: { quantity: new Prisma.Decimal('4.5') },
-        _count: 1,
-      }),
     },
-    custodyBalance: {
-      findMany: jest.fn().mockResolvedValue([custodyRow]),
+    stockDocumentLine: {
+      findMany: jest.fn().mockResolvedValue([transferRow]),
       count: jest.fn().mockResolvedValue(1),
-      aggregate: jest.fn().mockResolvedValue({
-        _sum: { quantity: new Prisma.Decimal('2') },
-        _count: 1,
-      }),
     },
     responsiblePerson: {
       findUnique: jest.fn().mockResolvedValue({ personnelNumber: '002' }),
@@ -90,14 +76,23 @@ function createService() {
   return { prisma, service: new MyPropertyService(prisma as never) };
 }
 
-function query(section: MyPropertySection, search?: string): ListMyPropertyQueryDto {
+function query(
+  section: MyPropertySection,
+  search?: string,
+): ListMyPropertyQueryDto {
   return {
     section,
     search,
     page: 1,
     limit: 20,
-    sortBy: MyPropertySortBy.NAME,
-    sortOrder: SortOrder.ASC,
+    sortBy:
+      section === MyPropertySection.TRANSFERRED
+        ? MyPropertySortBy.DOCUMENT_DATE
+        : MyPropertySortBy.NAME,
+    sortOrder:
+      section === MyPropertySection.TRANSFERRED
+        ? SortOrder.DESC
+        : SortOrder.ASC,
   };
 }
 
@@ -108,114 +103,167 @@ async function streamText(stream: NodeJS.ReadableStream) {
 }
 
 describe('MyPropertyService', () => {
-  it.each([
-    ['кодом', 'KB-001', 'externalCode'],
-    ['частиною назви', 'клавіат', 'name'],
-    ['ПІБ власника', 'Левіс Артур', 'accountingOwnerResponsiblePerson'],
-    ['ПІБ утримувача', 'Інший Утримувач', 'custodianResponsiblePerson'],
-  ])('builds server-side search by %s', async (_label, search, expectedField) => {
-    const { prisma, service: propertyService } = createService();
-    await propertyService.list(query(MyPropertySection.ASSIGNED_TO_ME, `  ${search}  `), user);
+  it('returns only positive direct StockBalance rows for the current MVO', async () => {
+    const { prisma, service } = createService();
 
-    const call = prisma.custodyBalance.findMany.mock.calls[0][0];
-    expect(JSON.stringify(call.where)).toContain(expectedField);
-    expect(JSON.stringify(call.where)).toContain(search.split(' ')[0]);
+    const result = await service.list(query(MyPropertySection.DIRECT), user);
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        section: MyPropertySection.DIRECT,
+        id: directRow.id,
+        quantity: '4.5',
+      }),
+    );
+    expect(result).not.toHaveProperty('summary');
+    expect(prisma.stockBalance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          responsiblePersonId: mvoId,
+          quantity: { gt: 0 },
+        }),
+      }),
+    );
   });
 
-  it('scopes every section to the responsible person from the session', async () => {
-    const { prisma, service: propertyService } = createService();
-    await propertyService.list(query(MyPropertySection.DIRECT), user);
-    expect(prisma.stockBalance.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ responsiblePersonId: mvoId }),
-    }));
+  it('builds transferred history from document lines rather than custody balances', async () => {
+    const { prisma, service } = createService();
 
-    await propertyService.list(query(MyPropertySection.ASSIGNED_OUT), user);
-    expect(prisma.custodyBalance.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ accountingOwnerResponsiblePersonId: mvoId }),
-    }));
+    const result = await service.list(
+      query(MyPropertySection.TRANSFERRED),
+      user,
+    );
 
-    await propertyService.list(query(MyPropertySection.ASSIGNED_TO_ME), user);
-    expect(prisma.custodyBalance.findMany).toHaveBeenLastCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ custodianResponsiblePersonId: mvoId }),
-    }));
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        section: MyPropertySection.TRANSFERRED,
+        id: transferRow.id,
+        recipient: expect.objectContaining({
+          id: otherId,
+          fullName: 'Інший Одержувач',
+        }),
+        document: expect.objectContaining({
+          displayNumber: 7,
+          status: StockDocumentStatus.POSTED,
+        }),
+      }),
+    );
+    expect(prisma.stockDocumentLine.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: expect.objectContaining({
+            sourceResponsiblePersonId: mvoId,
+            type: {
+              in: [
+                StockDocumentType.TRANSFER,
+                StockDocumentType.ASSIGNMENT,
+                StockDocumentType.MVO_TRANSFER,
+              ],
+            },
+            status: {
+              in: [
+                StockDocumentStatus.DRAFT,
+                StockDocumentStatus.POSTED,
+                StockDocumentStatus.CANCELLED,
+              ],
+            },
+          }),
+        }),
+      }),
+    );
+    expect(prisma).not.toHaveProperty('custodyBalance');
   });
 
-  it('does not mix DIRECT, ASSIGNED_OUT and ASSIGNED_TO_ME responses', async () => {
-    const direct = createService();
-    expect((await direct.service.list(query(MyPropertySection.DIRECT), user)).items[0].section)
-      .toBe(MyPropertySection.DIRECT);
+  it('searches transfer history by item, document, and recipient fields', async () => {
+    const { prisma, service } = createService();
 
-    const assignedOut = createService();
-    const out = await assignedOut.service.list(query(MyPropertySection.ASSIGNED_OUT), user);
-    expect(out.items[0]).toMatchObject({ section: MyPropertySection.ASSIGNED_OUT, canAssign: false });
+    await service.list(
+      query(MyPropertySection.TRANSFERRED, '  Інший 7  '),
+      user,
+    );
 
-    const assignedToMe = createService();
-    const held = await assignedToMe.service.list(query(MyPropertySection.ASSIGNED_TO_ME), user);
-    expect(held.items[0]).toMatchObject({ section: MyPropertySection.ASSIGNED_TO_ME, canAssign: true });
+    const where = prisma.stockDocumentLine.findMany.mock.calls[0][0].where;
+    const serialized = JSON.stringify(where);
+    expect(serialized).toContain('inventoryItem');
+    expect(serialized).toContain('documentNumber');
+    expect(serialized).toContain('destinationResponsiblePerson');
+    expect(serialized).toContain('displayNumber');
   });
 
-  it('caps page size at 100 and applies supported sorting', async () => {
-    const { prisma, service: propertyService } = createService();
-    await propertyService.list({
-      ...query(MyPropertySection.DIRECT),
-      limit: 999,
-      sortBy: MyPropertySortBy.CODE,
-      sortOrder: SortOrder.DESC,
-    }, user);
+  it('caps page size at 100 and applies supported direct sorting', async () => {
+    const { prisma, service } = createService();
+    await service.list(
+      {
+        ...query(MyPropertySection.DIRECT),
+        limit: 999,
+        sortBy: MyPropertySortBy.CODE,
+        sortOrder: SortOrder.DESC,
+      },
+      user,
+    );
 
-    expect(prisma.stockBalance.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      take: 100,
-      orderBy: [
-        { inventoryItem: { externalCode: SortOrder.DESC } },
-        { id: SortOrder.ASC },
-      ],
-    }));
+    expect(prisma.stockBalance.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 100,
+        orderBy: [
+          { inventoryItem: { externalCode: SortOrder.DESC } },
+          { id: SortOrder.ASC },
+        ],
+      }),
+    );
   });
 
-  it('uses the session link for every stock-read role and rejects a missing link', async () => {
-    const { service: propertyService } = createService();
-    await expect(propertyService.list(query(MyPropertySection.DIRECT), {
-      ...user,
-      role: UserRole.OWNER,
-    })).resolves.toBeDefined();
-    await expect(propertyService.list(query(MyPropertySection.DIRECT), {
-      ...user,
-      responsiblePersonId: null,
-    })).rejects.toBeInstanceOf(BadRequestException);
+  it('uses the responsible person link from the session', async () => {
+    const { service } = createService();
+    await expect(
+      service.list(query(MyPropertySection.DIRECT), {
+        ...user,
+        role: UserRole.OWNER,
+      }),
+    ).resolves.toBeDefined();
+    await expect(
+      service.list(query(MyPropertySection.DIRECT), {
+        ...user,
+        responsiblePersonId: null,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('exports ALL with all three categories and no technical UUID fields', async () => {
-    const { prisma, service: propertyService } = createService();
-    prisma.stockBalance.findMany.mockResolvedValue([directRow]);
-    prisma.custodyBalance.findMany.mockResolvedValue([custodyRow]);
-    const exported = await propertyService.exportCsv({
-      section: MyPropertyExportSection.ALL,
-    } as ExportMyPropertyQueryDto, user);
+  it('exports direct balances and transfer-document history without UUIDs', async () => {
+    const { service } = createService();
+    const exported = await service.exportCsv(
+      { section: MyPropertyExportSection.ALL } as ExportMyPropertyQueryDto,
+      user,
+    );
     const csv = await streamText(exported.stream);
 
-    expect(csv).toContain('Безпосередньо у мене');
-    expect(csv).toContain('Закріплено за іншими');
-    expect(csv).toContain('Закріплено за мною');
+    expect(csv).toContain('У мене');
+    expect(csv).toContain('Передано іншим МВО');
+    expect(csv).toContain('Інший Одержувач');
     expect(csv).not.toContain(itemId);
     expect(csv).not.toContain(directRow.id);
-    expect(exported.filename).toMatch(/^mvo-property-002-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(exported.filename).toMatch(
+      /^mvo-property-002-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
   });
 
-  it('exports only the selected tab when a concrete section is requested', async () => {
-    const { prisma, service: propertyService } = createService();
-    const exported = await propertyService.exportCsv({
-      section: MyPropertyExportSection.ASSIGNED_TO_ME,
-    } as ExportMyPropertyQueryDto, user);
+  it('exports only transfer history for the transferred tab', async () => {
+    const { prisma, service } = createService();
+    const exported = await service.exportCsv(
+      {
+        section: MyPropertyExportSection.TRANSFERRED,
+      } as ExportMyPropertyQueryDto,
+      user,
+    );
     const csv = await streamText(exported.stream);
 
-    expect(csv).toContain('Закріплено за мною');
-    expect(csv).not.toContain('Безпосередньо у мене');
-    expect(csv).not.toContain('Закріплено за іншими');
+    expect(csv).toContain('Передано іншим МВО');
+    expect(csv).not.toContain('"У мене"');
     expect(prisma.stockBalance.findMany).not.toHaveBeenCalled();
   });
 
-  it('streams every export batch instead of limiting CSV to the first page', async () => {
-    const { prisma, service: propertyService } = createService();
+  it('streams all direct export batches', async () => {
+    const { prisma, service } = createService();
     const firstBatch = Array.from({ length: 500 }, (_, index) => ({
       ...directRow,
       id: `batch-${String(index).padStart(4, '0')}`,
@@ -223,10 +271,19 @@ describe('MyPropertyService', () => {
     }));
     prisma.stockBalance.findMany
       .mockResolvedValueOnce(firstBatch)
-      .mockResolvedValueOnce([{ ...directRow, id: 'batch-last', inventoryItem: { ...item, externalCode: 'CODE-500' } }]);
-    const exported = await propertyService.exportCsv({
-      section: MyPropertyExportSection.DIRECT,
-    } as ExportMyPropertyQueryDto, user);
+      .mockResolvedValueOnce([
+        {
+          ...directRow,
+          id: 'batch-last',
+          inventoryItem: { ...item, externalCode: 'CODE-500' },
+        },
+      ]);
+    const exported = await service.exportCsv(
+      {
+        section: MyPropertyExportSection.DIRECT,
+      } as ExportMyPropertyQueryDto,
+      user,
+    );
     const csv = await streamText(exported.stream);
 
     expect(csv).toContain('CODE-0');

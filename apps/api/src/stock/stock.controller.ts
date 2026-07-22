@@ -69,20 +69,14 @@ export class StockController {
 
   @Get('stock-transactions')
   @Roles(...TRANSACTION_READ_ROLES)
-  listTransactions(
-    @Query() query: ListStockTransactionsQueryDto,
-    @CurrentUserParam() user: CurrentUser,
-  ) {
-    return this.stockService.listTransactions(query, user);
+  listTransactions(@Query() query: ListStockTransactionsQueryDto) {
+    return this.stockService.listTransactions(query);
   }
 
   @Get('stock-transactions/:id')
   @Roles(...TRANSACTION_READ_ROLES)
-  findTransaction(
-    @Param('id') id: string,
-    @CurrentUserParam() user: CurrentUser,
-  ) {
-    return this.stockService.findTransaction(id, user);
+  findTransaction(@Param('id') id: string) {
+    return this.stockService.findTransaction(id);
   }
 
   @Post('stock-transactions/manual-receipt')

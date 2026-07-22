@@ -23,6 +23,7 @@ import { UsersModule } from './users/users.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AdminModule } from './admin/admin.module';
 import { StockDocumentsModule } from './stock-documents/stock-documents.module';
+import { AccountingModule } from './accounting/accounting.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { StockDocumentsModule } from './stock-documents/stock-documents.module';
     UsersModule,
     AdminModule,
     StockDocumentsModule,
+    AccountingModule,
   ],
   controllers: [AppController, DashboardController],
   providers: [

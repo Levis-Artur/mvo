@@ -11,12 +11,15 @@ import { StockDocumentStatusBadge } from './stock-document-status-badge';
 import { formatFileSize } from './stock-document-attachments-model';
 import { stockDocumentsService } from './stock-documents.service';
 
-export function StockDocumentDetailsModal({ document, user, loading, error, onEdit, onPost, onCancel, onDelete, onClose }: {
+export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
+  readOnly?: boolean;
   onEdit: () => void; onPost: () => void; onCancel: () => void; onDelete: () => void; onClose: () => void;
 }) {
-  const actions = lifecycleActions(document, user);
-  const direction = documentDirectionPresentation(document, user);
+  const actions = readOnly
+    ? { edit: false, post: false, cancel: false, remove: false }
+    : lifecycleActions(document, user);
+  const direction = documentDirectionPresentation(document);
   const recipient = document.destinationResponsiblePerson
     ? fullName(document.destinationResponsiblePerson)
     : document.recipientName ?? '—';
@@ -35,7 +38,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
-      {document.type === 'TRANSFER' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара передача</strong><span>Цей документ створено за старими правилами та доступний лише для перегляду.</span></div> : null}
+      {document.type === 'TRANSFER' || document.type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара передача</strong><span>Цей документ створено за старими правилами та доступний лише для перегляду.</span></div> : null}
       <Card title="Загальні дані">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Дата">{formatDateTime(document.documentDate)}</Detail>
@@ -65,7 +68,9 @@ export function StockDocumentDetailsModal({ document, user, loading, error, onEd
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ] : [
           line.inventoryItem.externalCode, line.inventoryItem.name,
-          line.sourceKind ? <StatusBadge key="source" tone={line.sourceKind === 'DIRECT' ? 'success' : 'info'}>{line.sourceKind}</StatusBadge> : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
+          document.type === 'MVO_TRANSFER'
+            ? <StatusBadge key="source" tone="success">Залишок МВО</StatusBadge>
+            : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ])}
       />

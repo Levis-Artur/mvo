@@ -10,9 +10,9 @@ describe('my-property CSV format', () => {
     const csv = csvPreamble();
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     expect(csv).toContain('"Категорія";"Код";"Назва"');
-    expect(csv).toContain('"Дата останнього оновлення"');
+    expect(csv).toContain('"Статус документа"');
     expect(csv.endsWith('\r\n')).toBe(true);
-    expect(MY_PROPERTY_CSV_HEADERS).toHaveLength(19);
+    expect(MY_PROPERTY_CSV_HEADERS).toHaveLength(9);
   });
 
   it('escapes quotes and neutralizes formula injection', () => {

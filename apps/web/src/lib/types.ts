@@ -168,7 +168,11 @@ export type StockTransactionType =
   | 'ISSUE_FROM_DIRECT'
   | 'ISSUE_FROM_CUSTODY'
   | 'ASSIGNMENT_REVERSAL'
-  | 'ISSUE_REVERSAL';
+  | 'ISSUE_REVERSAL'
+  | 'MVO_TRANSFER_OUT'
+  | 'MVO_TRANSFER_REVERSAL'
+  | 'ISSUE_OUT'
+  | 'IMPORT_RECEIPT';
 
 export type InventoryItem = {
   id: string;
@@ -189,9 +193,6 @@ export type InventoryItem = {
 export type StockBalance = {
   id: string;
   quantity: string;
-  directQuantity: string;
-  assignedToOthersQuantity: string;
-  totalAccountedQuantity: string;
   updatedAt: string;
   responsiblePerson: {
     id: string;
@@ -211,8 +212,13 @@ export type PersonReference = {
 };
 
 export type StockSourceKind = 'DIRECT' | 'ASSIGNED';
-export type StockDocumentType = 'TRANSFER' | 'ASSIGNMENT' | 'ISSUE';
+export type StockDocumentType =
+  | 'TRANSFER'
+  | 'ASSIGNMENT'
+  | 'MVO_TRANSFER'
+  | 'ISSUE';
 export type StockDocumentStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
+export type AccountingExportState = 'NOT_EXPORTED' | 'EXPORTED';
 
 export type StockDocumentAttachment = {
   id: string;
@@ -235,6 +241,9 @@ export type StockDocumentLine = {
   accountingOwnerResponsiblePersonId: string | null;
   sourceCustodianResponsiblePersonId: string | null;
   sourceCustodyBalanceId: string | null;
+  sourceBalanceId: string | null;
+  quantityBefore: string | null;
+  quantityAfter: string | null;
   inventoryItem: InventoryItem;
 };
 
@@ -279,68 +288,53 @@ export type StockDocumentInput = {
   lines: {
     inventoryItemId: string;
     quantity: string;
-    sourceKind?: StockSourceKind;
-    accountingOwnerResponsiblePersonId?: string;
-    sourceCustodianResponsiblePersonId?: string;
-    sourceCustodyBalanceId?: string;
+    sourceBalanceId?: string;
     note?: string;
   }[];
 };
 
 export type AvailableStockSource = {
-  sourceKind: StockSourceKind;
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
-  accountingOwner: PersonReference;
-  currentCustodian: PersonReference;
+  balanceId: string;
   availableQuantity: string;
-  sourceBalanceId: string;
-  canAssign: boolean;
+  unit: string | null;
+  canTransfer: boolean;
   canIssue: boolean;
 };
 
-export type MyPropertySection = 'DIRECT' | 'ASSIGNED_OUT' | 'ASSIGNED_TO_ME';
+export type MyPropertySection = 'DIRECT' | 'TRANSFERRED';
 export type MyPropertyExportSection = 'ALL' | MyPropertySection;
 export type MyPropertySortBy =
   | 'code'
   | 'name'
   | 'quantity'
-  | 'accountingOwner'
-  | 'currentCustodian';
+  | 'documentDate'
+  | 'documentNumber'
+  | 'recipient';
 export type SortOrder = 'asc' | 'desc';
 
-export type MyPropertyPerson = PersonReference & {
-  management: string | null;
-  service: string | null;
-  unit: string | null;
-};
-
-export type MyPropertyItem = {
-  section: MyPropertySection;
-  sourceKind: StockSourceKind;
-  sourceBalanceId: string;
+export type DirectMyPropertyItem = {
+  section: 'DIRECT';
+  id: string;
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
-  accountingOwner: MyPropertyPerson;
-  currentCustodian: MyPropertyPerson;
   quantity: string;
-  canAssign: boolean;
-  canIssue: boolean;
   updatedAt: string;
 };
 
-export type MyPropertySummary = {
-  directCount: number;
-  assignedOutCount: number;
-  assignedToMeCount: number;
-  directQuantity: string;
-  assignedOutQuantity: string;
-  assignedToMeQuantity: string;
-  totalOwnedAccountingQuantity: string;
-  totalPhysicallyHeldQuantity: string;
+export type TransferredMyPropertyItem = {
+  section: 'TRANSFERRED';
+  id: string;
+  inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
+  quantity: string;
+  document: Pick<
+    StockDocument,
+    'id' | 'displayNumber' | 'documentDate' | 'type' | 'status'
+  >;
+  recipient: PersonReference | null;
 };
 
-export type MyPropertyResponse = PaginatedResponse<MyPropertyItem> & {
-  summary: MyPropertySummary;
-};
+export type MyPropertyItem = DirectMyPropertyItem | TransferredMyPropertyItem;
+export type MyPropertyResponse = PaginatedResponse<MyPropertyItem>;
 
 export type MyPropertyQuery = {
   search?: string;
@@ -351,7 +345,7 @@ export type MyPropertyQuery = {
   sortOrder: SortOrder;
 };
 
-export type CustodyBalanceView = {
+export type LegacyCustodyArchiveEntry = {
   id: string;
   inventoryItem: InventoryItem;
   accountingOwner: PersonReference;
@@ -380,34 +374,99 @@ export type AccountingCardDocument = {
 
 export type ResponsiblePersonAccountingCard = {
   directBalances: { id: string; inventoryItem: InventoryItem; quantity: string }[];
-  assignedToOthers: CustodyBalanceView[];
-  assignedToMe: CustodyBalanceView[];
-  totalOwnedAccountingQuantity: string;
-  totalPhysicallyHeldQuantity: string;
-  recentAssignments: AccountingCardDocument[];
+  legacyCustodyArchive: LegacyCustodyArchiveEntry[];
+  totalDirectQuantity: string;
+  recentTransfers: AccountingCardDocument[];
   recentIssues: AccountingCardDocument[];
 };
 
 export type InventoryItemAccountingCard = {
   inventoryItem: InventoryItem;
   totals: {
-    directQuantity: string;
-    assignedQuantity: string;
-    totalAccountedQuantity: string;
+    currentQuantity: string;
+    responsiblePersons: number;
   };
-  directBalances: { responsiblePerson: PersonReference; quantity: string }[];
-  custodyBalances: {
-    accountingOwner: PersonReference;
-    custodian: PersonReference;
+  currentBalances: {
+    id: string;
+    responsiblePerson: PersonReference & {
+      management: Pick<Management, 'id' | 'name'>;
+      service: Pick<Service, 'id' | 'name'>;
+      unit: Pick<Unit, 'id' | 'name'> | null;
+    };
     quantity: string;
+    updatedAt: string;
   }[];
-  recentDocuments: AccountingCardDocument[];
-  recentTransactions: (StockTransaction & {
-    accountingOwner: PersonReference | null;
-    sourceCustodian: PersonReference | null;
-    destinationCustodian: PersonReference | null;
-  })[];
+  movements: PaginatedResponse<InventoryItemMovement>;
+  documents: PaginatedResponse<InventoryItemCardDocument>;
 };
+
+export type InventoryMovementCategory =
+  | 'IMPORT'
+  | 'MANUAL_RECEIPT'
+  | 'MVO_TRANSFER'
+  | 'ISSUE'
+  | 'MVO_TRANSFER_REVERSAL'
+  | 'ISSUE_REVERSAL'
+  | 'LEGACY';
+
+export type InventoryItemMovement = {
+  id: string;
+  occurredAt: string;
+  category: InventoryMovementCategory;
+  typeLabel: string;
+  from: string;
+  to: string;
+  quantity: string;
+  balanceBefore: string;
+  balanceAfter: string;
+  documentNumber: string;
+  source: string;
+  user: string | null;
+  responsiblePerson: PersonReference & {
+    management: Pick<Management, 'id' | 'name'>;
+    service: Pick<Service, 'id' | 'name'>;
+    unit: Pick<Unit, 'id' | 'name'> | null;
+  };
+  documentId: string | null;
+  importBatchId: string | null;
+};
+
+export type InventoryItemCardDocument = {
+  kind: 'IMPORT' | 'STOCK_DOCUMENT';
+  id: string;
+  occurredAt: string;
+  title: string;
+  typeLabel: string;
+  statusLabel: string;
+  from: string;
+  to: string;
+  quantity: string;
+  attachments: Pick<
+    StockDocumentAttachment,
+    'id' | 'originalFileName' | 'mimeType' | 'sizeBytes' | 'createdAt'
+  >[];
+};
+
+export type InventoryItemAccountingCardQuery = {
+  movementPage?: number;
+  movementLimit?: number;
+  documentPage?: number;
+  documentLimit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+  movementType?: InventoryMovementCategory;
+  responsiblePersonId?: string;
+  documentNumber?: string;
+};
+
+export type InventoryItemMovementFilters = Pick<
+  InventoryItemAccountingCardQuery,
+  | 'dateFrom'
+  | 'dateTo'
+  | 'movementType'
+  | 'responsiblePersonId'
+  | 'documentNumber'
+>;
 
 export type StockDocumentsQuery = {
   type?: StockDocumentType;
@@ -418,6 +477,46 @@ export type StockDocumentsQuery = {
   documentDateTo?: string;
   page?: number;
   limit?: number;
+};
+
+export type AccountingTransferFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  sourceResponsiblePersonId?: string;
+  destinationResponsiblePersonId?: string;
+  inventoryItemId?: string;
+  status?: StockDocumentStatus;
+  exportState?: AccountingExportState;
+  documentNumber?: string;
+};
+
+export type AccountingTransferRow = {
+  documentId: string;
+  displayNumber: number;
+  documentNumber: string;
+  documentDate: string;
+  status: StockDocumentStatus;
+  exportState: AccountingExportState;
+  postedAt: string | null;
+  sourceResponsiblePerson: PersonReference & {
+    management: Pick<Management, 'id' | 'name'>;
+  };
+  destinationResponsiblePerson: (PersonReference & {
+    management: Pick<Management, 'id' | 'name'>;
+  }) | null;
+  inventoryItem: InventoryItem;
+  quantity: string;
+};
+
+export type AccountingTransferExportBatch = {
+  id: string;
+  filename: string;
+  documentCount: number;
+  rowCount: number;
+  sha256: string;
+  filters: Record<string, unknown>;
+  createdAt: string;
+  createdByUser: Pick<UserSummary, 'id' | 'username' | 'role'>;
 };
 
 export type StockTransaction = {
