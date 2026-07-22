@@ -7,6 +7,7 @@ import type {
   AuthUser,
   AdminEntityType,
   AccountingTransferExportBatch,
+  AccountingTransferExportFilters,
   AccountingTransferFilters,
   AccountingTransferRow,
   DashboardStats,
@@ -405,7 +406,7 @@ export const apiClient = {
       {},
       query,
     ),
-  exportAccountingMvoTransfers: (query: AccountingTransferFilters) =>
+  exportAccountingMvoTransfers: (query: AccountingTransferExportFilters) =>
     downloadRequest('/accounting/mvo-transfers/export.csv', query),
   accountingMvoTransferExportBatches: (query: { page?: number; limit?: number }) =>
     request<PaginatedResponse<AccountingTransferExportBatch>>(

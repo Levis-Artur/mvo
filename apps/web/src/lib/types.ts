@@ -262,6 +262,8 @@ export type StockDocument = {
   note: string | null;
   postedAt: string | null;
   cancelledAt: string | null;
+  accountingExportState: AccountingExportState;
+  exportedAt: string | null;
   createdAt: string;
   updatedAt: string;
   sourceResponsiblePerson: ResponsiblePerson;
@@ -490,13 +492,18 @@ export type AccountingTransferFilters = {
   documentNumber?: string;
 };
 
+export type AccountingTransferExportFilters = Omit<
+  AccountingTransferFilters,
+  'status' | 'exportState'
+>;
+
 export type AccountingTransferRow = {
   documentId: string;
   displayNumber: number;
-  documentNumber: string;
   documentDate: string;
   status: StockDocumentStatus;
   exportState: AccountingExportState;
+  exportedAt: string | null;
   postedAt: string | null;
   sourceResponsiblePerson: PersonReference & {
     management: Pick<Management, 'id' | 'name'>;
@@ -514,6 +521,7 @@ export type AccountingTransferExportBatch = {
   documentCount: number;
   rowCount: number;
   sha256: string;
+  formatVersion: number;
   filters: Record<string, unknown>;
   createdAt: string;
   createdByUser: Pick<UserSummary, 'id' | 'username' | 'role'>;

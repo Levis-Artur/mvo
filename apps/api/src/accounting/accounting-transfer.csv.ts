@@ -14,8 +14,7 @@ const HEADERS = [
   'Статус',
 ] as const;
 
-export type AccountingTransferCsvRow = {
-  documentNumber: string;
+type AccountingTransferCsvRowBase = {
   documentDate: Date;
   sourcePersonnelNumber: string;
   sourceFullName: string;
@@ -30,9 +29,35 @@ export type AccountingTransferCsvRow = {
   documentStatus: string;
 };
 
-export function accountingTransfersCsv(rows: readonly AccountingTransferCsvRow[]) {
+export type AccountingTransferCsvV1Row = AccountingTransferCsvRowBase & {
+  documentNumber: string;
+};
+
+export type AccountingTransferCsvV2Row = AccountingTransferCsvRowBase & {
+  displayNumber: number;
+};
+
+export const ACCOUNTING_TRANSFER_EXPORT_FORMAT_V1 = 1;
+export const ACCOUNTING_TRANSFER_EXPORT_FORMAT_V2 = 2;
+
+export function buildAccountingTransferCsvV1(
+  rows: readonly AccountingTransferCsvV1Row[],
+) {
+  return buildAccountingTransferCsv(rows, (row) => row.documentNumber);
+}
+
+export function buildAccountingTransferCsvV2(
+  rows: readonly AccountingTransferCsvV2Row[],
+) {
+  return buildAccountingTransferCsv(rows, (row) => `№ ${row.displayNumber}`);
+}
+
+function buildAccountingTransferCsv<Row extends AccountingTransferCsvRowBase>(
+  rows: readonly Row[],
+  documentNumber: (row: Row) => string,
+) {
   return `\uFEFF${csvLine(HEADERS)}${rows.map((row) => csvLine([
-    row.documentNumber,
+    documentNumber(row),
     formatDate(row.documentDate),
     row.sourcePersonnelNumber,
     row.sourceFullName,

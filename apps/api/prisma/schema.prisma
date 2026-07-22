@@ -235,6 +235,7 @@ model User {
   createdStockDocuments   StockDocument[]  @relation("StockDocumentCreatedBy")
   postedStockDocuments    StockDocument[]  @relation("StockDocumentPostedBy")
   cancelledStockDocuments StockDocument[]  @relation("StockDocumentCancelledBy")
+  exportedStockDocuments  StockDocument[]  @relation("StockDocumentExportedBy")
   uploadedStockDocumentAttachments StockDocumentAttachment[]
   accountingTransferExportBatches AccountingTransferExportBatch[]
 
@@ -410,6 +411,8 @@ model StockDocument {
   postedAt                       DateTime?
   cancelledByUserId              String?             @db.Uuid
   cancelledAt                    DateTime?
+  exportedByUserId               String?             @db.Uuid
+  exportedAt                     DateTime?
   createdAt                      DateTime            @default(now())
   updatedAt                      DateTime            @updatedAt
   sourceResponsiblePerson        ResponsiblePerson   @relation("StockDocumentSource", fields: [sourceResponsiblePersonId], references: [id], onDelete: Restrict)
@@ -417,6 +420,7 @@ model StockDocument {
   createdByUser                  User                @relation("StockDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   postedByUser                   User?               @relation("StockDocumentPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict)
   cancelledByUser                User?               @relation("StockDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
+  exportedByUser                 User?               @relation("StockDocumentExportedBy", fields: [exportedByUserId], references: [id], onDelete: Restrict)
   lines                          StockDocumentLine[]
   transactions                   StockTransaction[]
   attachments                    StockDocumentAttachment[]
@@ -430,6 +434,8 @@ model StockDocument {
   @@index([createdByUserId])
   @@index([accountingModel])
   @@index([accountingExportState])
+  @@index([exportedByUserId])
+  @@index([exportedAt])
 }
 
 model StockDocumentLine {
@@ -487,6 +493,7 @@ model AccountingTransferExportBatch {
   filters         Json
   filename        String
   sha256          String
+  formatVersion   Int       @default(2)
   documentCount   Int
   rowCount        Int
   createdAt       DateTime  @default(now())
@@ -514,6 +521,7 @@ model AccountingTransferExportRow {
   documentId                 String              @db.Uuid
   documentLineId             String              @db.Uuid
   documentNumber             String
+  displayNumber              Int?
   documentDate               DateTime
   sourcePersonnelNumber      String
   sourceFullName             String

@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AccountingExportState,
   Prisma,
   SecurityEventType,
   StockAccountingModel,
@@ -392,6 +394,7 @@ export class StockDocumentsService {
           select: {
             type: true,
             accountingModel: true,
+            accountingExportState: true,
             status: true,
             sourceResponsiblePersonId: true,
           },
@@ -407,21 +410,35 @@ export class StockDocumentsService {
             'Скасувати можна лише проведений документ',
           );
         }
+        this.assertCancellationExportAllowed(current);
 
         const claim = await tx.stockDocument.updateMany({
-          where: { id, status: StockDocumentStatus.POSTED },
+          where: {
+            id,
+            status: StockDocumentStatus.POSTED,
+            accountingExportState:
+              current.type === StockDocumentType.MVO_TRANSFER
+                ? AccountingExportState.NOT_EXPORTED
+                : undefined,
+          },
           data: { updatedAt: new Date() },
         });
         if (claim.count === 0) {
           const concurrent = await tx.stockDocument.findUnique({
             where: { id },
-            select: { status: true, sourceResponsiblePersonId: true },
+            select: {
+              type: true,
+              accountingExportState: true,
+              status: true,
+              sourceResponsiblePersonId: true,
+            },
           });
           if (!concurrent) {
             throw new NotFoundException('Документ руху майна не знайдено');
           }
           this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
           if (concurrent.status === StockDocumentStatus.CANCELLED) return false;
+          this.assertCancellationExportAllowed(concurrent);
           throw new BadRequestException(
             'Скасувати можна лише проведений документ',
           );
@@ -464,6 +481,20 @@ export class StockDocumentsService {
       throw error;
     }
     return this.findOne(id, actor);
+  }
+
+  private assertCancellationExportAllowed(document: {
+    type: StockDocumentType;
+    accountingExportState: AccountingExportState;
+  }) {
+    if (
+      document.type === StockDocumentType.MVO_TRANSFER &&
+      document.accountingExportState === AccountingExportState.EXPORTED
+    ) {
+      throw new ConflictException(
+        'Передачу вже передано бухгалтерії. Звичайне скасування неможливе.',
+      );
+    }
   }
 
   private async postLine(

@@ -31,7 +31,7 @@ describe('AccountingTransfersView', () => {
 
   it('renders all required filters, register columns and export history', () => {
     for (const label of [
-      'Відправник', 'Одержувач', 'Номенклатура', 'Статус', 'Номер документа',
+      'Відправник', 'Одержувач', 'Показати документи, що містять номенклатуру', 'Статус', 'Номер документа',
       'Номер документа', 'МВО-відправник', 'МВО-одержувач', 'Кількість',
       'Дата проведення', 'Історія експортів',
     ]) expect(view).toContain(label);
@@ -39,6 +39,16 @@ describe('AccountingTransfersView', () => {
     expect(view).toContain('dateTo={draft.dateTo}');
     expect(view).toContain('Завантажити повторно');
     expect(view).toContain("router.push('/accounting/mvo-transfers/exports')");
+  });
+
+  it('keeps the document-level nomenclature filter operable by mouse and keyboard', () => {
+    expect(view).toContain(
+      '<FilterField label="Показати документи, що містять номенклатуру"><Select',
+    );
+    expect(view).toContain('value={draft.inventoryItemId}');
+    expect(view).toContain('onChange={(event) => setDraft');
+    expect(readFileSync(join(__dirname, '../../components/ui/select.tsx'), 'utf8'))
+      .toContain('<select');
   });
 
   it('uses dedicated accounting endpoints and never requests a page limit above 100', () => {
@@ -50,7 +60,24 @@ describe('AccountingTransfersView', () => {
 
   it('does not render UUIDs and explains that export does not link imports', () => {
     expect(view).not.toContain('row.documentId');
+    expect(view).not.toContain('row.documentNumber');
     expect(view).not.toContain('batch.sha256');
+    expect(view).toContain('documentNumberLabel(row.displayNumber)');
     expect(view).toContain('не пов’язує передачі з імпортами');
+  });
+
+  it('creates exports without unsafe status or export-state filters', () => {
+    const exportMapper = view.slice(
+      view.indexOf('function toExportFilters'),
+      view.indexOf('function formatDate'),
+    );
+    expect(exportMapper).not.toContain('status:');
+    expect(exportMapper).not.toContain('exportState:');
+    expect(view).toContain("user && user.role !== 'AUDITOR'");
+  });
+
+  it('shows exported transfers as sent to accounting', () => {
+    expect(view).toContain('Передано бухгалтерії');
+    expect(view).toContain("row.exportState === 'EXPORTED'");
   });
 });

@@ -130,6 +130,12 @@ export const ACCOUNTING_TRANSFER_READ_ROLES = [
   UserRole.AUDITOR,
 ];
 
+export const ACCOUNTING_TRANSFER_EXPORT_ROLES = [
+  UserRole.OWNER,
+  UserRole.DPP_ADMIN,
+  UserRole.ACCOUNTANT,
+];
+
 export const TRANSFER_TARGET_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,

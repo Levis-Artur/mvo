@@ -38,6 +38,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
+      {document.type === 'MVO_TRANSFER' && document.accountingExportState === 'EXPORTED' ? <div className="ui-alert" data-tone="info" role="status"><strong>Передано бухгалтерії</strong><span>Звичайне скасування цієї передачі недоступне.</span></div> : null}
       {document.type === 'TRANSFER' || document.type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара передача</strong><span>Цей документ створено за старими правилами та доступний лише для перегляду.</span></div> : null}
       <Card title="Загальні дані">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

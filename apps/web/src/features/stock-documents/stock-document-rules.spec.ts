@@ -112,6 +112,21 @@ describe('stock document frontend rules', () => {
     expect(lifecycleActions({ type: 'ASSIGNMENT', status: 'POSTED', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
   });
 
+  it('не дозволяє скасувати передачу після бухгалтерського експорту', () => {
+    expect(lifecycleActions({
+      type: 'MVO_TRANSFER',
+      status: 'POSTED',
+      accountingExportState: 'EXPORTED',
+      sourceResponsiblePersonId: 'person-1',
+    }, mvoUser).cancel).toBe(false);
+    expect(lifecycleActions({
+      type: 'MVO_TRANSFER',
+      status: 'POSTED',
+      accountingExportState: 'NOT_EXPORTED',
+      sourceResponsiblePersonId: 'person-1',
+    }, mvoUser).cancel).toBe(true);
+  });
+
   it('дозволяє редагувати нову видачу та MVO_TRANSFER лише з sourceBalanceId', () => {
     expect(lifecycleActions({
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',

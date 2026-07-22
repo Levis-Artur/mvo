@@ -4,7 +4,7 @@ import {
   StockSourceKind,
   StockTransactionType,
 } from '@prisma/client';
-import { accountingTransfersCsv } from '../accounting/accounting-transfer.csv';
+import { buildAccountingTransferCsvV2 } from '../accounting/accounting-transfer.csv';
 import { StockService } from './stock.service';
 
 const personA = '11111111-1111-4111-8111-111111111111';
@@ -197,9 +197,9 @@ describe('direct-balance accounting end-to-end flow', () => {
       ledger.quantity(personA).toString(),
       ledger.quantity(personB).toString(),
     ];
-    const csv = accountingTransfersCsv([
+    const csv = buildAccountingTransferCsvV2([
       {
-        documentNumber: 'MVO-1',
+        displayNumber: 1,
         documentDate: occurredAt,
         sourcePersonnelNumber: '001',
         sourceFullName: 'МВО А',

@@ -24,14 +24,6 @@ export class AccountingTransferFiltersDto {
   inventoryItemId?: string;
 
   @IsOptional()
-  @IsEnum(StockDocumentStatus)
-  status?: StockDocumentStatus;
-
-  @IsOptional()
-  @IsEnum(AccountingExportState)
-  exportState?: AccountingExportState;
-
-  @IsOptional()
   @IsString()
   @MaxLength(100)
   documentNumber?: string;

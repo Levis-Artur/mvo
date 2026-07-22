@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AccountingExportState,
   Prisma,
@@ -77,6 +82,8 @@ function rawDocument(
     postedAt: status === StockDocumentStatus.POSTED ? new Date() : null,
     cancelledByUserId: null,
     cancelledAt: null,
+    exportedByUserId: null,
+    exportedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     lines,
@@ -96,6 +103,7 @@ function viewDocument(
     createdByUser: { id: mvo.id, username: mvo.username, role: mvo.role },
     postedByUser: null,
     cancelledByUser: null,
+    exportedByUser: null,
     attachments: [],
     lines: lines.map((entry) => ({
       ...entry,
@@ -330,6 +338,61 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
       reversalOfTransactionId: 'out',
     }));
     expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('blocks cancellation after accounting export before any reversal', async () => {
+    const h = harness();
+    h.tx.stockDocument.findUnique.mockResolvedValueOnce({
+      type: StockDocumentType.MVO_TRANSFER,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      accountingExportState: AccountingExportState.EXPORTED,
+      status: StockDocumentStatus.POSTED,
+      sourceResponsiblePersonId: sourceId,
+    });
+
+    const error = await h.service.cancel(documentId, mvo, {
+      requestId: 'blocked-cancel-request',
+    }).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getStatus()).toBe(409);
+    expect((error as ConflictException).message).toBe(
+      'Передачу вже передано бухгалтерії. Звичайне скасування неможливе.',
+    );
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.update).not.toHaveBeenCalled();
+    expect(h.prisma.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestId: 'blocked-cancel-request',
+          success: false,
+        }),
+      }),
+    );
+  });
+
+  it('blocks cancellation when export wins the concurrent claim', async () => {
+    const h = harness();
+    h.tx.stockDocument.findUnique
+      .mockResolvedValueOnce({
+        type: StockDocumentType.MVO_TRANSFER,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
+        accountingExportState: AccountingExportState.NOT_EXPORTED,
+        status: StockDocumentStatus.POSTED,
+        sourceResponsiblePersonId: sourceId,
+      })
+      .mockResolvedValueOnce({
+        type: StockDocumentType.MVO_TRANSFER,
+        accountingExportState: AccountingExportState.EXPORTED,
+        status: StockDocumentStatus.POSTED,
+        sourceResponsiblePersonId: sourceId,
+      });
+    h.tx.stockDocument.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(h.service.cancel(documentId, mvo, {})).rejects.toThrow(
+      'Передачу вже передано бухгалтерії. Звичайне скасування неможливе.',
+    );
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
   it('does not restore twice when cancellation is repeated', async () => {

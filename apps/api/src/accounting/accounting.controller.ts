@@ -1,6 +1,9 @@
 import { Controller, Get, Param, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
-import { ACCOUNTING_TRANSFER_READ_ROLES } from '../auth/access-policy';
+import {
+  ACCOUNTING_TRANSFER_EXPORT_ROLES,
+  ACCOUNTING_TRANSFER_READ_ROLES,
+} from '../auth/access-policy';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
@@ -23,6 +26,7 @@ export class AccountingController {
   }
 
   @Get('mvo-transfers/export.csv')
+  @Roles(...ACCOUNTING_TRANSFER_EXPORT_ROLES)
   async export(
     @Query() query: AccountingTransferFiltersDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -47,9 +51,15 @@ export class AccountingController {
   @Get('mvo-transfer-exports/:id/download')
   async downloadBatch(
     @Param('id') id: string,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const exported = await this.service.downloadExportBatch(id);
+    const exported = await this.service.downloadExportBatch(
+      id,
+      actor,
+      getRequestContext(request),
+    );
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader('X-Export-Batch-ID', exported.batchId);

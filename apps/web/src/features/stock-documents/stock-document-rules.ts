@@ -203,7 +203,7 @@ export function documentPostingBlocker(
 
 export function lifecycleActions(
   document: Pick<StockDocument, 'status' | 'sourceResponsiblePersonId' | 'type'> &
-    Partial<Pick<StockDocument, 'lines'>>,
+    Partial<Pick<StockDocument, 'accountingExportState' | 'lines'>>,
   user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
 ) {
   const directDocument =
@@ -216,6 +216,12 @@ export function lifecycleActions(
     edit: writable && document.status === 'DRAFT',
     post: writable && document.status === 'DRAFT',
     remove: writable && document.status === 'DRAFT',
-    cancel: writable && document.status === 'POSTED',
+    cancel:
+      writable &&
+      document.status === 'POSTED' &&
+      !(
+        document.type === 'MVO_TRANSFER' &&
+        document.accountingExportState === 'EXPORTED'
+      ),
   };
 }
