@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Button,
   Card,
-  EmptyState,
   ErrorState,
   FormField,
   Input,
@@ -17,9 +16,7 @@ import type { StockDocumentInput } from '@/lib/types';
 import { StockDocumentAttachments } from './stock-document-attachments';
 import { StockDocumentLines } from './stock-document-lines';
 import {
-  documentNumberLabel,
   documentRecipientMode,
-  filterRecipientOptions,
   personOptionLabel,
   resolveSourceId,
   shouldConfirmUnsavedDocument,
@@ -30,6 +27,7 @@ import type {
   StockDocumentFormProps,
 } from './stock-document.types';
 import { StockSourcePickerModal } from './stock-source-picker-modal';
+import { RecipientCombobox } from './recipient-combobox';
 import {
   addSelectedStockSource,
   availableSourceOptions,
@@ -89,14 +87,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const [dirty, setDirty] = useState(false);
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const [validationError, setValidationError] = useState('');
-  const [recipientSearch, setRecipientSearch] = useState('');
-  const source = persons.find((person) => person.id === sourceId);
   const recipientMode = documentRecipientMode(type);
-  const simplified = user.role === 'MVO';
-  const recipients = useMemo(
-    () => filterRecipientOptions(transferTargets, sourceId, recipientSearch),
-    [recipientSearch, sourceId, transferTargets],
-  );
 
   useEffect(() => {
     const uploaded = document?.attachments ?? [];
@@ -127,7 +118,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         recipientMode === 'EXTERNAL'
           ? recipientUnit.trim() || undefined
           : undefined,
-      basis: basis.trim() || undefined,
+      basis: type === 'MVO_TRANSFER' ? undefined : basis.trim() || undefined,
       note: note.trim() || undefined,
       lines: lines.map((line) => ({
         inventoryItemId: line.inventoryItemId,
@@ -222,16 +213,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const title = document
     ? `Редагування ${transfer ? 'передачі' : 'видачі'}`
     : `Нова ${transfer ? 'передача' : 'видача'}`;
-  const steps = transfer
-    ? ['Кому передаємо', 'Що передаємо', 'Скільки', 'Перевірка та збереження']
-    : [
-        'Кому видаємо',
-        'Для чого',
-        'Що видаємо',
-        'Додати накладну',
-        'Перевірка та збереження',
-      ];
-
   return (
     <Modal
       closeOnEscape={!saving}
@@ -259,54 +240,16 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         </>
       }
       onClose={requestClose}
-      size="large"
+      size="fullscreen"
       title={title}
     >
-      {simplified ? (
-        <ol
-          aria-label="Етапи заповнення документа"
-          className={`stock-document-steps stock-document-steps--${transfer ? 'transfer' : 'issue'}`}
-        >
-          {steps.map((step, index) => (
-            <li key={step}>
-              <span>{index + 1}</span>
-              {step}
-            </li>
-          ))}
-        </ol>
-      ) : null}
       <form
-        className="grid min-w-0 gap-4 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.7fr)]"
+        className="stock-document-form-layout"
         id="stock-document-form"
         onSubmit={submit}
       >
-        <Card
-          title={
-            simplified
-              ? transfer
-                ? 'Кому передаємо'
-                : 'Кому видаємо'
-              : 'Основні дані'
-          }
-        >
+        <Card title="Основні реквізити">
           <div className="grid gap-3">
-            <FormField
-              hint={
-                document
-                  ? 'Номер присвоєно під час створення документа.'
-                  : 'Наступний номер буде присвоєно під час збереження чернетки.'
-              }
-              label="Номер"
-            >
-              <Input
-                readOnly
-                value={
-                  document
-                    ? documentNumberLabel(document.displayNumber)
-                    : 'Буде присвоєно автоматично'
-                }
-              />
-            </FormField>
             <FormField label="Дата" required>
               <Input
                 required
@@ -318,22 +261,8 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                 }}
               />
             </FormField>
-            <FormField
-              hint={
-                simplified
-                  ? 'Відправником автоматично є ваша картка МВО.'
-                  : undefined
-              }
-              label="МВО-відправник"
-              required
-            >
-              {user.role === 'MVO' ? (
-                <Input
-                  disabled
-                  readOnly
-                  value={source ? personOptionLabel(source) : user.username}
-                />
-              ) : (
+            {user.role !== 'MVO' ? (
+              <FormField label="МВО-відправник" required>
                 <Select
                   required
                   value={sourceId}
@@ -348,42 +277,30 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                       </option>
                     ))}
                 </Select>
-              )}
-            </FormField>
+              </FormField>
+            ) : null}
             {recipientMode === 'MVO' ? (
               <>
-                <FormField label="Пошук МВО" hint="Номер, ПІБ або управління">
-                  <Input
-                    placeholder="003 або прізвище"
-                    value={recipientSearch}
-                    onChange={(event) => setRecipientSearch(event.target.value)}
-                  />
-                </FormField>
-                <FormField label="Кому передаємо" required>
-                  <Select
+                <FormField
+                  hint="Пошук за номером, ПІБ або управлінням"
+                  label="Кому передаємо"
+                  required
+                >
+                  <RecipientCombobox
                     disabled={
-                      loadingTargets || Boolean(targetsError) || !recipients.length
+                      loadingTargets || Boolean(targetsError)
                     }
-                    required
+                    sourceId={sourceId}
+                    targets={transferTargets}
                     value={destinationId}
-                    onChange={(event) => {
-                      setDestinationId(event.target.value);
+                    onChange={(id) => {
+                      setDestinationId(id);
                       setDirty(true);
                     }}
-                  >
-                    <option value="">Оберіть МВО</option>
-                    {recipients.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {personOptionLabel(person)}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 </FormField>
                 {loadingTargets ? (
                   <LoadingState label="Завантаження МВО-одержувачів…" />
-                ) : null}
-                {!loadingTargets && !targetsError && !recipients.length ? (
-                  <EmptyState message="Активних МВО за вказаним пошуком не знайдено." />
                 ) : null}
                 {targetsError ? (
                   <div className="ui-alert" data-tone="warning" role="status">
@@ -414,21 +331,21 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                 </FormField>
               </>
             )}
-            <FormField
-              label={transfer ? 'Підстава' : 'Мета або підстава'}
-              required={!transfer}
-            >
-              <Input
-                required={!transfer}
-                value={basis}
-                onChange={(event) => {
-                  setBasis(event.target.value);
-                  setDirty(true);
-                }}
-              />
-            </FormField>
+            {!transfer ? (
+              <FormField label="Мета або підстава" required>
+                <Input
+                  required
+                  value={basis}
+                  onChange={(event) => {
+                    setBasis(event.target.value);
+                    setDirty(true);
+                  }}
+                />
+              </FormField>
+            ) : null}
             <FormField label="Примітка">
               <Textarea
+                placeholder="За потреби вкажіть додаткову інформацію"
                 value={note}
                 onChange={(event) => {
                   setNote(event.target.value);
@@ -438,16 +355,13 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             </FormField>
           </div>
         </Card>
-        <div className="grid min-w-0 content-start gap-3">
-          <div
-            className="ui-alert"
-            data-tone={transfer ? 'info' : 'warning'}
-            role="status"
-          >
-            {transfer
-              ? 'Після проведення залишок відправника зменшиться. Одержувачу залишок автоматично не додається.'
-              : 'Після проведення документа вказана кількість буде списана з обліку.'}
-          </div>
+        <div className="stock-document-form-workspace">
+          {transfer ? (
+            <div className="stock-document-transfer-info" role="status">
+              Після проведення кількість буде списана з вашого залишку.
+              Одержувачу майно автоматично не додається.
+            </div>
+          ) : null}
           {loadingSources ? (
             <LoadingState label="Завантаження доступного майна…" />
           ) : null}
@@ -455,7 +369,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             disabled={!sourceId}
             lines={lines}
             loading={loadingSources}
-            simplified={simplified}
             sources={eligibleSources}
             type={type}
             onAddRequest={() => setSourcePickerOpen(true)}
@@ -475,15 +388,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
               }}
               onRemoveAttachment={onRemoveAttachment}
             />
-          ) : null}
-          {simplified ? (
-            <div className="stock-document-review-note">
-              <strong>{transfer ? '4.' : '5.'} Перевірка та збереження</strong>
-              <span>
-                Перевірте одержувача, майно та кількість, потім збережіть
-                чернетку.
-              </span>
-            </div>
           ) : null}
           {validationError || error || sourcesError ? (
             <ErrorState message={validationError || error || sourcesError} />

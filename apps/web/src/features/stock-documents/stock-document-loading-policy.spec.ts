@@ -90,7 +90,7 @@ describe('stock document lazy loading policy', () => {
     expect(table).toContain('actions.cancel ? <Button size="compact" title="Скасувати документ"');
     expect(table).toContain('onClick={() => onView(document)}');
     expect(table).toContain('onClick={() => onCancel(document)}');
-    expect(form).toContain('documentNumberLabel(document.displayNumber)');
+    expect(form).not.toContain('documentNumberLabel(document.displayNumber)');
     expect(form).not.toContain('setDocumentNumber');
     expect(view).toContain('stock-documents-page--mvo');
     expect(view).toContain('onApply={() => {');

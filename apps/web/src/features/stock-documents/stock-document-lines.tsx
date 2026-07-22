@@ -7,6 +7,7 @@ import {
   EmptyState,
   Input,
 } from '@/components/ui';
+import type { DataTableColumn } from '@/components/ui';
 import {
   addQuantities,
   formatQuantity,
@@ -25,7 +26,6 @@ export function StockDocumentLines({
   lines,
   disabled,
   loading,
-  simplified,
   type,
   onAddRequest,
   onChange,
@@ -34,7 +34,6 @@ export function StockDocumentLines({
   lines: DocumentFormLine[];
   disabled: boolean;
   loading: boolean;
-  simplified: boolean;
   type: StockDocumentType;
   onAddRequest: () => void;
   onChange: (lines: DocumentFormLine[]) => void;
@@ -47,8 +46,35 @@ export function StockDocumentLines({
     );
   }
 
+  const transfer = type === 'MVO_TRANSFER';
+  const columns: DataTableColumn[] = [
+    { label: 'Код', className: 'stock-document-lines__code' },
+    { label: 'Назва', className: 'stock-document-lines__name' },
+    {
+      label: 'Доступно',
+      numeric: true,
+      className: 'stock-document-lines__available',
+    },
+    {
+      label: 'Кількість',
+      numeric: true,
+      className: 'stock-document-lines__quantity',
+    },
+    ...(!transfer
+      ? [
+          { label: 'Одиниця', className: 'stock-document-lines__unit' },
+          { label: 'Примітка', className: 'stock-document-lines__note' },
+        ]
+      : []),
+    {
+      label: 'Дії',
+      actions: true,
+      className: 'stock-document-lines__actions',
+    },
+  ];
+
   return (
-    <Card title={simplified ? (type === 'MVO_TRANSFER' ? 'Що і скільки передаємо' : 'Що і скільки видаємо') : 'Рядки документа'}>
+    <Card title={transfer ? 'Позиції для передачі' : 'Позиції для видачі'}>
       <div className="grid min-w-0 gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-[var(--color-text-secondary)]">
@@ -74,33 +100,22 @@ export function StockDocumentLines({
         ) : null}
         {lines.length ? (
           <DataTable
-            ariaLabel="Рядки документа видачі майна"
-            columns={[
-              { label: 'Код' },
-              { label: 'Назва', className: 'stock-document-lines__name' },
-              {
-                label: 'Доступно',
-                numeric: true,
-                className: 'stock-document-lines__available',
-              },
-              {
-                label: 'Кількість',
-                numeric: true,
-                className: 'stock-document-lines__quantity',
-              },
-              { label: 'Одиниця' },
-              { label: 'Примітка', className: 'stock-document-lines__note' },
-              { label: 'Дії', actions: true },
-            ]}
+            ariaLabel={
+              type === 'MVO_TRANSFER'
+                ? 'Рядки документа передачі майна'
+                : 'Рядки документа видачі майна'
+            }
+            columns={columns}
             loading={loading}
             rows={lines.map((line, index) => {
               const current = findStockSourceForLine(sources, line);
               const lineError = documentLineError(line, sources);
-              return [
+              const row: React.ReactNode[] = [
                 current?.inventoryItem.externalCode ?? '—',
                 <span
                   className="stock-document-lines__name-text"
                   key="name"
+                  title={current?.inventoryItem.name}
                 >
                   {current?.inventoryItem.name ?? 'Позиція недоступна'}
                 </span>,
@@ -128,23 +143,30 @@ export function StockDocumentLines({
                     </p>
                   ) : null}
                   {current ? (
-                    <p className="form-field__hint">
+                    <p className="form-field__hint stock-document-lines__maximum">
                       Максимум: {formatQuantity(current.availableQuantity)}
                     </p>
                   ) : null}
                 </div>,
-                current?.inventoryItem.unitOfMeasure ?? '—',
-                <Input
-                  aria-label={`Примітка рядка ${index + 1}`}
-                  key="note"
-                  value={line.note}
-                  onChange={(event) =>
-                    updateLine(index, { note: event.target.value })
-                  }
-                />,
+              ];
+              if (!transfer) {
+                row.push(
+                  current?.inventoryItem.unitOfMeasure ?? '—',
+                  <Input
+                    aria-label={`Примітка рядка ${index + 1}`}
+                    key="note"
+                    value={line.note}
+                    onChange={(event) =>
+                      updateLine(index, { note: event.target.value })
+                    }
+                  />,
+                );
+              }
+              row.push(
                 <Button
                   aria-label={`Видалити рядок ${index + 1}`}
                   key="remove"
+                  size="compact"
                   type="button"
                   variant="danger"
                   onClick={() =>
@@ -153,9 +175,10 @@ export function StockDocumentLines({
                 >
                   Видалити
                 </Button>,
-              ];
+              );
+              return row;
             })}
-            tableClassName="stock-document-lines-table stock-document-lines-table--mvo"
+            tableClassName={`stock-document-lines-table stock-document-lines-table--${transfer ? 'transfer' : 'issue'}`}
           />
         ) : null}
         <div className="flex justify-end gap-6 border-t border-[var(--color-border-light)] pt-3 text-sm">
