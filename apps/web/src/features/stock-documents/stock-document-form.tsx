@@ -249,7 +249,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         onSubmit={submit}
       >
         <Card title="Основні реквізити">
-          <div className="grid gap-3">
+          <div className="stock-document-form-fields">
             <FormField label="Дата" required>
               <Input
                 required
