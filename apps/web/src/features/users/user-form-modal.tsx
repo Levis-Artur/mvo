@@ -63,7 +63,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
         <FormField label="Пов’язаний МВО" required={requiresResponsiblePerson(role)}>
           <Select value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>
             <option value="">Без прив’язки</option>
-            {persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
+            {persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
           </Select>
         </FormField>
         <FormField label="Пароль"><Checkbox checked={mustChangePassword} label="Вимагати зміну пароля під час наступного входу" onChange={(event) => setMustChangePassword(event.target.checked)} /></FormField>

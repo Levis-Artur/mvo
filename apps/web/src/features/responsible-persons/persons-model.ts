@@ -13,6 +13,17 @@ export type PersonFilterDraft = Pick<
 >;
 
 export const EMPTY_PERSON_FILTERS: PersonFilterDraft = {};
+export const MVO_ACCOUNTING_CODE_PATTERN = /^\d{4}$/;
+
+export function mvoAccountingCodeError(value: string): string {
+  return MVO_ACCOUNTING_CODE_PATTERN.test(value.trim())
+    ? ''
+    : 'Код МВО повинен містити рівно 4 цифри.';
+}
+
+export function personAccountingCode(person: ResponsiblePerson): string {
+  return person.externalAccountingCode ?? 'Не вказано';
+}
 
 export function applyPersonFilters(
   draft: PersonFilterDraft,

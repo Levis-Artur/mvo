@@ -125,7 +125,7 @@ export function StockFilterBar({
             <option value="">Усі МВО</option>
             {visiblePersons.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.personnelNumber} — {person.lastName} {person.firstName}
+                {person.externalAccountingCode ?? 'Не вказано'} — {person.lastName} {person.firstName}
               </option>
             ))}
           </FilterSelect>

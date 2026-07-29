@@ -23,7 +23,7 @@ export function TransactionsTable({ transactions, loading, onOpen }: {
       rows={transactions.map((item) => [
         new Date(item.occurredAt).toLocaleString('uk-UA'),
         transactionTypeLabel(item.type),
-        <span className="block max-w-56 break-words" key="person">{item.responsiblePerson.personnelNumber} — {item.responsiblePerson.fullName}</span>,
+        <span className="block max-w-56 break-words" key="person">{item.responsiblePerson.externalAccountingCode ?? 'Не вказано'} — {item.responsiblePerson.fullName}</span>,
         <span className="block max-w-64 break-words" key="item"><span className="font-mono">{item.inventoryItem.externalCode}</span> — {item.inventoryItem.name}</span>,
         formatQuantity(item.quantity),
         transactionDirection(item.type),

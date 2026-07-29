@@ -72,7 +72,7 @@ export function RecipientCombobox({
         data-modal-initial-focus={initialFocus ? 'true' : undefined}
         disabled={disabled}
         id={inputId}
-        placeholder="Введіть номер, ПІБ або управління"
+        placeholder="Введіть код МВО, ПІБ або управління"
         required={required}
         role="combobox"
         value={query}
@@ -129,7 +129,7 @@ export function RecipientCombobox({
                 onMouseEnter={() => setActiveIndex(index)}
               >
                 <strong>
-                  {target.personnelNumber} — {target.fullName}
+                  {target.externalAccountingCode} — {target.fullName}
                 </strong>
                 <span>{target.management?.name ?? 'Без управління'}</span>
               </Button>

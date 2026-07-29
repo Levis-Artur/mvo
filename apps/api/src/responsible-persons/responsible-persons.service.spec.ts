@@ -1,8 +1,14 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { Prisma, UserRole } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { ListResponsiblePersonsQueryDto } from './dto/list-responsible-persons-query.dto';
+import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
+import { UpdateResponsiblePersonDto } from './dto/update-responsible-person.dto';
 import { ResponsiblePersonsService } from './responsible-persons.service';
 
 type MockPrisma = {
@@ -13,6 +19,7 @@ type MockPrisma = {
     create: jest.Mock;
     findMany: jest.Mock;
     count: jest.Mock;
+    findFirst: jest.Mock;
     findUnique: jest.Mock;
     update: jest.Mock;
   };
@@ -35,6 +42,7 @@ function createPrismaMock(): MockPrisma {
       create: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
     },
@@ -45,11 +53,24 @@ function createService(prisma: MockPrisma): ResponsiblePersonsService {
   return new ResponsiblePersonsService(prisma as never);
 }
 
+function arrangeValidOrganization(prisma: MockPrisma) {
+  prisma.management.findUnique.mockResolvedValue({ id: ids.management });
+  prisma.service.findUnique.mockResolvedValue({
+    id: ids.service,
+    managementId: ids.management,
+  });
+  prisma.unit.findUnique.mockResolvedValue({
+    id: ids.unit,
+    serviceId: ids.service,
+  });
+}
+
 function validDto() {
   return {
     lastName: 'Тестовий',
     firstName: 'Олександр',
     personnelNumber: 'TEST-001',
+    externalAccountingCode: '0057',
     managementId: ids.management,
     serviceId: ids.service,
     unitId: ids.unit,
@@ -57,6 +78,45 @@ function validDto() {
 }
 
 describe('ResponsiblePersonsService', () => {
+  it('keeps a four-digit accounting code as a string with leading zeroes', async () => {
+    const dto = plainToInstance(CreateResponsiblePersonDto, {
+      ...validDto(),
+      externalAccountingCode: ' 0057 ',
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+    expect(dto.externalAccountingCode).toBe('0057');
+    expect(typeof dto.externalAccountingCode).toBe('string');
+  });
+
+  it.each(['', '57', '00057', 'ABCD', '00 57'])(
+    'rejects an invalid accounting code: %p',
+    async (externalAccountingCode) => {
+      const dto = plainToInstance(CreateResponsiblePersonDto, {
+        ...validDto(),
+        externalAccountingCode,
+      });
+
+      await expect(validate(dto)).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ property: 'externalAccountingCode' }),
+        ]),
+      );
+    },
+  );
+
+  it('validates an accounting code when a legacy MVO is edited', async () => {
+    const dto = plainToInstance(UpdateResponsiblePersonDto, {
+      externalAccountingCode: '',
+    });
+
+    await expect(validate(dto)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ property: 'externalAccountingCode' }),
+      ]),
+    );
+  });
+
   it('rejects transfer-target pagination limits above 100', async () => {
     const query = plainToInstance(ListResponsiblePersonsQueryDto, {
       page: '1',
@@ -140,9 +200,115 @@ describe('ResponsiblePersonsService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           personnelNumber: 'TEST-001',
+          externalAccountingCode: '0057',
         }),
       }),
     );
+  });
+
+  it('rejects a duplicate accounting code even when it belongs to an inactive MVO', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    prisma.responsiblePerson.findUnique.mockResolvedValue({
+      id: 'inactive-person',
+      isActive: false,
+    });
+
+    await expect(service.create(validDto())).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'MVO_ACCOUNTING_CODE_EXISTS',
+        message: 'МВО з кодом 0057 уже існує.',
+      },
+    });
+    expect(prisma.responsiblePerson.create).not.toHaveBeenCalled();
+  });
+
+  it('maps a concurrent Prisma unique violation to the stable accounting-code conflict', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    arrangeValidOrganization(prisma);
+    prisma.responsiblePerson.findUnique.mockResolvedValue(null);
+    prisma.responsiblePerson.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['externalAccountingCode'] },
+      }),
+    );
+
+    await expect(service.create(validDto())).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: 'MVO_ACCOUNTING_CODE_EXISTS',
+        message: 'МВО з кодом 0057 уже існує.',
+      },
+    });
+  });
+
+  it('allows an MVO to retain its current accounting code', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    const id = '77777777-7777-4777-8777-777777777777';
+    arrangeValidOrganization(prisma);
+    prisma.responsiblePerson.findFirst.mockResolvedValue({
+      id,
+      ...validDto(),
+      unitId: ids.unit,
+    });
+    prisma.responsiblePerson.findUnique.mockResolvedValue({ id });
+    prisma.responsiblePerson.update.mockResolvedValue({
+      id,
+      ...validDto(),
+    });
+
+    await expect(
+      service.update(id, { externalAccountingCode: '0057' }),
+    ).resolves.toEqual(expect.objectContaining({ id }));
+  });
+
+  it('allows adding an accounting code to a legacy MVO without one', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    const id = '77777777-7777-4777-8777-777777777777';
+    arrangeValidOrganization(prisma);
+    prisma.responsiblePerson.findFirst.mockResolvedValue({
+      id,
+      ...validDto(),
+      externalAccountingCode: null,
+      unitId: ids.unit,
+    });
+    prisma.responsiblePerson.findUnique.mockResolvedValue(null);
+    prisma.responsiblePerson.update.mockResolvedValue({ id });
+
+    await service.update(id, { externalAccountingCode: '0057' });
+
+    expect(prisma.responsiblePerson.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id },
+        data: expect.objectContaining({ externalAccountingCode: '0057' }),
+      }),
+    );
+  });
+
+  it('rejects changing an MVO to another MVO accounting code', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+    const id = '77777777-7777-4777-8777-777777777777';
+    prisma.responsiblePerson.findFirst.mockResolvedValue({
+      id,
+      ...validDto(),
+      externalAccountingCode: '0057',
+      unitId: ids.unit,
+    });
+    prisma.responsiblePerson.findUnique.mockResolvedValue({
+      id: 'another-person',
+    });
+
+    await expect(
+      service.update(id, { externalAccountingCode: '1155' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.responsiblePerson.update).not.toHaveBeenCalled();
   });
 
   it('searches responsible persons by text fields', async () => {
@@ -161,7 +327,61 @@ describe('ResponsiblePersonsService', () => {
             { lastName: { contains: 'Тест', mode: 'insensitive' } },
             { firstName: { contains: 'Тест', mode: 'insensitive' } },
             { middleName: { contains: 'Тест', mode: 'insensitive' } },
+            {
+              externalAccountingCode: {
+                contains: 'Тест',
+                mode: 'insensitive',
+              },
+            },
             { personnelNumber: { contains: 'Тест', mode: 'insensitive' } },
+            {
+              management: {
+                name: { contains: 'Тест', mode: 'insensitive' },
+              },
+            },
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('searches responsible persons by a multi-part full name', async () => {
+    const prisma = createPrismaMock();
+    const service = createService(prisma);
+
+    prisma.responsiblePerson.findMany.mockResolvedValue([]);
+    prisma.responsiblePerson.count.mockResolvedValue(0);
+
+    await service.findAll({ search: 'Жигульський Андрій', page: 1, limit: 20 });
+
+    expect(prisma.responsiblePerson.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            {
+              AND: [
+                {
+                  OR: expect.arrayContaining([
+                    {
+                      lastName: {
+                        contains: 'Жигульський',
+                        mode: 'insensitive',
+                      },
+                    },
+                  ]),
+                },
+                {
+                  OR: expect.arrayContaining([
+                    {
+                      firstName: {
+                        contains: 'Андрій',
+                        mode: 'insensitive',
+                      },
+                    },
+                  ]),
+                },
+              ],
+            },
           ]),
         }),
       }),
@@ -209,7 +429,7 @@ describe('ResponsiblePersonsService', () => {
         service: { id: ids.service, name: 'Служба' },
         unit: { id: ids.unit, name: 'Підрозділ' },
         phone: '+380000000000',
-        externalAccountingCode: 'secret-code',
+        externalAccountingCode: '0057',
       },
     ]);
     prisma.responsiblePerson.count.mockResolvedValue(1);
@@ -230,12 +450,14 @@ describe('ResponsiblePersonsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           isActive: true,
+          externalAccountingCode: { not: null },
           id: { not: currentResponsiblePersonId },
           OR: expect.any(Array),
         }),
         select: expect.objectContaining({
           id: true,
           personnelNumber: true,
+          externalAccountingCode: true,
           management: expect.any(Object),
         }),
         take: 100,
@@ -245,6 +467,7 @@ describe('ResponsiblePersonsService', () => {
       {
         id: '99999999-9999-4999-8999-999999999999',
         personnelNumber: '003',
+        externalAccountingCode: '0057',
         fullName: 'Левіс Артур Сергійович',
         management: { id: ids.management, name: 'Управління' },
         service: { id: ids.service, name: 'Служба' },
@@ -252,7 +475,7 @@ describe('ResponsiblePersonsService', () => {
       },
     ]);
     expect(result.items[0]).not.toHaveProperty('phone');
-    expect(result.items[0]).not.toHaveProperty('externalAccountingCode');
+    expect(result.items[0]).toHaveProperty('externalAccountingCode', '0057');
   });
 
   it('does not expose transfer targets to an unlinked MVO account', async () => {

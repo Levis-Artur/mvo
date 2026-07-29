@@ -200,7 +200,7 @@ export function InventoryItemAccountingCardView({
                     <option value="">Усі МВО</option>
                     {controller.persons.map((person) => (
                       <option key={person.id} value={person.id}>
-                        {person.personnelNumber} — {person.lastName} {person.firstName}{' '}
+                        {person.externalAccountingCode ?? 'Не вказано'} — {person.lastName} {person.firstName}{' '}
                         {person.middleName ?? ''}
                       </option>
                     ))}

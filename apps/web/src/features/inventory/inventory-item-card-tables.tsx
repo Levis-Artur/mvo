@@ -22,7 +22,7 @@ export function InventoryBalancesTable({
     <DataTable
       ariaLabel="Поточні залишки номенклатури по МВО"
       columns={[
-        { label: 'Номер МВО' },
+        { label: 'Код МВО' },
         { label: 'ПІБ' },
         { label: 'Управління' },
         { label: 'Служба' },
@@ -33,7 +33,7 @@ export function InventoryBalancesTable({
       emptyMessage="Поточних залишків за цією позицією немає."
       loading={loading && !card}
       rows={(card?.currentBalances ?? []).map((balance) => [
-        balance.responsiblePerson.personnelNumber,
+        balance.responsiblePerson.externalAccountingCode ?? 'Не вказано',
         balance.responsiblePerson.fullName,
         balance.responsiblePerson.management.name,
         balance.responsiblePerson.service.name,

@@ -21,6 +21,7 @@ const responsiblePersonInclude = {
 const transferTargetSelect = {
   id: true,
   personnelNumber: true,
+  externalAccountingCode: true,
   lastName: true,
   firstName: true,
   middleName: true,
@@ -91,6 +92,7 @@ export class ResponsiblePersonsService {
     const limit = query.limit ?? 20;
     const where: Prisma.ResponsiblePersonWhereInput = {
       ...this.buildWhere({ ...query, isActive: true }),
+      externalAccountingCode: { not: null },
       id: user.responsiblePersonId
         ? { not: user.responsiblePersonId }
         : undefined,
@@ -99,7 +101,7 @@ export class ResponsiblePersonsService {
       this.prisma.responsiblePerson.findMany({
         where,
         select: transferTargetSelect,
-        orderBy: [{ personnelNumber: 'asc' }, { lastName: 'asc' }],
+        orderBy: [{ externalAccountingCode: 'asc' }, { lastName: 'asc' }],
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -109,6 +111,7 @@ export class ResponsiblePersonsService {
       items: items.map((person) => ({
         id: person.id,
         personnelNumber: person.personnelNumber,
+        externalAccountingCode: person.externalAccountingCode!,
         fullName: [person.lastName, person.firstName, person.middleName]
           .filter(Boolean)
           .join(' '),
@@ -121,6 +124,10 @@ export class ResponsiblePersonsService {
   }
 
   async create(dto: CreateResponsiblePersonDto) {
+    const externalAccountingCode = this.normalizeAccountingCode(
+      dto.externalAccountingCode,
+    );
+    await this.assertAccountingCodeAvailable(externalAccountingCode);
     await this.validateOrganization(
       dto.managementId,
       dto.serviceId,
@@ -129,11 +136,11 @@ export class ResponsiblePersonsService {
 
     try {
       return await this.prisma.responsiblePerson.create({
-        data: this.toPrismaData(dto),
+        data: this.toPrismaData({ ...dto, externalAccountingCode }),
         include: responsiblePersonInclude,
       });
     } catch (error) {
-      this.handleUniqueError(error);
+      this.handleUniqueError(error, externalAccountingCode);
     }
   }
 
@@ -142,17 +149,28 @@ export class ResponsiblePersonsService {
     const managementId = dto.managementId ?? existing.managementId;
     const serviceId = dto.serviceId ?? existing.serviceId;
     const unitId = dto.unitId === undefined ? existing.unitId : dto.unitId;
+    const externalAccountingCode =
+      dto.externalAccountingCode === undefined
+        ? undefined
+        : this.normalizeAccountingCode(dto.externalAccountingCode);
+
+    if (externalAccountingCode !== undefined) {
+      await this.assertAccountingCodeAvailable(externalAccountingCode, id);
+    }
 
     await this.validateOrganization(managementId, serviceId, unitId);
 
     try {
       return await this.prisma.responsiblePerson.update({
         where: { id },
-        data: this.toPrismaData(dto),
+        data: this.toPrismaData({ ...dto, externalAccountingCode }),
         include: responsiblePersonInclude,
       });
     } catch (error) {
-      this.handleUniqueError(error);
+      this.handleUniqueError(
+        error,
+        externalAccountingCode ?? existing.externalAccountingCode,
+      );
     }
   }
 
@@ -161,6 +179,21 @@ export class ResponsiblePersonsService {
     user?: CurrentUser,
   ): Prisma.ResponsiblePersonWhereInput {
     const search = query.search?.trim();
+    const nameTokens = search?.split(/\s+/).filter(Boolean) ?? [];
+    const fullNameFilter: Prisma.ResponsiblePersonWhereInput | undefined =
+      nameTokens.length > 1
+        ? {
+            AND: nameTokens.map(
+              (token): Prisma.ResponsiblePersonWhereInput => ({
+                OR: [
+                  { lastName: { contains: token, mode: 'insensitive' } },
+                  { firstName: { contains: token, mode: 'insensitive' } },
+                  { middleName: { contains: token, mode: 'insensitive' } },
+                ],
+              }),
+            ),
+          }
+        : undefined;
 
     return {
       managementId: query.managementId,
@@ -176,7 +209,23 @@ export class ResponsiblePersonsService {
             { lastName: { contains: search, mode: 'insensitive' } },
             { firstName: { contains: search, mode: 'insensitive' } },
             { middleName: { contains: search, mode: 'insensitive' } },
+            {
+              externalAccountingCode: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
             { personnelNumber: { contains: search, mode: 'insensitive' } },
+            {
+              management: { name: { contains: search, mode: 'insensitive' } },
+            },
+            {
+              service: { name: { contains: search, mode: 'insensitive' } },
+            },
+            {
+              unit: { name: { contains: search, mode: 'insensitive' } },
+            },
+            ...(fullNameFilter ? [fullNameFilter] : []),
           ]
         : undefined,
     };
@@ -237,20 +286,67 @@ export class ResponsiblePersonsService {
     return {
       ...dto,
       unitId: dto.unitId || null,
+      externalAccountingCode:
+        dto.externalAccountingCode === undefined
+          ? undefined
+          : this.normalizeAccountingCode(dto.externalAccountingCode),
       appointmentDate: dto.appointmentDate
         ? new Date(dto.appointmentDate)
         : dto.appointmentDate,
     } as Prisma.ResponsiblePersonUncheckedCreateInput;
   }
 
-  private handleUniqueError(error: unknown): never {
+  private normalizeAccountingCode(value: string): string {
+    const code = value.trim();
+    if (!/^\d{4}$/.test(code)) {
+      throw new BadRequestException(
+        'Код МВО повинен містити рівно 4 цифри',
+      );
+    }
+    return code;
+  }
+
+  private async assertAccountingCodeAvailable(
+    externalAccountingCode: string,
+    currentId?: string,
+  ): Promise<void> {
+    const existing = await this.prisma.responsiblePerson.findUnique({
+      where: { externalAccountingCode },
+      select: { id: true },
+    });
+    if (existing && existing.id !== currentId) {
+      this.throwAccountingCodeConflict(externalAccountingCode);
+    }
+  }
+
+  private handleUniqueError(
+    error: unknown,
+    externalAccountingCode?: string | null,
+  ): never {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     ) {
+      const target = error.meta?.target;
+      const fields = Array.isArray(target)
+        ? target.map(String)
+        : [String(target ?? '')];
+      if (
+        externalAccountingCode &&
+        fields.some((field) => field.includes('externalAccountingCode'))
+      ) {
+        this.throwAccountingCodeConflict(externalAccountingCode);
+      }
       throw new ConflictException('Табельний номер вже використовується');
     }
 
     throw error;
+  }
+
+  private throwAccountingCodeConflict(code: string): never {
+    throw new ConflictException({
+      code: 'MVO_ACCOUNTING_CODE_EXISTS',
+      message: `МВО з кодом ${code} уже існує.`,
+    });
   }
 }

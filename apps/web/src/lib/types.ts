@@ -21,7 +21,13 @@ export type UserSummary = AuthUser & {
   createdById: string | null;
   responsiblePerson: Pick<
     ResponsiblePerson,
-    'id' | 'lastName' | 'firstName' | 'middleName' | 'personnelNumber' | 'isActive'
+    | 'id'
+    | 'lastName'
+    | 'firstName'
+    | 'middleName'
+    | 'personnelNumber'
+    | 'externalAccountingCode'
+    | 'isActive'
   > | null;
 };
 
@@ -67,6 +73,8 @@ export type ResponsiblePerson = {
   firstName: string;
   middleName: string | null;
   personnelNumber: string;
+  externalAccountingName: string | null;
+  externalAccountingCode: string | null;
   position: string | null;
   phone: string | null;
   email: string | null;
@@ -86,6 +94,7 @@ export type ResponsiblePerson = {
 export type TransferTarget = {
   id: string;
   personnelNumber: string;
+  externalAccountingCode: string;
   fullName: string;
   management: Pick<Management, 'id' | 'name'>;
   service: Pick<Service, 'id' | 'name'>;
@@ -198,6 +207,7 @@ export type StockBalance = {
     id: string;
     fullName: string;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   };
   inventoryItem: Pick<
     InventoryItem,
@@ -209,6 +219,7 @@ export type PersonReference = {
   id: string;
   fullName: string;
   personnelNumber: string;
+  externalAccountingCode: string | null;
 };
 
 export type StockSourceKind = 'DIRECT' | 'ASSIGNED';
@@ -353,7 +364,7 @@ export type MyInventoryItemTransferHistoryItem = {
   quantity: string;
   recipient: {
     id: string;
-    number: string;
+    externalAccountingCode: string | null;
     fullName: string;
   } | null;
 };
@@ -385,12 +396,12 @@ export type InventoryItemTransferHistory = {
     quantity: string;
     sender: {
       id: string;
-      number: string;
+      externalAccountingCode: string | null;
       fullName: string;
     };
     recipient: {
       id: string;
-      number: string;
+      externalAccountingCode: string | null;
       fullName: string;
     } | null;
   }>;
@@ -608,6 +619,7 @@ export type StockTransaction = {
     id: string;
     fullName: string;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   };
   inventoryItem: Pick<
     InventoryItem,
@@ -665,6 +677,7 @@ export type ImportRow = {
     firstName: string;
     middleName: string | null;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   } | null;
   inventoryItem: Pick<
     InventoryItem,
@@ -708,7 +721,7 @@ export type CreateResponsiblePersonDto = {
   phone?: string | null;
   email?: string | null;
   externalAccountingName?: string | null;
-  externalAccountingCode?: string | null;
+  externalAccountingCode: string;
   managementId: string;
   serviceId: string;
   unitId?: string | null;

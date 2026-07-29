@@ -29,7 +29,7 @@ export function StockBalancesTable({
           <span key="person">
             <strong className="block">{balance.responsiblePerson.fullName}</strong>
             <small className="text-[var(--color-text-secondary)]">
-              {balance.responsiblePerson.personnelNumber}
+              {balance.responsiblePerson.externalAccountingCode ?? 'Не вказано'}
             </small>
           </span>,
           <span className="font-mono" key="code">

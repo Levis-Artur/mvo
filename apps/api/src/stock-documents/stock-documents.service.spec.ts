@@ -156,7 +156,7 @@ function harness() {
     },
     stockDocumentAttachment: { deleteMany: jest.fn() },
     stockBalance: { findUnique: jest.fn() },
-    responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true }) },
+    responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true, externalAccountingCode: '0057' }) },
     securityEvent: { create: jest.fn() },
   };
   const prisma = {
@@ -167,7 +167,7 @@ function harness() {
       create: jest.fn(),
     },
     stockDocumentAttachment: { findMany: jest.fn().mockResolvedValue([]) },
-    responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true }) },
+    responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true, externalAccountingCode: '0057' }) },
     securityEvent: { create: jest.fn() },
     $transaction: jest.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
   };
@@ -302,6 +302,26 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
     await expect(
       h.service.createAndPostMvoTransfer(atomicDto(), mvo, {}),
     ).rejects.toThrow('деактивовано');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it('forbids a recipient without an accounting code', async () => {
+    const h = harness();
+    h.tx.responsiblePerson.findUnique
+      .mockResolvedValueOnce({
+        id: sourceId,
+        isActive: true,
+        externalAccountingCode: '1155',
+      })
+      .mockResolvedValueOnce({
+        id: destinationId,
+        isActive: true,
+        externalAccountingCode: null,
+      });
+
+    await expect(
+      h.service.createAndPostMvoTransfer(atomicDto(), mvo, {}),
+    ).rejects.toThrow('не має дійсного бухгалтерського коду');
     expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
   });
 

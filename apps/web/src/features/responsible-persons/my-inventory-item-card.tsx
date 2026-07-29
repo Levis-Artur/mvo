@@ -124,7 +124,7 @@ export function MyInventoryItemCard({
               loading={loading}
               rows={data.items.map((item) => {
                 const recipient = item.recipient
-                  ? `${item.recipient.number} — ${item.recipient.fullName}`
+                  ? `${item.recipient.externalAccountingCode ?? 'Не вказано'} — ${item.recipient.fullName}`
                   : 'Одержувача не вказано';
                 return [
                   new Date(item.documentDate).toLocaleDateString('uk-UA'),

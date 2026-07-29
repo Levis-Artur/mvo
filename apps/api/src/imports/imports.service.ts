@@ -23,6 +23,7 @@ import { ListImportRowsQueryDto } from './dto/list-import-rows-query.dto';
 import { ListImportsQueryDto } from './dto/list-imports-query.dto';
 import { UpdateImportMappingsDto } from './dto/update-import-mappings.dto';
 import { normalizeImportFilename } from './import-filename.util';
+import { parseAccountingCounterparty } from './import-counterparty.util';
 
 const importInclude = {
   rows: false,
@@ -185,6 +186,7 @@ export class ImportsService {
               firstName: true,
               middleName: true,
               personnelNumber: true,
+              externalAccountingCode: true,
             },
           },
           inventoryItem: {
@@ -236,13 +238,15 @@ export class ImportsService {
       });
 
       if (mapping.saveExternalAccountingName) {
+        const parsedCounterparty = parseAccountingCounterparty(
+          mapping.counterpartyRaw,
+        );
         await this.prisma.responsiblePerson.update({
           where: { id: mapping.responsiblePersonId },
           data: {
-            externalAccountingName: mapping.counterpartyRaw,
-            externalAccountingCode: this.extractExternalCode(
-              mapping.counterpartyRaw,
-            ),
+            externalAccountingName:
+              parsedCounterparty.externalAccountingName ??
+              mapping.counterpartyRaw.trim(),
           },
         });
       }
@@ -519,9 +523,17 @@ export class ImportsService {
     const result = [];
 
     for (const row of rows) {
-      const responsiblePersonMatch = await this.findResponsiblePerson(
+      const parsedCounterparty = parseAccountingCounterparty(
         row.counterpartyRaw,
       );
+      const responsiblePersonMatch =
+        row.status === 'ERROR' ||
+        row.status === 'SKIPPED' ||
+        Boolean(parsedCounterparty.error)
+          ? { person: null, error: parsedCounterparty.error }
+          : await this.findResponsiblePerson(
+              parsedCounterparty.externalAccountingCode,
+            );
       const responsiblePerson = responsiblePersonMatch.person;
       const item = row.nomenclatureCodeRaw
         ? await this.prisma.inventoryItem.findUnique({
@@ -529,6 +541,13 @@ export class ImportsService {
           })
         : null;
       const messages = row.message ? [row.message] : [];
+      if (
+        row.status !== 'ERROR' &&
+        row.status !== 'SKIPPED' &&
+        parsedCounterparty.error
+      ) {
+        messages.push(parsedCounterparty.error);
+      }
       let status = row.status as ImportRowStatus;
       let systemBalance: Prisma.Decimal | undefined;
       let fileEndingBalance: Prisma.Decimal | undefined;
@@ -540,9 +559,9 @@ export class ImportsService {
         !responsiblePerson
       ) {
         status = ImportRowStatus.ERROR;
-        messages.push(
-          responsiblePersonMatch.error ?? 'МВО не знайдено',
-        );
+        const matchError =
+          responsiblePersonMatch.error ?? 'МВО не знайдено';
+        if (!messages.includes(matchError)) messages.push(matchError);
       }
 
       if (
@@ -617,48 +636,31 @@ export class ImportsService {
     return result;
   }
 
-  private async findResponsiblePerson(counterpartyRaw: string) {
-    const normalizedCounterparty = counterpartyRaw.trim();
-    const exactMatch = normalizedCounterparty
-      ? await this.prisma.responsiblePerson.findFirst({
-          where: {
-            externalAccountingName: normalizedCounterparty,
-            isActive: true,
-          },
-        })
-      : null;
-
-    if (exactMatch) {
-      return { person: exactMatch };
-    }
-
-    const externalAccountingCode = this.extractExternalCode(
-      normalizedCounterparty,
-    );
+  private async findResponsiblePerson(externalAccountingCode?: string) {
     if (!externalAccountingCode) {
-      return { person: null };
-    }
-
-    const codeMatches = await this.prisma.responsiblePerson.findMany({
-      where: {
-        externalAccountingCode,
-        isActive: true,
-      },
-      take: 2,
-    });
-
-    if (codeMatches.length > 1) {
       return {
         person: null,
-        error: 'Неоднозначне зіставлення МВО за зовнішнім кодом',
+        error: 'У колонці "Контрагент" відсутній код МВО.',
       };
     }
 
-    return { person: codeMatches[0] ?? null };
-  }
+    const person = await this.prisma.responsiblePerson.findUnique({
+      where: { externalAccountingCode },
+    });
 
-  private extractExternalCode(value: string): string | undefined {
-    return value.match(/(\d+)\s*$/)?.[1];
+    if (!person) {
+      return {
+        person: null,
+        error: `МВО з кодом ${externalAccountingCode} не знайдено.`,
+      };
+    }
+    if (!person.isActive) {
+      return {
+        person: null,
+        error: `МВО з кодом ${externalAccountingCode} деактивований.`,
+      };
+    }
+    return { person };
   }
 
   private parseOptionalDecimal(value: string): Prisma.Decimal | undefined {

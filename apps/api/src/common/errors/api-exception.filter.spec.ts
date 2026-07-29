@@ -82,6 +82,24 @@ describe('ApiExceptionFilter', () => {
     );
   });
 
+  it('preserves the stable duplicate MVO accounting-code error', () => {
+    const { body } = execute(
+      new ConflictException({
+        code: 'MVO_ACCOUNTING_CODE_EXISTS',
+        message: 'МВО з кодом 0057 уже існує.',
+      }),
+    );
+
+    expect(body).toEqual(
+      expect.objectContaining({
+        statusCode: 409,
+        code: 'MVO_ACCOUNTING_CODE_EXISTS',
+        message: 'МВО з кодом 0057 уже існує.',
+        details: null,
+      }),
+    );
+  });
+
   it.each([
     ['P2002', 409, 'UNIQUE_CONSTRAINT_VIOLATION'],
     ['P2003', 409, 'FOREIGN_KEY_CONSTRAINT_VIOLATION'],

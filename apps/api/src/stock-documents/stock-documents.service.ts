@@ -793,11 +793,16 @@ export class StockDocumentsService {
     }
     const recipient = await client.responsiblePerson.findUnique({
       where: { id: destinationResponsiblePersonId },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, externalAccountingCode: true },
     });
     if (!recipient?.isActive) {
       throw new BadRequestException(
         'МВО-одержувача не знайдено або його деактивовано',
+      );
+    }
+    if (!/^\d{4}$/.test(recipient.externalAccountingCode ?? '')) {
+      throw new BadRequestException(
+        'МВО-одержувач не має дійсного бухгалтерського коду',
       );
     }
   }

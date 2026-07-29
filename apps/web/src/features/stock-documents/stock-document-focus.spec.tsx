@@ -28,6 +28,7 @@ const authUser: AuthUser = {
 const target: TransferTarget = {
   id: destinationId,
   personnelNumber: '003',
+  externalAccountingCode: '0057',
   fullName: 'Левіс Артур Сергійович',
   management: { id: 'management-id', name: 'Управління забезпечення' },
   service: { id: 'service-id', name: 'Служба майна' },
@@ -105,7 +106,7 @@ describe('new transfer modal focus lifecycle', () => {
 
     await user.keyboard('{Enter}');
     expect((recipient as HTMLInputElement).value).toContain(
-      '003 — Левіс Артур Сергійович',
+      '0057 — Левіс Артур Сергійович',
     );
     expect(document.activeElement).toBe(recipient);
 

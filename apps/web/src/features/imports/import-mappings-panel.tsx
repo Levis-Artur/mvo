@@ -25,7 +25,7 @@ export function ImportMappingsPanel({ counterparties, persons, mappings, loading
               [counterparty]: { responsiblePersonId: event.target.value, save: mappings[counterparty]?.save ?? true },
             })}>
               <option value="">Оберіть МВО</option>
-              {persons.map((person) => <option key={person.id} value={person.id}>{fullName(person)} — {person.personnelNumber}</option>)}
+              {persons.map((person) => <option key={person.id} value={person.id}>{fullName(person)} — {person.externalAccountingCode ?? 'Не вказано'}</option>)}
             </Select>
             <Checkbox checked={mappings[counterparty]?.save ?? true} disabled={loading} label="Зберегти" onChange={(event) => onMappingsChange({
               ...mappings,

@@ -2,11 +2,14 @@ import {
   IsBoolean,
   IsDateString,
   IsEmail,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateResponsiblePersonDto {
   @IsString()
@@ -46,10 +49,15 @@ export class CreateResponsiblePersonDto {
   @MaxLength(255)
   externalAccountingName?: string;
 
-  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
-  @MaxLength(80)
-  externalAccountingCode?: string;
+  @IsNotEmpty()
+  @Matches(/^\d{4}$/, {
+    message: 'Код МВО повинен містити рівно 4 цифри',
+  })
+  externalAccountingCode!: string;
 
   @IsUUID()
   managementId!: string;

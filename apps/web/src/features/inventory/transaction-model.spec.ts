@@ -11,7 +11,7 @@ const transaction: StockTransaction = {
   id: 'tx-1', type: 'RECEIPT', quantity: '2.50', balanceBefore: '1', balanceAfter: '3.50',
   occurredAt: '2026-01-02T10:00:00.000Z', sourceDocument: 'Накладна 7', comment: 'Тест',
   importBatchId: null, createdAt: '2026-01-02T10:00:00.000Z',
-  responsiblePerson: { id: 'person-1', fullName: 'Левіс Артур Сергійович', personnelNumber: '003' },
+  responsiblePerson: { id: 'person-1', fullName: 'Левіс Артур Сергійович', personnelNumber: '003', externalAccountingCode: '0057' },
   inventoryItem: { id: 'item-1', externalCode: '100', name: 'Папір', unitOfMeasure: 'пач.' },
 };
 

@@ -25,9 +25,12 @@ export function resolveSourceId(
 
 export function recipientOptions(persons: TransferTarget[], sourceId: string) {
   return persons
-    .filter((person) => person.id !== sourceId)
+    .filter(
+      (person) =>
+        person.id !== sourceId && /^\d{4}$/.test(person.externalAccountingCode),
+    )
     .sort((left, right) =>
-      left.personnelNumber.localeCompare(right.personnelNumber, 'uk-UA', { numeric: true }) ||
+      left.externalAccountingCode.localeCompare(right.externalAccountingCode, 'uk-UA', { numeric: true }) ||
       personSearchText(left).localeCompare(personSearchText(right), 'uk-UA'),
     );
 }
@@ -36,7 +39,7 @@ export function personOptionLabel(person: ResponsiblePerson | TransferTarget) {
   const name = 'fullName' in person
     ? person.fullName
     : [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
-  return `${person.personnelNumber} — ${name} — ${person.management?.name ?? 'Без управління'}`;
+  return `${person.externalAccountingCode ?? 'Не вказано'} — ${name} — ${person.management?.name ?? 'Без управління'}`;
 }
 
 export function filterRecipientOptions(persons: TransferTarget[], sourceId: string, search: string) {
@@ -47,7 +50,7 @@ export function filterRecipientOptions(persons: TransferTarget[], sourceId: stri
 }
 
 function personSearchText(person: TransferTarget) {
-  return [person.personnelNumber, person.fullName, person.management?.name]
+  return [person.externalAccountingCode, person.fullName, person.management?.name]
     .filter(Boolean).join(' ');
 }
 

@@ -44,6 +44,26 @@ describe('API client errors', () => {
     expect(error.code).toBe('UNKNOWN_ERROR');
     expect(error.requestId).toBe('proxy-request-1');
   });
+
+  it('preserves the duplicate MVO accounting-code error', async () => {
+    const response = new Response(
+      JSON.stringify({
+        statusCode: 409,
+        code: 'MVO_ACCOUNTING_CODE_EXISTS',
+        message: 'МВО з кодом 0057 уже існує.',
+        details: null,
+        path: '/api/responsible-persons',
+        requestId: 'request-mvo-code',
+        timestamp: '2026-07-29T10:00:00.000Z',
+      }),
+      { status: 409, headers: { 'content-type': 'application/json' } },
+    );
+
+    const error = await createApiError(response, 'Помилка запиту');
+
+    expect(error.code).toBe('MVO_ACCOUNTING_CODE_EXISTS');
+    expect(error.message).toBe('МВО з кодом 0057 уже існує.');
+  });
 });
 
 describe('destructive administration URLs', () => {

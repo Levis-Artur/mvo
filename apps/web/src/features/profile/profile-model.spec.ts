@@ -12,11 +12,11 @@ describe('profile presentation', () => {
   it('показує дані картки MVO у профілі', () => {
     const user: AuthUser = { id: '1', username: 'mvo', role: 'MVO', isActive: true, mustChangePassword: false, responsiblePersonId: 'person-1' };
     const person = {
-      personnelNumber: '003', lastName: 'Левіс', firstName: 'Артур', middleName: 'Сергійович',
+      personnelNumber: '003', externalAccountingCode: '0057', lastName: 'Левіс', firstName: 'Артур', middleName: 'Сергійович',
       management: { name: 'Управління' }, service: { name: 'Служба' }, unit: { name: 'Підрозділ' },
     } as ResponsiblePerson;
     expect(profilePresentation(user, person)).toMatchObject({
-      personnelNumber: '003', fullName: 'Левіс Артур Сергійович', management: 'Управління',
+      externalAccountingCode: '0057', fullName: 'Левіс Артур Сергійович', management: 'Управління',
       service: 'Служба', unit: 'Підрозділ', accountState: 'Активний',
     });
   });
@@ -25,7 +25,7 @@ describe('profile presentation', () => {
     const view = readFileSync(join(__dirname, 'profile-view.tsx'), 'utf8');
     expect(view).toContain('Дані матеріально відповідальної особи');
     expect(view).toContain('data-read-only="true"');
-    expect(view).toContain('<dt>Номер МВО</dt>');
+    expect(view).toContain('<dt>Код МВО</dt>');
     expect(view).toContain('<dt>Управління</dt>');
     expect(view).toContain('<dt>Служба</dt>');
     expect(view).toContain('<dt>Підрозділ</dt>');

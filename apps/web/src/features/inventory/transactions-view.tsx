@@ -120,7 +120,7 @@ export function TransactionsView() {
           <option value="ADJUSTMENT_INCREASE">Коригування: збільшення</option><option value="ADJUSTMENT_DECREASE">Коригування: зменшення</option>
         </Select></FilterField>
         <FilterField label="МВО"><Select value={draft.responsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, responsiblePersonId: event.target.value }))}>
-          <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {person.lastName} {person.firstName}</option>)}
+          <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {person.lastName} {person.firstName}</option>)}
         </Select></FilterField>
         <FilterField label="Номенклатура"><Select value={draft.inventoryItemId} onChange={(event) => setDraft((current) => ({ ...current, inventoryItemId: event.target.value }))}>
           <option value="">Уся номенклатура</option>{items.map((item) => <option key={item.id} value={item.id}>{item.externalCode} — {item.name}</option>)}

@@ -12,6 +12,7 @@ const person = {
   firstName: 'Артур',
   middleName: null,
   personnelNumber: '003',
+  externalAccountingCode: '0057',
   management: { id: 'management-1', name: 'Управління А' },
   service: { id: 'service-1', name: 'Служба А' },
   unit: { id: 'unit-1', name: 'Підрозділ А' },
@@ -21,6 +22,7 @@ const destination = {
   ...person,
   id: '22222222-2222-4222-8222-222222222222',
   personnelNumber: '004',
+  externalAccountingCode: '1155',
   lastName: 'Луцик',
 };
 
@@ -160,10 +162,10 @@ describe('InventoryItemsService accounting card', () => {
       'Передача між МВО',
     ]);
     expect(result.movements.items[0]).toEqual(
-      expect.objectContaining({ quantity: '5', to: expect.stringContaining('004') }),
+      expect.objectContaining({ quantity: '5', to: expect.stringContaining('1155') }),
     );
     expect(result.movements.items[1]).toEqual(
-      expect.objectContaining({ quantity: '-2', to: expect.stringContaining('004') }),
+      expect.objectContaining({ quantity: '-2', to: expect.stringContaining('1155') }),
     );
     expect(prisma.stockTransaction.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

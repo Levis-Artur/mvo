@@ -9,8 +9,14 @@ export function fullName(person: ResponsiblePerson) {
   return [person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ');
 }
 
-export function responsiblePersonShortName(person: Pick<ResponsiblePerson, 'lastName' | 'firstName' | 'middleName' | 'personnelNumber'>) {
-  return `${[person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ')} · ${person.personnelNumber}`;
+export function responsiblePersonCode(
+  person: Pick<ResponsiblePerson, 'externalAccountingCode'>,
+) {
+  return person.externalAccountingCode ?? 'Не вказано';
+}
+
+export function responsiblePersonShortName(person: Pick<ResponsiblePerson, 'lastName' | 'firstName' | 'middleName' | 'externalAccountingCode'>) {
+  return `${[person.lastName, person.firstName, person.middleName].filter(Boolean).join(' ')} · ${responsiblePersonCode(person)}`;
 }
 
 export function formatDateTime(value?: string | null) {
@@ -25,6 +31,7 @@ export function isUserLocked(user: UserSummary) {
 export function normalizePersonForm(form: CreateResponsiblePersonDto): CreateResponsiblePersonDto {
   return {
     ...form,
+    externalAccountingCode: form.externalAccountingCode.trim(),
     middleName: form.middleName || null,
     position: form.position || null,
     phone: form.phone || null,

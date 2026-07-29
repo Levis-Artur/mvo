@@ -30,6 +30,7 @@ const recipientSelect = {
   firstName: true,
   middleName: true,
   personnelNumber: true,
+  externalAccountingCode: true,
 } satisfies Prisma.ResponsiblePersonSelect;
 
 const directPropertySelect = {
@@ -250,6 +251,16 @@ export class MyPropertyService {
             {
               document: {
                 destinationResponsiblePerson: {
+                  externalAccountingCode: {
+                    contains: term,
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+            {
+              document: {
+                destinationResponsiblePerson: {
                   lastName: { contains: term, mode: 'insensitive' },
                 },
               },
@@ -338,6 +349,7 @@ export class MyPropertyService {
         ? {
             id: recipient.id,
             personnelNumber: recipient.personnelNumber,
+            externalAccountingCode: recipient.externalAccountingCode,
             fullName: [
               recipient.lastName,
               recipient.firstName,

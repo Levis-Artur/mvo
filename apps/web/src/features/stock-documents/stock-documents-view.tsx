@@ -75,10 +75,10 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       </Select></FilterField>
       {user.role === 'MVO' ? <Button aria-expanded={advancedFilters} variant="outline" type="button" onClick={() => setAdvancedFilters((current) => !current)}>Додаткові фільтри</Button> : null}
       {globalPersonFilters ? <><FilterField label="Відправник"><Select value={controller.draftFilters.sourceId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, sourceId: event.target.value }))}>
-        <option value="">Усі відправники</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
+        <option value="">Усі відправники</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
       </Select></FilterField>
       <FilterField label="Одержувач-МВО"><Select value={controller.draftFilters.destinationId} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, destinationId: event.target.value }))}>
-        <option value="">Усі одержувачі</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}
+        <option value="">Усі одержувачі</option>{controller.persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
       </Select></FilterField></> : null}
     </FilterBar>
     {controller.error ? <ErrorState message={controller.error} /> : null}

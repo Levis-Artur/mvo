@@ -3,6 +3,8 @@
 import type { ResponsiblePerson, UserSummary } from '@/lib/types';
 import { Button, DataTable, StatusBadge } from '@/components/ui';
 import { personDisplayName } from './persons-model';
+import { personAccountingCode } from './persons-model';
+import { PersonActionsMenu } from './person-actions-menu';
 
 type StockPresence = boolean | undefined;
 
@@ -39,7 +41,7 @@ export function PersonsTable({
     <DataTable
       ariaLabel="Реєстр матеріально відповідальних осіб"
       columns={[
-        { label: 'Номер МВО' },
+        { label: 'Код МВО', className: 'persons-table__code' },
         { label: 'ПІБ' },
         { label: 'Управління' },
         { label: 'Служба' },
@@ -47,17 +49,19 @@ export function PersonsTable({
         { label: 'Обліковий запис' },
         { label: 'Активність' },
         { label: 'Залишки' },
-        { label: 'Дії', actions: true },
+        { label: 'Дії', actions: true, className: 'persons-table__actions' },
       ]}
       emptyMessage="МВО за вказаними фільтрами не знайдено."
       loading={loading}
+      tableClassName="persons-table"
+      rowKeys={persons.map((person) => person.id)}
       rows={persons.map((person) => {
         const account = accounts.get(person.id);
         const hasStock = stockPresence[person.id];
 
         return [
-          <span className="font-mono font-semibold" key="number">
-            {person.personnelNumber}
+          <span className="font-mono font-semibold" key="code">
+            {personAccountingCode(person)}
           </span>,
           <Button
             variant="link"
@@ -100,44 +104,18 @@ export function PersonsTable({
               {hasStock ? 'Має залишки' : 'Залишків немає'}
             </StatusBadge>
           ),
-          <div className="flex min-w-48 flex-wrap gap-1" key="actions">
-            <Button variant="ghost" type="button" onClick={() => onView(person)}>
-              Переглянути
-            </Button>
-            {canEdit ? (
-              <Button variant="ghost" type="button" onClick={() => onEdit(person)}>
-                Редагувати
-              </Button>
-            ) : null}
-            {canCreateAccount && accountsAvailable && !account ? (
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => onCreateAccount(person)}
-              >
-                Створити обліковий запис
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => onToggleActive(person)}
-              >
-                {person.isActive ? 'Деактивувати' : 'Активувати'}
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Button variant="ghost" type="button" onClick={() => onEdit(person)}>
-                Перемістити
-              </Button>
-            ) : null}
-            {canDelete ? (
-              <Button variant="danger" type="button" onClick={() => onDelete(person)}>
-                Видалити
-              </Button>
-            ) : null}
-          </div>,
+          <PersonActionsMenu
+            canCreateAccount={canCreateAccount && accountsAvailable && !account}
+            canDelete={canDelete}
+            canEdit={canEdit}
+            key="actions"
+            person={person}
+            onCreateAccount={() => onCreateAccount(person)}
+            onDelete={() => onDelete(person)}
+            onEdit={() => onEdit(person)}
+            onToggleActive={() => onToggleActive(person)}
+            onView={() => onView(person)}
+          />,
         ];
       })}
     />

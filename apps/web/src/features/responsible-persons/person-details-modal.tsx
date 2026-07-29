@@ -101,7 +101,7 @@ export function PersonDetailsModal({
           <div className="grid gap-3 lg:grid-cols-2">
             <Card title="Основні дані">
               <dl className="grid gap-3 sm:grid-cols-2">
-                <Detail label="Номер МВО" value={person.personnelNumber} />
+                <Detail label="Код МВО" value={person.externalAccountingCode ?? 'Не вказано'} />
                 <Detail label="ПІБ" value={personDisplayName(person)} />
                 <Detail label="Посада" value={person.position} />
                 <Detail label="Телефон" value={person.phone} />

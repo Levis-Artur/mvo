@@ -117,7 +117,7 @@ function UnitSection({
             {unitPeople.map((person) => (
               <li key={person.id}>
                 <span>
-                  <strong>{person.personnelNumber}</strong> — {personDisplayName(person)}
+                  <strong>{person.externalAccountingCode ?? 'Не вказано'}</strong> — {personDisplayName(person)}
                 </span>
                 <span className="flex flex-wrap gap-1">
                   <StatusBadge tone={person.isActive ? 'success' : 'neutral'}>
@@ -216,7 +216,7 @@ function ServiceSection({
             <strong>МВО без підрозділу</strong>
             {withoutUnit.map((person) => (
               <span key={person.id}>
-                {person.personnelNumber} — {personDisplayName(person)}
+                {person.externalAccountingCode ?? 'Не вказано'} — {personDisplayName(person)}
               </span>
             ))}
           </div>

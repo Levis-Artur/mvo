@@ -63,6 +63,7 @@ export type ApiErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'CONFLICT'
+  | 'MVO_ACCOUNTING_CODE_EXISTS'
   | 'UNIQUE_CONSTRAINT_VIOLATION'
   | 'FOREIGN_KEY_CONSTRAINT_VIOLATION'
   | 'RECORD_NOT_FOUND'
@@ -133,6 +134,7 @@ function isApiErrorCode(value: unknown): value is ApiErrorCode {
       'FORBIDDEN',
       'NOT_FOUND',
       'CONFLICT',
+      'MVO_ACCOUNTING_CODE_EXISTS',
       'UNIQUE_CONSTRAINT_VIOLATION',
       'FOREIGN_KEY_CONSTRAINT_VIOLATION',
       'RECORD_NOT_FOUND',

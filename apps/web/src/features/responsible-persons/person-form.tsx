@@ -10,6 +10,7 @@ import type {
   Unit,
 } from '@/lib/types';
 import { getErrorMessage, normalizePersonForm } from '@/components/common';
+import { mvoAccountingCodeError } from './persons-model';
 import {
   Button,
   Checkbox,
@@ -25,6 +26,7 @@ const emptyPersonForm: CreateResponsiblePersonDto = {
   firstName: '',
   middleName: '',
   personnelNumber: '',
+  externalAccountingCode: '',
   position: '',
   phone: '',
   email: '',
@@ -52,6 +54,7 @@ export function PersonForm({
           firstName: person.firstName,
           middleName: person.middleName ?? '',
           personnelNumber: person.personnelNumber,
+          externalAccountingCode: person.externalAccountingCode ?? '',
           position: person.position ?? '',
           phone: person.phone ?? '',
           email: person.email ?? '',
@@ -69,6 +72,10 @@ export function PersonForm({
   const [units, setUnits] = useState<Unit[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [accountingCodeTouched, setAccountingCodeTouched] = useState(false);
+  const accountingCodeError = accountingCodeTouched
+    ? mvoAccountingCodeError(form.externalAccountingCode)
+    : '';
 
   useEffect(() => {
     apiClient
@@ -101,10 +108,31 @@ export function PersonForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setAccountingCodeTouched(true);
+    const codeError = mvoAccountingCodeError(form.externalAccountingCode);
+    if (codeError) {
+      setError(codeError);
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       const payload = normalizePersonForm(form);
+      const matches = await apiClient.responsiblePersons({
+        search: payload.externalAccountingCode,
+        page: 1,
+        limit: 2,
+      });
+      if (
+        matches.items.some(
+          (item) =>
+            item.externalAccountingCode === payload.externalAccountingCode &&
+            item.id !== person?.id,
+        )
+      ) {
+        setError(`МВО з кодом ${payload.externalAccountingCode} уже існує.`);
+        return;
+      }
       if (person) {
         await apiClient.updateResponsiblePerson(person.id, payload);
       } else {
@@ -162,7 +190,32 @@ export function PersonForm({
               }
             />
           </FormField>
-          <FormField label="Номер МВО" required>
+          <FormField
+            error={accountingCodeError}
+            hint="4-значний код, присвоєний бухгалтерією. Початкові нулі зберігаються."
+            label="Код МВО"
+            required
+          >
+            <Input
+              inputMode="numeric"
+              maxLength={4}
+              pattern="\d{4}"
+              placeholder="Наприклад, 0057"
+              value={form.externalAccountingCode}
+              onBlur={() => setAccountingCodeTouched(true)}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  externalAccountingCode: event.target.value,
+                }))
+              }
+            />
+          </FormField>
+          <FormField
+            hint="Внутрішній номер для облікового запису та legacy-даних."
+            label="Внутрішній номер"
+            required
+          >
             <Input
               value={form.personnelNumber}
               onChange={(event) =>

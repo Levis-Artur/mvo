@@ -467,6 +467,7 @@ export class AccountingService {
     return {
       id: person.id,
       personnelNumber: person.personnelNumber,
+      externalAccountingCode: person.externalAccountingCode,
       fullName: this.fullName(person),
       management: { id: person.management.id, name: person.management.name },
     };

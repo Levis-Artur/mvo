@@ -182,8 +182,8 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
         onReset={() => { setDraft(EMPTY_FILTERS); setFilters(EMPTY_FILTERS); setPage(1); }}
         onSearchChange={(documentNumber) => setDraft((current) => ({ ...current, documentNumber }))}
       >
-        <FilterField label="Відправник"><Select value={draft.sourceResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, sourceResponsiblePersonId: event.target.value }))}><option value="">Усі</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}</Select></FilterField>
-        <FilterField label="Одержувач"><Select value={draft.destinationResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, destinationResponsiblePersonId: event.target.value }))}><option value="">Усі</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.personnelNumber} — {fullName(person)}</option>)}</Select></FilterField>
+        <FilterField label="Відправник"><Select value={draft.sourceResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, sourceResponsiblePersonId: event.target.value }))}><option value="">Усі</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}</Select></FilterField>
+        <FilterField label="Одержувач"><Select value={draft.destinationResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, destinationResponsiblePersonId: event.target.value }))}><option value="">Усі</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}</Select></FilterField>
         <FilterField label="Показати документи, що містять номенклатуру"><Select value={draft.inventoryItemId} onChange={(event) => setDraft((current) => ({ ...current, inventoryItemId: event.target.value }))}><option value="">Уся</option>{items.map((item) => <option key={item.id} value={item.id}>{item.externalCode} — {item.name}</option>)}</Select></FilterField>
         <FilterField label="Статус"><Select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as FilterState['status'] }))}><option value="">Усі</option><option value="DRAFT">Чернетка</option><option value="POSTED">Проведено</option><option value="CANCELLED">Скасовано</option></Select></FilterField>
         <FilterField label="Експорт"><Select value={draft.exportState} onChange={(event) => setDraft((current) => ({ ...current, exportState: event.target.value as FilterState['exportState'] }))}><option value="">Усі</option><option value="NOT_EXPORTED">Не експортовано</option><option value="EXPORTED">Експортовано</option></Select></FilterField>
@@ -201,8 +201,8 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
         rows={rows.map((row) => [
           formatDate(row.documentDate),
           documentNumberLabel(row.displayNumber),
-          `${row.sourceResponsiblePerson.personnelNumber} — ${row.sourceResponsiblePerson.fullName}`,
-          row.destinationResponsiblePerson ? `${row.destinationResponsiblePerson.personnelNumber} — ${row.destinationResponsiblePerson.fullName}` : '—',
+          `${row.sourceResponsiblePerson.externalAccountingCode ?? 'Не вказано'} — ${row.sourceResponsiblePerson.fullName}`,
+          row.destinationResponsiblePerson ? `${row.destinationResponsiblePerson.externalAccountingCode ?? 'Не вказано'} — ${row.destinationResponsiblePerson.fullName}` : '—',
           row.inventoryItem.externalCode,
           row.inventoryItem.name,
           row.inventoryItem.unitOfMeasure ?? '—',

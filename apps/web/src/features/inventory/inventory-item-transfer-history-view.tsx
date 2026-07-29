@@ -127,9 +127,9 @@ export function InventoryItemTransferHistoryView({
               emptyMessage="Цю позицію ще не передавали між МВО."
               loading={loading}
               rows={data.items.map((item) => {
-                const sender = `${item.sender.fullName} — МВО №${item.sender.number}`;
+                const sender = `${item.sender.fullName} — код МВО ${item.sender.externalAccountingCode ?? 'не вказано'}`;
                 const recipient = item.recipient
-                  ? `${item.recipient.fullName} — МВО №${item.recipient.number}`
+                  ? `${item.recipient.fullName} — код МВО ${item.recipient.externalAccountingCode ?? 'не вказано'}`
                   : 'Одержувача не вказано';
                 return [
                   formatDateTime(item.documentDate),

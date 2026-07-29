@@ -13,7 +13,7 @@ export function TransactionDetailsModal({ transaction, onClose }: { transaction:
         <Detail label="Статус"><StatusBadge tone="success">Проведено</StatusBadge></Detail>
         <Detail label="Напрямок">{transactionDirection(transaction.type)}</Detail>
         <Detail label="Кількість">{formatQuantity(transaction.quantity)}</Detail>
-        <Detail label="МВО">{transaction.responsiblePerson.personnelNumber} — {transaction.responsiblePerson.fullName}</Detail>
+        <Detail label="МВО">{transaction.responsiblePerson.externalAccountingCode ?? 'Не вказано'} — {transaction.responsiblePerson.fullName}</Detail>
         <Detail label="Номенклатура">{transaction.inventoryItem.externalCode} — {transaction.inventoryItem.name}</Detail>
         <Detail label="Було">{formatQuantity(transaction.balanceBefore)}</Detail>
         <Detail label="Стало">{formatQuantity(transaction.balanceAfter)}</Detail>

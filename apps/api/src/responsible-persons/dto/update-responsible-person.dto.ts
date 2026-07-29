@@ -5,8 +5,11 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateResponsiblePersonDto {
   @IsOptional()
@@ -49,10 +52,15 @@ export class UpdateResponsiblePersonDto {
   @MaxLength(255)
   externalAccountingName?: string | null;
 
-  @IsOptional()
+  @ValidateIf((_, value: unknown) => value !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
-  @MaxLength(80)
-  externalAccountingCode?: string | null;
+  @Matches(/^\d{4}$/, {
+    message: 'Код МВО повинен містити рівно 4 цифри',
+  })
+  externalAccountingCode?: string;
 
   @IsOptional()
   @IsUUID()

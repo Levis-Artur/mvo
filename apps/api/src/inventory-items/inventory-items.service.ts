@@ -258,6 +258,7 @@ export class InventoryItemsService {
           responsiblePerson: { include: organizationPersonInclude },
         },
         orderBy: [
+          { responsiblePerson: { externalAccountingCode: 'asc' } },
           { responsiblePerson: { personnelNumber: 'asc' } },
           { updatedAt: 'desc' },
         ],
@@ -476,6 +477,7 @@ export class InventoryItemsService {
     const personSelect = {
       id: true,
       personnelNumber: true,
+      externalAccountingCode: true,
       lastName: true,
       firstName: true,
       middleName: true,
@@ -754,6 +756,7 @@ export class InventoryItemsService {
     firstName: string;
     middleName: string | null;
     personnelNumber: string;
+    externalAccountingCode: string | null;
     management: { id: string; name: string };
     service: { id: string; name: string };
     unit: { id: string; name: string } | null;
@@ -771,8 +774,9 @@ export class InventoryItemsService {
     firstName: string;
     middleName: string | null;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   }) {
-    return `${person.personnelNumber} — ${[
+    return `${person.externalAccountingCode ?? 'Не вказано'} — ${[
       person.lastName,
       person.firstName,
       person.middleName,
@@ -829,6 +833,7 @@ export class InventoryItemsService {
     firstName: string;
     middleName: string | null;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   }) {
     return {
       id: person.id,
@@ -836,6 +841,7 @@ export class InventoryItemsService {
         .filter(Boolean)
         .join(' '),
       personnelNumber: person.personnelNumber,
+      externalAccountingCode: person.externalAccountingCode,
     };
   }
 
@@ -845,11 +851,12 @@ export class InventoryItemsService {
     firstName: string;
     middleName: string | null;
     personnelNumber: string;
+    externalAccountingCode: string | null;
   }) {
     const reference = this.personReference(person);
     return {
       id: reference.id,
-      number: reference.personnelNumber,
+      externalAccountingCode: reference.externalAccountingCode,
       fullName: reference.fullName,
     };
   }

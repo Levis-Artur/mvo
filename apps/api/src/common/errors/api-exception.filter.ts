@@ -149,6 +149,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     fallbackMessage: string,
   ): ErrorDescriptor {
     const extractedMessage = this.extractMessages(exception)[0];
+    const extractedCode = this.extractCode(exception);
     const defaultMessages = [
       'Bad Request',
       'Unauthorized',
@@ -160,13 +161,26 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     return {
       statusCode: exception.getStatus(),
-      code,
+      code: extractedCode ?? code,
       message:
         extractedMessage && !defaultMessages.includes(extractedMessage)
           ? extractedMessage
           : fallbackMessage,
       details: null,
     };
+  }
+
+  private extractCode(exception: HttpException): ApiErrorCode | undefined {
+    const response = exception.getResponse();
+    if (
+      response &&
+      typeof response === 'object' &&
+      'code' in response &&
+      response.code === 'MVO_ACCOUNTING_CODE_EXISTS'
+    ) {
+      return response.code;
+    }
+    return undefined;
   }
 
   private extractMessages(exception: HttpException): string[] {

@@ -366,7 +366,7 @@ function myStockRow(
       </Button>,
       formatQuantity(item.quantity),
       item.recipient
-        ? `${item.recipient.personnelNumber} — ${item.recipient.fullName}`
+        ? `${item.recipient.externalAccountingCode ?? 'Не вказано'} — ${item.recipient.fullName}`
         : 'Одержувача не вказано',
       <StockDocumentStatusBadge key="status" status={item.document.status} />,
     ];

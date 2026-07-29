@@ -2,10 +2,16 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ImportType } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import * as iconv from 'iconv-lite';
+import {
+  markCounterpartyCodeCollisions,
+  parseAccountingCounterparty,
+} from './import-counterparty.util';
 
 export type ParsedImportRow = {
   rowNumber: number;
   counterpartyRaw: string;
+  externalAccountingName?: string;
+  externalAccountingCode?: string;
   nomenclatureCodeRaw: string;
   itemNameRaw: string;
   unitOfMeasureRaw?: string;
@@ -74,7 +80,7 @@ export class ImportParserService {
 
     const columns = this.resolveColumns(records[0]);
     const seen = new Set<string>();
-    const rows = records.slice(1).map((record, index) => {
+    const parsedRows = records.slice(1).map((record, index) => {
       const rowNumber = index + 2;
       const row = this.toImportRow(
         record,
@@ -85,6 +91,7 @@ export class ImportParserService {
       );
       return row;
     });
+    const rows = markCounterpartyCodeCollisions(parsedRows);
 
     return {
       fileHash,
@@ -254,8 +261,10 @@ export class ImportParserService {
         : debitQuantityRaw;
     const key = [counterpartyRaw, nomenclatureCodeRaw, quantityRaw].join('|');
     const messages: string[] = [];
+    const counterparty = parseAccountingCounterparty(counterpartyRaw);
 
     if (!counterpartyRaw) messages.push('Не заповнено контрагента');
+    if (counterparty.error) messages.push(counterparty.error);
     if (!nomenclatureCodeRaw) messages.push('Не заповнено код номенклатури');
     if (!itemNameRaw) messages.push('Не заповнено найменування');
     if (seen.has(key)) messages.push('Повтор рядка у файлі');
@@ -280,6 +289,8 @@ export class ImportParserService {
       return {
         rowNumber,
         counterpartyRaw,
+        externalAccountingName: counterparty.externalAccountingName,
+        externalAccountingCode: counterparty.externalAccountingCode,
         nomenclatureCodeRaw,
         itemNameRaw,
         unitOfMeasureRaw,
@@ -300,6 +311,8 @@ export class ImportParserService {
       return {
         rowNumber,
         counterpartyRaw,
+        externalAccountingName: counterparty.externalAccountingName,
+        externalAccountingCode: counterparty.externalAccountingCode,
         nomenclatureCodeRaw,
         itemNameRaw,
         unitOfMeasureRaw,
@@ -317,6 +330,8 @@ export class ImportParserService {
       return {
         rowNumber,
         counterpartyRaw,
+        externalAccountingName: counterparty.externalAccountingName,
+        externalAccountingCode: counterparty.externalAccountingCode,
         nomenclatureCodeRaw,
         itemNameRaw,
         unitOfMeasureRaw,
@@ -330,6 +345,8 @@ export class ImportParserService {
     return {
       rowNumber,
       counterpartyRaw,
+      externalAccountingName: counterparty.externalAccountingName,
+      externalAccountingCode: counterparty.externalAccountingCode,
       nomenclatureCodeRaw,
       itemNameRaw,
       unitOfMeasureRaw,
