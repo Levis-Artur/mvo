@@ -88,6 +88,8 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const [discardConfirmation, setDiscardConfirmation] = useState(false);
   const [validationError, setValidationError] = useState('');
   const recipientMode = documentRecipientMode(type);
+  const transfer = type === 'MVO_TRANSFER';
+  const createAndPostTransfer = transfer && !document;
 
   useEffect(() => {
     const uploaded = document?.attachments ?? [];
@@ -209,7 +211,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     );
   }
 
-  const transfer = type === 'MVO_TRANSFER';
   const title = document
     ? `Редагування ${transfer ? 'передачі' : 'видачі'}`
     : `Нова ${transfer ? 'передача' : 'видача'}`;
@@ -231,7 +232,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             form="stock-document-form"
             type="submit"
           >
-            {transfer && !document
+            {createAndPostTransfer
               ? saving
                 ? 'Передаємо…'
                 : 'Підтвердити передачу'

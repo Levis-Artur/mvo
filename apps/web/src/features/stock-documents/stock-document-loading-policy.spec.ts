@@ -39,10 +39,25 @@ describe('stock document lazy loading policy', () => {
 
   it('creates MVO_TRANSFER while keeping legacy transfers read-only', () => {
     const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
+    const controller = readFileSync(join(__dirname, 'use-stock-documents-controller.ts'), 'utf8');
     const details = readFileSync(join(__dirname, 'stock-document-details-modal.tsx'), 'utf8');
     const rules = readFileSync(join(__dirname, 'stock-document-rules.ts'), 'utf8');
+    const apiClient = readFileSync(join(__dirname, '../../lib/api-client.ts'), 'utf8');
+    const success = readFileSync(join(__dirname, 'document-success-modal.tsx'), 'utf8');
+    const branchStart = controller.indexOf("if (!editing && input.type === 'MVO_TRANSFER')");
+    const branchEnd = controller.indexOf('\n      let result = editing', branchStart);
+    const createAndPostBranch = controller.slice(branchStart, branchEnd);
 
     expect(view).toContain("controller.openCreate('MVO_TRANSFER')");
+    expect(createAndPostBranch).toContain(
+      'stockDocumentsService.createAndPostMvoTransfer',
+    );
+    expect(createAndPostBranch).not.toContain('stockDocumentsService.create(');
+    expect(createAndPostBranch).not.toContain('mode: \'draft\'');
+    expect(apiClient).toContain("'/stock-documents/mvo-transfer'");
+    expect(success).toContain(
+      "if (document.type === 'MVO_TRANSFER') return null;",
+    );
     expect(view).toContain('Передача (стара логіка)');
     expect(details).toContain("document.type === 'TRANSFER' || document.type === 'ASSIGNMENT'");
     expect(details).toContain('доступний лише для перегляду');

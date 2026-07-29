@@ -10,6 +10,8 @@ export function DocumentSuccessModal({ document, mode, onView, onReturn }: {
   onView: () => void;
   onReturn: () => void;
 }) {
+  if (document.type === 'MVO_TRANSFER') return null;
+
   const recipient = document.destinationResponsiblePerson
     ? fullName(document.destinationResponsiblePerson)
     : document.recipientName ?? 'Не вказано';

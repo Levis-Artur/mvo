@@ -84,8 +84,14 @@ describe('stock document workspace modal', () => {
     );
   });
 
-  it('keeps draft actions in a sticky footer without changing submission', () => {
+  it('uses create-and-post for a new transfer and keeps draft submission for ISSUE', () => {
     expect(form).toContain('form="stock-document-form"');
+    expect(form).toContain(
+      "const createAndPostTransfer = transfer && !document;",
+    );
+    expect(form).toContain('{createAndPostTransfer');
+    expect(form).toContain('Підтвердити передачу');
+    expect(form).toContain('Передаємо…');
     expect(form).toContain('Зберегти чернетку');
     expect(form).toContain('onClick={requestClose}');
     expect(componentsCss).toContain(
