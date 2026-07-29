@@ -126,10 +126,26 @@ function dto(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function atomicDto(overrides: Record<string, unknown> = {}) {
+  return {
+    documentDate: '2026-07-21T00:00:00.000Z',
+    destinationResponsiblePersonId: destinationId,
+    lines: [
+      {
+        inventoryItemId: itemId,
+        sourceBalanceId: balanceId,
+        quantity: '2',
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function harness() {
   const tx = {
     stockDocument: {
       findUnique: jest.fn(),
+      create: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn(),
       delete: jest.fn(),
@@ -186,6 +202,32 @@ function preparePosting(h: ReturnType<typeof harness>, lines = [line()]) {
   h.prisma.stockDocument.findUnique.mockResolvedValue(viewDocument(StockDocumentStatus.POSTED));
 }
 
+function prepareAtomicTransfer(
+  h: ReturnType<typeof harness>,
+  lines = [line()],
+) {
+  h.tx.stockDocument.create.mockResolvedValue(
+    rawDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.MVO_TRANSFER,
+      lines,
+    ),
+  );
+  h.tx.stockBalance.findUnique.mockResolvedValue({
+    id: balanceId,
+    responsiblePersonId: sourceId,
+    inventoryItemId: itemId,
+  });
+  h.stock.createDecreasingTransactionInTx.mockResolvedValue({
+    id: 'transaction-out',
+    balanceBefore: new Prisma.Decimal(10),
+    balanceAfter: new Prisma.Decimal(8),
+  });
+  h.prisma.stockDocument.findUnique.mockResolvedValue(
+    viewDocument(StockDocumentStatus.POSTED),
+  );
+}
+
 describe('StockDocumentsService MVO_TRANSFER', () => {
   it('scopes an MVO list to documents created by or sent from the current MVO', async () => {
     const h = harness();
@@ -197,36 +239,241 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
     }));
   });
 
-  it('creates MVO_TRANSFER with only a direct source balance', async () => {
+  it('rejects MVO_TRANSFER in the generic draft endpoint', async () => {
     const h = harness();
-    h.prisma.stockDocument.create.mockResolvedValue(viewDocument());
-    await h.service.create(dto(), mvo, {});
-    expect(h.prisma.stockDocument.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
-      type: StockDocumentType.MVO_TRANSFER,
-      accountingModel: StockAccountingModel.DIRECT_BALANCE,
-      lines: { create: [expect.objectContaining({ sourceBalanceId: balanceId, sourceKind: null })] },
-    }) }));
+    await expect(h.service.create(dto(), mvo, {})).rejects.toThrow(
+      'Нову передачу потрібно одразу підтвердити та провести',
+    );
+    expect(h.prisma.stockDocument.create).not.toHaveBeenCalled();
   });
 
-  it('forbids transfer to the sender', async () => {
+  it('atomically creates MVO_TRANSFER as POSTED and decreases only the sender', async () => {
     const h = harness();
-    await expect(h.service.create(dto({ destinationResponsiblePersonId: sourceId }), mvo, {})).rejects.toBeInstanceOf(BadRequestException);
+    prepareAtomicTransfer(h);
+
+    const result = await h.service.createAndPostMvoTransfer(
+      atomicDto(),
+      mvo,
+      { requestId: 'atomic-transfer' },
+    );
+
+    expect(result.status).toBe(StockDocumentStatus.POSTED);
+    expect(result.displayNumber).toBe(7);
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: StockDocumentType.MVO_TRANSFER,
+          status: StockDocumentStatus.POSTED,
+          sourceResponsiblePersonId: sourceId,
+          destinationResponsiblePersonId: destinationId,
+          postedByUserId: mvo.id,
+          postedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
+      h.tx,
+      expect.objectContaining({
+        type: StockTransactionType.MVO_TRANSFER_OUT,
+        responsiblePersonId: sourceId,
+        quantity: new Prisma.Decimal(2),
+      }),
+    );
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('forbids transfer to the sender before creating a document', async () => {
+    const h = harness();
+    await expect(
+      h.service.createAndPostMvoTransfer(
+        atomicDto({ destinationResponsiblePersonId: sourceId }),
+        mvo,
+        {},
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
   });
 
   it('forbids an inactive recipient', async () => {
     const h = harness();
-    h.prisma.responsiblePerson.findUnique.mockResolvedValue({ id: destinationId, isActive: false });
-    await expect(h.service.create(dto(), mvo, {})).rejects.toThrow('деактивовано');
+    h.tx.responsiblePerson.findUnique
+      .mockResolvedValueOnce({ id: sourceId, isActive: true })
+      .mockResolvedValueOnce({ id: destinationId, isActive: false });
+    await expect(
+      h.service.createAndPostMvoTransfer(atomicDto(), mvo, {}),
+    ).rejects.toThrow('деактивовано');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
   });
 
-  it('does not let MVO substitute another source', async () => {
+  it('takes the sender from auth context and ignores injected source data', async () => {
     const h = harness();
-    await expect(h.service.create(dto({ sourceResponsiblePersonId: destinationId }), mvo, {})).rejects.toBeInstanceOf(ForbiddenException);
+    prepareAtomicTransfer(h);
+    await h.service.createAndPostMvoTransfer(
+      {
+        ...atomicDto(),
+        sourceResponsiblePersonId: destinationId,
+      } as never,
+      mvo,
+      {},
+    );
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceResponsiblePersonId: sourceId,
+        }),
+      }),
+    );
   });
 
   it.each([UserRole.ACCOUNTANT, UserRole.AUDITOR])('%s is read-only', async (role) => {
     const h = harness();
-    await expect(h.service.create(dto(), user(role, null), {})).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      h.service.createAndPostMvoTransfer(
+        atomicDto(),
+        user(role, null),
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('forbids an inactive MVO sender', async () => {
+    const h = harness();
+    h.tx.responsiblePerson.findUnique.mockResolvedValueOnce({
+      id: sourceId,
+      isActive: false,
+    });
+
+    await expect(
+      h.service.createAndPostMvoTransfer(atomicDto(), mvo, {}),
+    ).rejects.toThrow('МВО-відправника');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty transfer before opening a persisted document', async () => {
+    const h = harness();
+    await expect(
+      h.service.createAndPostMvoTransfer(
+        atomicDto({ lines: [] }),
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('щонайменше одну позицію');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '-1'])(
+    'rejects non-positive quantity %s',
+    async (quantity) => {
+      const h = harness();
+      await expect(
+        h.service.createAndPostMvoTransfer(
+          atomicDto({
+            lines: [
+              {
+                inventoryItemId: itemId,
+                sourceBalanceId: balanceId,
+                quantity,
+              },
+            ],
+          }),
+          mvo,
+          {},
+        ),
+      ).rejects.toThrow('має бути додатною');
+      expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['NaN', 'Infinity', '1.00001'])(
+    'rejects invalid or unsupported decimal quantity %s',
+    async (quantity) => {
+      const h = harness();
+      await expect(
+        h.service.createAndPostMvoTransfer(
+          atomicDto({
+            lines: [
+              {
+                inventoryItemId: itemId,
+                sourceBalanceId: balanceId,
+                quantity,
+              },
+            ],
+          }),
+          mvo,
+          {},
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rolls back atomic creation when the sender balance is insufficient', async () => {
+    const h = harness();
+    prepareAtomicTransfer(h);
+    h.stock.createDecreasingTransactionInTx.mockRejectedValue(
+      new BadRequestException('Недостатній залишок'),
+    );
+
+    await expect(
+      h.service.createAndPostMvoTransfer(
+        atomicDto(),
+        mvo,
+        { requestId: 'insufficient-transfer' },
+      ),
+    ).rejects.toThrow('Недостатній залишок');
+    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('rolls back all atomic lines when a later line fails', async () => {
+    const h = harness();
+    const secondLine = line({
+      id: '88888888-8888-4888-8888-888888888888',
+      inventoryItemId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      sourceBalanceId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+    prepareAtomicTransfer(h, [line(), secondLine]);
+    h.tx.stockBalance.findUnique
+      .mockResolvedValueOnce({
+        id: balanceId,
+        responsiblePersonId: sourceId,
+        inventoryItemId: itemId,
+      })
+      .mockResolvedValueOnce({
+        id: secondLine.sourceBalanceId,
+        responsiblePersonId: sourceId,
+        inventoryItemId: secondLine.inventoryItemId,
+      });
+    h.stock.createDecreasingTransactionInTx
+      .mockResolvedValueOnce({
+        id: 'first-transaction',
+        balanceBefore: new Prisma.Decimal(10),
+        balanceAfter: new Prisma.Decimal(8),
+      })
+      .mockRejectedValueOnce(new Error('second line failed'));
+
+    await expect(
+      h.service.createAndPostMvoTransfer(
+        atomicDto({
+          lines: [
+            {
+              inventoryItemId: itemId,
+              sourceBalanceId: balanceId,
+              quantity: '2',
+            },
+            {
+              inventoryItemId: secondLine.inventoryItemId,
+              sourceBalanceId: secondLine.sourceBalanceId,
+              quantity: '1',
+            },
+          ],
+        }),
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('second line failed');
+    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledTimes(2);
+    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
   });
 
   it.each([StockDocumentType.TRANSFER, StockDocumentType.ASSIGNMENT])('keeps legacy %s valid but read-only', async (type) => {

@@ -17,6 +17,7 @@ import { documentLineError } from './stock-document-rules';
 import type { DocumentFormLine } from './stock-document.types';
 import {
   canOpenSourcePicker,
+  documentLineSourceKey,
   findStockSourceForLine,
   removeDocumentLine,
 } from './stock-source-picker-model';
@@ -107,6 +108,7 @@ export function StockDocumentLines({
             }
             columns={columns}
             loading={loading}
+            rowKeys={lines.map(documentLineSourceKey)}
             rows={lines.map((line, index) => {
               const current = findStockSourceForLine(sources, line);
               const lineError = documentLineError(line, sources);

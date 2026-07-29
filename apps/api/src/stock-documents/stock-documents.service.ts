@@ -195,24 +195,36 @@ export class StockDocumentsService {
         'Передачу може створити лише користувач із пов’язаною карткою МВО',
       );
     }
+    const sourceResponsiblePersonId = actor.responsiblePersonId;
 
     const documentId = randomUUID();
     const normalized = this.validateDto(
       {
         ...dto,
         type: StockDocumentType.MVO_TRANSFER,
-        sourceResponsiblePersonId: actor.responsiblePersonId,
+        sourceResponsiblePersonId,
       },
       actor,
     );
+    const destinationResponsiblePersonId =
+      normalized.destinationResponsiblePersonId;
+    if (!destinationResponsiblePersonId) {
+      throw new BadRequestException(
+        'Для передачі обов’язково вкажіть МВО-одержувача',
+      );
+    }
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.assertActiveMvoSender(
+          tx,
+          sourceResponsiblePersonId,
+        );
         await this.assertActiveTransferRecipient(
           tx,
           StockDocumentType.MVO_TRANSFER,
-          normalized.sourceResponsiblePersonId,
-          normalized.destinationResponsiblePersonId,
+          sourceResponsiblePersonId,
+          destinationResponsiblePersonId,
         );
         const now = new Date();
         const document = await tx.stockDocument.create({
@@ -223,9 +235,8 @@ export class StockDocumentsService {
             type: StockDocumentType.MVO_TRANSFER,
             accountingModel: StockAccountingModel.DIRECT_BALANCE,
             status: StockDocumentStatus.POSTED,
-            sourceResponsiblePersonId: actor.responsiblePersonId,
-            destinationResponsiblePersonId:
-              normalized.destinationResponsiblePersonId,
+            sourceResponsiblePersonId,
+            destinationResponsiblePersonId,
             recipientName: null,
             recipientUnit: null,
             basis: null,
@@ -791,9 +802,30 @@ export class StockDocumentsService {
     }
   }
 
+  private async assertActiveMvoSender(
+    client: PrismaService | Prisma.TransactionClient,
+    sourceResponsiblePersonId: string,
+  ) {
+    const sender = await client.responsiblePerson.findUnique({
+      where: { id: sourceResponsiblePersonId },
+      select: { id: true, isActive: true },
+    });
+    if (!sender?.isActive) {
+      throw new ForbiddenException(
+        'Картку МВО-відправника не знайдено або її деактивовано',
+      );
+    }
+  }
+
   private validateDto(dto: CreateStockDocumentDto, actor: CurrentUser) {
     this.assertMvoOwnSource(actor, dto.sourceResponsiblePersonId);
     const isMvoTransfer = dto.type === StockDocumentType.MVO_TRANSFER;
+
+    if (!Array.isArray(dto.lines) || dto.lines.length === 0) {
+      throw new BadRequestException(
+        'Документ повинен містити щонайменше одну позицію',
+      );
+    }
 
     if (isMvoTransfer) {
       if (!dto.destinationResponsiblePersonId) {
@@ -843,10 +875,30 @@ export class StockDocumentsService {
         );
       }
       seen.add(sourceKey);
-      const quantity = new Prisma.Decimal(line.quantity);
+      let quantity: Prisma.Decimal;
+      try {
+        quantity = new Prisma.Decimal(line.quantity);
+      } catch {
+        throw new BadRequestException(
+          'Кількість у кожному рядку має бути коректним числом',
+        );
+      }
+      if (!quantity.isFinite()) {
+        throw new BadRequestException(
+          'Кількість у кожному рядку має бути коректним числом',
+        );
+      }
       if (quantity.lte(0)) {
         throw new BadRequestException(
           'Кількість у кожному рядку має бути додатною',
+        );
+      }
+      if (
+        quantity.decimalPlaces() > 4 ||
+        quantity.gt(new Prisma.Decimal('99999999999999.9999'))
+      ) {
+        throw new BadRequestException(
+          'Кількість підтримує не більше 4 знаків після коми та 14 знаків до коми',
         );
       }
 

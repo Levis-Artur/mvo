@@ -72,15 +72,18 @@ describe('stock document workspace modal', () => {
     expect(componentsCss).not.toContain('.stock-document-review-note');
   });
 
-  it('uses a narrow details column and a wider document workspace', () => {
+  it('uses a full-width responsive details grid above the document workspace', () => {
     expect(form).toContain('className="stock-document-form-layout"');
     expect(form).toContain('<Card title="Основні реквізити">');
     expect(form).toContain('className="stock-document-form-workspace"');
     expect(componentsCss).toContain(
-      'grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.8fr)',
+      '.stock-document-form-layout { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr)',
+    );
+    expect(componentsCss).toContain(
+      'grid-template-columns: minmax(0, 0.6fr) minmax(0, 1.4fr) minmax(0, 1fr)',
     );
     expect(responsiveCss).toContain(
-      '.stock-document-form-layout { grid-template-columns: minmax(0, 1fr); }',
+      '.stock-document-form-fields { grid-template-columns: minmax(0, 1fr); }',
     );
   });
 
@@ -92,6 +95,9 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('{createAndPostTransfer');
     expect(form).toContain('Підтвердити передачу');
     expect(form).toContain('Передаємо…');
+    expect(form).toContain(
+      'disabled={saving || loadingSources || loadingTargets}',
+    );
     expect(form).toContain('Зберегти чернетку');
     expect(form).toContain('onClick={requestClose}');
     expect(componentsCss).toContain(

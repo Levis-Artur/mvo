@@ -295,6 +295,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                     disabled={
                       loadingTargets || Boolean(targetsError)
                     }
+                    initialFocus={!document}
                     sourceId={sourceId}
                     targets={transferTargets}
                     value={destinationId}

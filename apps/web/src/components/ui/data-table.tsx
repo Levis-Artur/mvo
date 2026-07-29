@@ -12,8 +12,9 @@ export type DataTableColumn = {
   className?: string;
 };
 
-export function DataTable({ ariaLabel, columns, headers, rows, loading = false, emptyMessage = 'Дані відсутні.', selectedIndex, tableClassName = '', onRowClick }: {
+export function DataTable({ ariaLabel, columns, headers, rows, rowKeys, loading = false, emptyMessage = 'Дані відсутні.', selectedIndex, tableClassName = '', onRowClick }: {
   ariaLabel: string; columns?: DataTableColumn[]; headers?: string[]; rows: React.ReactNode[][];
+  rowKeys?: React.Key[];
   loading?: boolean; emptyMessage?: string; selectedIndex?: number; tableClassName?: string;
   onRowClick?: (index: number) => void;
 }) {
@@ -27,5 +28,5 @@ export function DataTable({ ariaLabel, columns, headers, rows, loading = false, 
     column?.actions ? 'data-table__actions' : '',
     column?.className ?? '',
   ].filter(Boolean).join(' ');
-  return <div className="data-table-shell"><div className="compact-scrollbar data-table-scroll"><table aria-label={ariaLabel} className={`data-table ${tableClassName}`}><thead><tr>{normalizedColumns.map((column) => <th className={columnClassName(column)} key={column.label} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); } }} tabIndex={onRowClick ? 0 : undefined}>{row.map((cell, cellIndex) => <td className={columnClassName(normalizedColumns[cellIndex])} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
+  return <div className="data-table-shell"><div className="compact-scrollbar data-table-scroll"><table aria-label={ariaLabel} className={`data-table ${tableClassName}`}><thead><tr>{normalizedColumns.map((column) => <th className={columnClassName(column)} key={column.label} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={rowKeys?.[index] ?? index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); } }} tabIndex={onRowClick ? 0 : undefined}>{row.map((cell, cellIndex) => <td className={columnClassName(normalizedColumns[cellIndex])} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
 }

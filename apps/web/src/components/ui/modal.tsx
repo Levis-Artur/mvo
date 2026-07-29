@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Button } from './button';
 import { trappedFocusIndex } from './modal-focus-model';
 
@@ -10,6 +10,7 @@ export function Modal({ title, children, footer, onClose, size = 'medium', destr
   title: string; children: React.ReactNode; footer?: React.ReactNode; onClose: () => void;
   size?: ModalSize; destructive?: boolean; closeOnEscape?: boolean;
 }) {
+  const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
   const onCloseRef = useRef(onClose);
   const closeOnEscapeRef = useRef(closeOnEscape);
@@ -20,10 +21,19 @@ export function Modal({ title, children, footer, onClose, size = 'medium', destr
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const dialog = dialogRef.current;
-    const initialFocus = [...(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])]
-      .find((element) => !element.hasAttribute('data-modal-close'));
+    const focusable = [
+      ...(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []),
+    ];
+    const initialFocus =
+      focusable.find((element) =>
+        element.hasAttribute('data-modal-initial-focus'),
+      ) ??
+      focusable.find((element) =>
+        !element.hasAttribute('data-modal-close'),
+      );
     (initialFocus ?? dialog)?.focus();
     function keyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
       if (event.key === 'Escape' && closeOnEscapeRef.current) { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== 'Tab' || !dialog) return;
       const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];
@@ -35,8 +45,8 @@ export function Modal({ title, children, footer, onClose, size = 'medium', destr
     document.addEventListener('keydown', keyDown);
     return () => { document.removeEventListener('keydown', keyDown); document.body.style.overflow = previousBodyOverflow; previousFocus?.focus(); };
   }, []);
-  return <div className="ui-modal-backdrop" role="presentation"><section aria-labelledby="ui-modal-title" aria-modal="true" className="ui-modal" data-destructive={destructive ? 'true' : undefined} data-size={size} ref={dialogRef} role="dialog" tabIndex={-1}>
-    <header className="ui-modal__header"><h2 id="ui-modal-title">{title}</h2><Button aria-label="Закрити" data-modal-close="true" variant="ghost" type="button" onClick={onClose}>×</Button></header>
+  return <div className="ui-modal-backdrop" role="presentation"><section aria-labelledby={titleId} aria-modal="true" className="ui-modal" data-destructive={destructive ? 'true' : undefined} data-size={size} ref={dialogRef} role="dialog" tabIndex={-1}>
+    <header className="ui-modal__header"><h2 id={titleId}>{title}</h2><Button aria-label="Закрити" data-modal-close="true" variant="ghost" type="button" onClick={onClose}>×</Button></header>
     <div className="ui-modal__body">{children}</div>{footer ? <footer className="ui-modal__footer">{footer}</footer> : null}
   </section></div>;
 }

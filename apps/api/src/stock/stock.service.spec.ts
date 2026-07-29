@@ -86,6 +86,9 @@ describe('StockService', () => {
         data: { quantity: new Prisma.Decimal(3) },
       }),
     );
+    expect(
+      (tx.$queryRaw.mock.calls[0][0] as TemplateStringsArray).join(' '),
+    ).toContain('FOR UPDATE');
     expect(tx.stockTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

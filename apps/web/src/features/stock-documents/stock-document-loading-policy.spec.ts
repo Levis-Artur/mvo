@@ -50,10 +50,22 @@ describe('stock document lazy loading policy', () => {
 
     expect(view).toContain("controller.openCreate('MVO_TRANSFER')");
     expect(createAndPostBranch).toContain(
+      'submitNewMvoTransfer',
+    );
+    expect(createAndPostBranch).toContain(
       'stockDocumentsService.createAndPostMvoTransfer',
     );
     expect(createAndPostBranch).not.toContain('stockDocumentsService.create(');
+    expect(createAndPostBranch).not.toContain('stockDocumentsService.post(');
     expect(createAndPostBranch).not.toContain('mode: \'draft\'');
+    expect(createAndPostBranch).toContain('setFormType(null)');
+    expect(createAndPostBranch).toContain(
+      "setToast('Передачу проведено. Залишки оновлено.')",
+    );
+    expect(createAndPostBranch).toContain("new CustomEvent('mvo:refresh-stock')");
+    expect(createAndPostBranch).toContain(
+      "new CustomEvent('mvo:refresh-stock-documents')",
+    );
     expect(apiClient).toContain("'/stock-documents/mvo-transfer'");
     expect(success).toContain(
       "if (document.type === 'MVO_TRANSFER') return null;",

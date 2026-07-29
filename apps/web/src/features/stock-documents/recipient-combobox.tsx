@@ -12,6 +12,7 @@ export function RecipientCombobox({
   id,
   required,
   disabled,
+  initialFocus = false,
   targets,
   sourceId,
   value,
@@ -20,6 +21,7 @@ export function RecipientCombobox({
   id?: string;
   required?: boolean;
   disabled: boolean;
+  initialFocus?: boolean;
   targets: TransferTarget[];
   sourceId: string;
   value: string;
@@ -67,6 +69,7 @@ export function RecipientCombobox({
         aria-controls={listboxId}
         aria-expanded={open}
         autoComplete="off"
+        data-modal-initial-focus={initialFocus ? 'true' : undefined}
         disabled={disabled}
         id={inputId}
         placeholder="Введіть номер, ПІБ або управління"
@@ -97,7 +100,7 @@ export function RecipientCombobox({
           } else if (event.key === 'Enter' && open && options[activeIndex]) {
             event.preventDefault();
             select(options[activeIndex]);
-          } else if (event.key === 'Escape') {
+          } else if (event.key === 'Escape' && open) {
             event.preventDefault();
             setOpen(false);
           }

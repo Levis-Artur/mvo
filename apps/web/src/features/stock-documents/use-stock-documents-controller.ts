@@ -18,6 +18,7 @@ import { stockDocumentsService } from './stock-documents.service';
 import { shouldLoadGlobalResponsiblePersons } from './stock-document-loading-policy';
 import { successfulDocumentActionMessage } from './stock-document-rules';
 import { loadTransferTargets } from './transfer-targets';
+import { submitNewMvoTransfer } from './mvo-transfer-submit';
 
 export type DocumentFilters = {
   search: string;
@@ -182,13 +183,10 @@ export function useStockDocumentsController(user: AuthUser) {
     let savedDocument: StockDocument | null = null;
     try {
       if (!editing && input.type === 'MVO_TRANSFER') {
-        await stockDocumentsService.createAndPostMvoTransfer({
-          documentDate: input.documentDate,
-          destinationResponsiblePersonId:
-            input.destinationResponsiblePersonId!,
-          note: input.note,
-          lines: input.lines,
-        });
+        await submitNewMvoTransfer(
+          input,
+          stockDocumentsService.createAndPostMvoTransfer,
+        );
         setFormType(null);
         setSelected(null);
         setSuccess(null);

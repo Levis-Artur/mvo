@@ -1,9 +1,9 @@
 module.exports = {
-  moduleFileExtensions: ['js', 'json', 'ts'],
+  moduleFileExtensions: ['js', 'json', 'ts', 'tsx'],
   rootDir: 'src',
-  testRegex: '.*\\.spec\\.ts$',
+  testRegex: '.*\\.spec\\.tsx?$',
   transform: {
-    '^.+\\.ts$': [
+    '^.+\\.tsx?$': [
       'ts-jest',
       {
         tsconfig: {
@@ -11,10 +11,14 @@ module.exports = {
           module: 'commonjs',
           lib: ['ES2021', 'DOM'],
           esModuleInterop: true,
+          jsx: 'react-jsx',
           strict: true,
         },
       },
     ],
+  },
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/$1',
   },
   testEnvironment: 'node',
 };
