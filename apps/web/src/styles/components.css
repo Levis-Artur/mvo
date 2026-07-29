@@ -108,6 +108,21 @@
 .my-stock-table__date { width: 120px; white-space: nowrap; }
 .my-stock-table__document { width: 110px; white-space: nowrap; }
 .my-stock-table__status { width: 130px; white-space: nowrap; }
+.my-stock-item-link { width: 100%; max-width: 100%; overflow: hidden; color: var(--color-primary); text-overflow: ellipsis; }
+.my-inventory-item-card { width: 100%; min-width: 0; }
+.my-inventory-item-card__table { width: 100%; min-width: 680px; table-layout: fixed; }
+.my-inventory-item-card__table th:nth-child(1), .my-inventory-item-card__table td:nth-child(1) { width: 120px; white-space: nowrap; }
+.my-inventory-item-card__table th:nth-child(2), .my-inventory-item-card__table td:nth-child(2) { width: 110px; white-space: nowrap; }
+.my-inventory-item-card__table th:nth-child(4), .my-inventory-item-card__table td:nth-child(4) { width: 120px; white-space: nowrap; }
+.my-inventory-item-card__table th:nth-child(5), .my-inventory-item-card__table td:nth-child(5) { width: 130px; white-space: nowrap; }
+.my-inventory-item-card__person { display: block; min-width: 0; overflow-wrap: anywhere; }
+.inventory-transfer-history { width: 100%; min-width: 0; }
+.inventory-transfer-history__table { width: 100%; min-width: 880px; table-layout: fixed; }
+.inventory-transfer-history__table th:nth-child(1), .inventory-transfer-history__table td:nth-child(1) { width: 155px; white-space: nowrap; }
+.inventory-transfer-history__table th:nth-child(2), .inventory-transfer-history__table td:nth-child(2) { width: 105px; white-space: nowrap; }
+.inventory-transfer-history__table th:nth-child(5), .inventory-transfer-history__table td:nth-child(5) { width: 115px; white-space: nowrap; }
+.inventory-transfer-history__table th:nth-child(6), .inventory-transfer-history__table td:nth-child(6) { width: 130px; white-space: nowrap; }
+.inventory-transfer-history__person { display: block; min-width: 0; overflow-wrap: anywhere; }
 .stock-documents-page { width: min(100%, 1440px); margin-inline: auto; }
 .stock-documents-page--mvo .filter-bar > .filter-bar__field:first-child { flex: 1 1 360px; }
 .stock-documents-page--mvo .filter-bar > .filter-bar__field:not(:first-child) { min-width: 160px; flex: 0 1 180px; }

@@ -26,6 +26,7 @@ import type {
   SortOrder,
 } from '@/lib/types';
 import { MyStockExportModal } from './my-stock-export-modal';
+import { MyInventoryItemCard } from './my-inventory-item-card';
 import {
   DEFAULT_MY_PROPERTY_SORT,
   downloadFileInBrowser,
@@ -61,6 +62,7 @@ export function MyStockView() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState('');
+  const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -134,6 +136,15 @@ export function MyStockView() {
     } finally {
       setExporting(false);
     }
+  }
+
+  if (selectedInventoryItemId) {
+    return (
+      <MyInventoryItemCard
+        inventoryItemId={selectedInventoryItemId}
+        onBack={() => setSelectedInventoryItemId('')}
+      />
+    );
   }
 
   return (
@@ -265,7 +276,9 @@ export function MyStockView() {
             : myStockEmptyMessage(section)
         }
         loading={loading}
-        rows={(data?.items ?? []).map(myStockRow)}
+        rows={(data?.items ?? []).map((item) =>
+          myStockRow(item, setSelectedInventoryItemId),
+        )}
         tableClassName={`my-stock-table my-stock-table--${section.toLocaleLowerCase()}`}
       />
       <Pagination
@@ -331,19 +344,26 @@ function myStockEmptyMessage(section: MyPropertySection) {
     : 'У вас немає майна за даними поточного обліку.';
 }
 
-function myStockRow(item: MyPropertyItem) {
+function myStockRow(
+  item: MyPropertyItem,
+  onOpenInventoryItem: (id: string) => void,
+) {
   if (item.section === 'TRANSFERRED') {
     const itemTitle = `${item.inventoryItem.externalCode} — ${item.inventoryItem.name}`;
     return [
       new Date(item.document.documentDate).toLocaleDateString('uk-UA'),
       documentNumberLabel(item.document.displayNumber),
-      <span
-        className="my-stock-table__name-text"
+      <Button
+        aria-label={`Відкрити картку: ${itemTitle}`}
+        className="my-stock-item-link my-stock-table__name-text"
         key="name"
         title={itemTitle}
+        type="button"
+        variant="link"
+        onClick={() => onOpenInventoryItem(item.inventoryItem.id)}
       >
         {itemTitle}
-      </span>,
+      </Button>,
       formatQuantity(item.quantity),
       item.recipient
         ? `${item.recipient.personnelNumber} — ${item.recipient.fullName}`
@@ -352,14 +372,28 @@ function myStockRow(item: MyPropertyItem) {
     ];
   }
   return [
-    item.inventoryItem.externalCode,
-    <span
-      className="my-stock-table__name-text"
+    <Button
+      aria-label={`Відкрити картку номенклатури ${item.inventoryItem.externalCode}`}
+      className="my-stock-item-link"
+      key="code"
+      title={item.inventoryItem.externalCode}
+      type="button"
+      variant="link"
+      onClick={() => onOpenInventoryItem(item.inventoryItem.id)}
+    >
+      {item.inventoryItem.externalCode}
+    </Button>,
+    <Button
+      aria-label={`Відкрити картку: ${item.inventoryItem.name}`}
+      className="my-stock-item-link my-stock-table__name-text"
       key="name"
       title={item.inventoryItem.name}
+      type="button"
+      variant="link"
+      onClick={() => onOpenInventoryItem(item.inventoryItem.id)}
     >
       {item.inventoryItem.name}
-    </span>,
+    </Button>,
     item.inventoryItem.unitOfMeasure ?? '—',
     formatQuantity(item.quantity),
   ];

@@ -21,7 +21,7 @@ import { AccountingTransfersView } from '@/features/accounting/accounting-transf
 
 export type View = AppView;
 
-export function MvoApp({ initialView = 'home', initialImportId, initialAccountingTab, initialInventoryItemId }: { initialView?: View; initialImportId?: string; initialAccountingTab?: 'register' | 'exports'; initialInventoryItemId?: string }) {
+export function MvoApp({ initialView = 'home', initialImportId, initialAccountingTab, initialInventoryItemId, initialInventoryTransferHistoryId }: { initialView?: View; initialImportId?: string; initialAccountingTab?: 'register' | 'exports'; initialInventoryItemId?: string; initialInventoryTransferHistoryId?: string }) {
   const router = useRouter();
   const { logout, user } = useAuth();
   const [view, setView] = useState<View>(initialView);
@@ -47,7 +47,7 @@ export function MvoApp({ initialView = 'home', initialImportId, initialAccountin
     {view === 'persons' ? <PersonsView /> : null}
     {view === 'structure' ? <StructureView /> : null}
     {view === 'stock' ? <StockView /> : null}
-    {view === 'nomenclature' ? <NomenclatureView initialInventoryItemId={initialInventoryItemId} /> : null}
+    {view === 'nomenclature' ? <NomenclatureView initialInventoryItemId={initialInventoryItemId} initialInventoryTransferHistoryId={initialInventoryTransferHistoryId} /> : null}
     {view === 'imports' ? <ImportsView initialImportId={initialImportId} /> : null}
     {view === 'transactions' ? <TransactionsView /> : null}
     {view === 'users' ? <UsersView /> : null}

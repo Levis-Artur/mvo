@@ -9,6 +9,8 @@ export const responsiblePersonsService = {
   responsiblePersonAccountingCard: apiClient.responsiblePersonAccountingCard,
   availableStockToMe: apiClient.availableStockToMe,
   myProperty: apiClient.myProperty,
+  myInventoryItemTransferHistory:
+    apiClient.myInventoryItemTransferHistory,
   exportMyPropertyCsv: apiClient.exportMyPropertyCsv,
   createResponsiblePerson: apiClient.createResponsiblePerson,
   updateResponsiblePerson: apiClient.updateResponsiblePerson,

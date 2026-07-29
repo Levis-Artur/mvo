@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,7 +11,9 @@ import {
   StockDocumentStatus,
   StockDocumentType,
   StockTransactionType,
+  UserRole,
 } from '@prisma/client';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import {
@@ -72,6 +76,11 @@ type CardMovement = Prisma.StockTransactionGetPayload<{
 type CardDocument = Prisma.StockDocumentGetPayload<{
   include: typeof cardDocumentInclude;
 }>;
+
+export type TransferHistoryQuery = {
+  page?: string | number;
+  limit?: string | number;
+};
 
 const CURRENT_MOVEMENT_TYPES = [
   StockTransactionType.INITIAL_BALANCE,
@@ -158,6 +167,69 @@ export class InventoryItemsService {
     }
 
     return item;
+  }
+
+  async myTransferHistory(
+    id: string,
+    actor: CurrentUser,
+    query: TransferHistoryQuery,
+  ) {
+    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
+      throw new ForbiddenException(
+        'Історія власних передач доступна лише пов’язаному МВО',
+      );
+    }
+
+    const history = await this.transferHistoryData(
+      id,
+      query,
+      actor.responsiblePersonId,
+    );
+    const balance = await this.prisma.stockBalance.findUnique({
+      where: {
+        responsiblePersonId_inventoryItemId: {
+          responsiblePersonId: actor.responsiblePersonId,
+          inventoryItemId: id,
+        },
+      },
+      select: { quantity: true },
+    });
+
+    return {
+      inventoryItem: history.inventoryItem,
+      currentBalance: (balance?.quantity ?? new Prisma.Decimal(0)).toString(),
+      items: history.documents.map((document) => ({
+        documentId: document.id,
+        displayNumber: document.displayNumber,
+        documentDate: document.documentDate,
+        status: document.status,
+        quantity: this.sumQuantities(document.lines).toString(),
+        recipient: document.destinationResponsiblePerson
+          ? this.transferPerson(document.destinationResponsiblePerson)
+          : null,
+      })),
+      pagination: history.pagination,
+    };
+  }
+
+  async transferHistory(id: string, query: TransferHistoryQuery) {
+    const history = await this.transferHistoryData(id, query);
+
+    return {
+      inventoryItem: history.inventoryItem,
+      items: history.documents.map((document) => ({
+        documentId: document.id,
+        displayNumber: document.displayNumber,
+        documentDate: document.documentDate,
+        status: document.status,
+        quantity: this.sumQuantities(document.lines).toString(),
+        sender: this.transferPerson(document.sourceResponsiblePerson),
+        recipient: document.destinationResponsiblePerson
+          ? this.transferPerson(document.destinationResponsiblePerson)
+          : null,
+      })),
+      pagination: history.pagination,
+    };
   }
 
   async accountingCard(
@@ -384,6 +456,82 @@ export class InventoryItemsService {
         (item): item is Prisma.StockTransactionWhereInput => Boolean(item),
       ),
     };
+  }
+
+  private async transferHistoryData(
+    inventoryItemId: string,
+    query: TransferHistoryQuery,
+    sourceResponsiblePersonId?: string,
+  ) {
+    const inventoryItem = await this.findOne(inventoryItemId);
+    const { page, limit } = this.transferHistoryPagination(query);
+    const where: Prisma.StockDocumentWhereInput = {
+      type: StockDocumentType.MVO_TRANSFER,
+      status: {
+        in: [StockDocumentStatus.POSTED, StockDocumentStatus.CANCELLED],
+      },
+      sourceResponsiblePersonId,
+      lines: { some: { inventoryItemId } },
+    };
+    const personSelect = {
+      id: true,
+      personnelNumber: true,
+      lastName: true,
+      firstName: true,
+      middleName: true,
+    } satisfies Prisma.ResponsiblePersonSelect;
+    const [documents, total] = await Promise.all([
+      this.prisma.stockDocument.findMany({
+        where,
+        select: {
+          id: true,
+          displayNumber: true,
+          documentDate: true,
+          status: true,
+          createdAt: true,
+          sourceResponsiblePerson: { select: personSelect },
+          destinationResponsiblePerson: { select: personSelect },
+          lines: {
+            where: { inventoryItemId },
+            select: { quantity: true },
+          },
+        },
+        orderBy: [{ documentDate: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.stockDocument.count({ where }),
+    ]);
+
+    return {
+      inventoryItem: {
+        id: inventoryItem.id,
+        code: inventoryItem.externalCode,
+        name: inventoryItem.name,
+        unit: inventoryItem.unitOfMeasure,
+      },
+      documents,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  private transferHistoryPagination(query: TransferHistoryQuery) {
+    const page = query.page === undefined ? 1 : Number(query.page);
+    const limit = query.limit === undefined ? 25 : Number(query.limit);
+    if (!Number.isInteger(page) || page < 1) {
+      throw new BadRequestException('Сторінка повинна бути цілим числом від 1');
+    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new BadRequestException(
+        'Кількість записів повинна бути цілим числом від 1 до 100',
+      );
+    }
+    return { page, limit };
   }
 
   private movementCategoryWhere(
@@ -688,6 +836,21 @@ export class InventoryItemsService {
         .filter(Boolean)
         .join(' '),
       personnelNumber: person.personnelNumber,
+    };
+  }
+
+  private transferPerson(person: {
+    id: string;
+    lastName: string;
+    firstName: string;
+    middleName: string | null;
+    personnelNumber: string;
+  }) {
+    const reference = this.personReference(person);
+    return {
+      id: reference.id,
+      number: reference.personnelNumber,
+      fullName: reference.fullName,
     };
   }
 

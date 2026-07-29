@@ -16,6 +16,7 @@ type ProtectedMvoAppProps = {
   initialImportId?: string;
   initialAccountingTab?: 'register' | 'exports';
   initialInventoryItemId?: string;
+  initialInventoryTransferHistoryId?: string;
 };
 
 export function ProtectedMvoApp(props: ProtectedMvoAppProps) {

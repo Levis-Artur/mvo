@@ -3,6 +3,7 @@ import { apiClient } from '@/lib/api-client';
 export const inventoryService = {
   inventoryItems: apiClient.inventoryItems,
   inventoryItemAccountingCard: apiClient.inventoryItemAccountingCard,
+  inventoryItemTransferHistory: apiClient.inventoryItemTransferHistory,
   exportInventoryItemHistoryCsv: apiClient.exportInventoryItemHistoryCsv,
   stockDocument: apiClient.stockDocument,
   createInventoryItem: apiClient.createInventoryItem,

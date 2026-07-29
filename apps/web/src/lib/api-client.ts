@@ -19,9 +19,11 @@ import type {
   InventoryItem,
   InventoryItemAccountingCard,
   InventoryItemAccountingCardQuery,
+  InventoryItemTransferHistory,
   InventoryItemMovementFilters,
   InventoryItemsQuery,
   Management,
+  MyInventoryItemTransferHistory,
   MyPropertyExportSection,
   MyPropertyQuery,
   MyPropertyResponse,
@@ -369,6 +371,15 @@ export const apiClient = {
       {},
       query,
     ),
+  inventoryItemTransferHistory: (
+    id: string,
+    query: { page: number; limit: number },
+  ) =>
+    request<InventoryItemTransferHistory>(
+      `/inventory-items/${id}/transfer-history`,
+      {},
+      query,
+    ),
   exportInventoryItemHistoryCsv: (
     id: string,
     query: InventoryItemMovementFilters,
@@ -388,6 +399,15 @@ export const apiClient = {
     request<AvailableStockSource[]>('/stock/available-to-me'),
   myProperty: (query: MyPropertyQuery) =>
     request<MyPropertyResponse>('/stock/my-property', {}, query),
+  myInventoryItemTransferHistory: (
+    id: string,
+    query: { page: number; limit: number },
+  ) =>
+    request<MyInventoryItemTransferHistory>(
+      `/inventory-items/${id}/my-transfer-history`,
+      {},
+      query,
+    ),
   exportMyPropertyCsv: (query: { search?: string; section: MyPropertyExportSection }) =>
     downloadRequest('/stock/my-property/export.csv', query),
   stockTransactions: (query: StockTransactionsQuery) =>

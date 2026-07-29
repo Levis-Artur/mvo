@@ -519,9 +519,10 @@ export class ImportsService {
     const result = [];
 
     for (const row of rows) {
-      const responsiblePerson = await this.findResponsiblePerson(
+      const responsiblePersonMatch = await this.findResponsiblePerson(
         row.counterpartyRaw,
       );
+      const responsiblePerson = responsiblePersonMatch.person;
       const item = row.nomenclatureCodeRaw
         ? await this.prisma.inventoryItem.findUnique({
             where: { externalCode: row.nomenclatureCodeRaw },
@@ -539,7 +540,9 @@ export class ImportsService {
         !responsiblePerson
       ) {
         status = ImportRowStatus.ERROR;
-        messages.push('МВО не знайдено');
+        messages.push(
+          responsiblePersonMatch.error ?? 'МВО не знайдено',
+        );
       }
 
       if (
@@ -615,15 +618,43 @@ export class ImportsService {
   }
 
   private async findResponsiblePerson(counterpartyRaw: string) {
-    const externalAccountingCode = this.extractExternalCode(counterpartyRaw);
-    return this.prisma.responsiblePerson.findFirst({
+    const normalizedCounterparty = counterpartyRaw.trim();
+    const exactMatch = normalizedCounterparty
+      ? await this.prisma.responsiblePerson.findFirst({
+          where: {
+            externalAccountingName: normalizedCounterparty,
+            isActive: true,
+          },
+        })
+      : null;
+
+    if (exactMatch) {
+      return { person: exactMatch };
+    }
+
+    const externalAccountingCode = this.extractExternalCode(
+      normalizedCounterparty,
+    );
+    if (!externalAccountingCode) {
+      return { person: null };
+    }
+
+    const codeMatches = await this.prisma.responsiblePerson.findMany({
       where: {
-        OR: [
-          { externalAccountingName: counterpartyRaw },
-          externalAccountingCode ? { externalAccountingCode } : {},
-        ],
+        externalAccountingCode,
+        isActive: true,
       },
+      take: 2,
     });
+
+    if (codeMatches.length > 1) {
+      return {
+        person: null,
+        error: 'Неоднозначне зіставлення МВО за зовнішнім кодом',
+      };
+    }
+
+    return { person: codeMatches[0] ?? null };
   }
 
   private extractExternalCode(value: string): string | undefined {

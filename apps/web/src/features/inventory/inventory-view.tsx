@@ -22,6 +22,7 @@ import { canShowDestructiveActions } from '@/features/admin/destructive-actions'
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 import { InventoryItemForm } from './inventory-item-form';
 import { InventoryItemAccountingCardView } from './inventory-item-accounting-card-view';
+import { InventoryItemTransferHistoryView } from './inventory-item-transfer-history-view';
 import { InventoryTable } from './inventory-table';
 import {
   EMPTY_INVENTORY_FILTERS,
@@ -33,10 +34,20 @@ const INITIAL_QUERY: InventoryItemsQuery = { page: 1, limit: 20 };
 
 export function NomenclatureView({
   initialInventoryItemId,
+  initialInventoryTransferHistoryId,
 }: {
   initialInventoryItemId?: string;
+  initialInventoryTransferHistoryId?: string;
 }) {
   const router = useRouter();
+  if (initialInventoryTransferHistoryId) {
+    return (
+      <InventoryItemTransferHistoryView
+        inventoryItemId={initialInventoryTransferHistoryId}
+        onBack={() => router.push('/nomenclature')}
+      />
+    );
+  }
   if (initialInventoryItemId) {
     return (
       <InventoryItemAccountingCardView
@@ -201,7 +212,9 @@ function NomenclatureListView() {
         onDelete={setDeletingItem}
         onEdit={openEdit}
         onToggleArchive={(item) => void toggleArchive(item)}
-        onView={(item) => router.push(`/inventory-items/${item.id}`)}
+        onView={(item) =>
+          router.push(`/inventory-items/${item.id}/transfer-history`)
+        }
       />
       <Pagination
         limit={pagination.limit}

@@ -47,6 +47,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     },
     responsiblePerson: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
     },
@@ -80,7 +81,204 @@ function createService(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function arrangeResponsiblePersonUpload(
+  context: ReturnType<typeof createService>,
+  counterpartyRaw: string,
+) {
+  context.parser.parse.mockReturnValue({
+    fileHash: `matching-${counterpartyRaw}`,
+    encoding: 'utf-8',
+    delimiter: ';',
+    totalRows: 1,
+    rows: [
+      {
+        rowNumber: 2,
+        status: 'VALID',
+        counterpartyRaw,
+        nomenclatureCodeRaw: '0001',
+        itemNameRaw: 'Позиція',
+        unitOfMeasureRaw: 'шт',
+        parsedQuantity: '1',
+        message: '',
+      },
+    ],
+  });
+  context.prisma.importBatch.findUnique.mockResolvedValue(null);
+  context.prisma.inventoryItem.findUnique.mockResolvedValue({
+    id: 'item',
+    name: 'Позиція',
+  });
+  context.prisma.importBatch.create.mockResolvedValue({ id: 'batch' });
+}
+
+function uploadResponsiblePersonFixture(
+  service: ImportsService,
+) {
+  return service.upload({
+    file: {
+      originalname: 'matching.csv',
+      buffer: Buffer.from('content'),
+      size: 7,
+    } as Express.Multer.File,
+    importType: ImportType.INITIAL_BALANCE,
+    maxFileSizeBytes: 1024,
+  });
+}
+
 describe('ImportsService', () => {
+  it('matches an active responsible person by trimmed exact accounting name', async () => {
+    const context = createService();
+    arrangeResponsiblePersonUpload(context, '  Точна назва МВО  ');
+    context.prisma.responsiblePerson.findFirst.mockResolvedValue({
+      id: 'person-by-name',
+    });
+
+    await uploadResponsiblePersonFixture(context.service);
+
+    expect(context.prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: {
+        externalAccountingName: 'Точна назва МВО',
+        isActive: true,
+      },
+    });
+    expect(context.prisma.responsiblePerson.findMany).not.toHaveBeenCalled();
+    expect(context.prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rows: {
+            create: [
+              expect.objectContaining({
+                responsiblePersonId: 'person-by-name',
+                status: ImportRowStatus.VALID,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('does not query by code or return a random person when code is absent', async () => {
+    const context = createService();
+    arrangeResponsiblePersonUpload(context, '  Невідомий контрагент  ');
+    context.prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+
+    await uploadResponsiblePersonFixture(context.service);
+
+    expect(context.prisma.responsiblePerson.findMany).not.toHaveBeenCalled();
+    expect(context.prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          errorRows: 1,
+          rows: {
+            create: [
+              expect.objectContaining({
+                responsiblePersonId: undefined,
+                status: ImportRowStatus.ERROR,
+                message: 'МВО не знайдено',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('matches one active responsible person by external accounting code', async () => {
+    const context = createService();
+    arrangeResponsiblePersonUpload(context, 'Контрагент_0042');
+    context.prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+    context.prisma.responsiblePerson.findMany.mockResolvedValue([
+      { id: 'person-by-code' },
+    ]);
+
+    await uploadResponsiblePersonFixture(context.service);
+
+    expect(context.prisma.responsiblePerson.findMany).toHaveBeenCalledWith({
+      where: { externalAccountingCode: '0042', isActive: true },
+      take: 2,
+    });
+    expect(context.prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rows: {
+            create: [
+              expect.objectContaining({
+                responsiblePersonId: 'person-by-code',
+                status: ImportRowStatus.VALID,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('marks the row as ERROR when an external code has multiple matches', async () => {
+    const context = createService();
+    arrangeResponsiblePersonUpload(context, 'Контрагент_0042');
+    context.prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+    context.prisma.responsiblePerson.findMany.mockResolvedValue([
+      { id: 'first-person' },
+      { id: 'second-person' },
+    ]);
+
+    await uploadResponsiblePersonFixture(context.service);
+
+    expect(context.prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          errorRows: 1,
+          rows: {
+            create: [
+              expect.objectContaining({
+                responsiblePersonId: undefined,
+                status: ImportRowStatus.ERROR,
+                message:
+                  'Неоднозначне зіставлення МВО за зовнішнім кодом',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('ignores inactive responsible persons during automatic matching', async () => {
+    const context = createService();
+    arrangeResponsiblePersonUpload(context, 'Неактивний МВО_0099');
+    context.prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+    context.prisma.responsiblePerson.findMany.mockResolvedValue([]);
+
+    await uploadResponsiblePersonFixture(context.service);
+
+    expect(context.prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: {
+        externalAccountingName: 'Неактивний МВО_0099',
+        isActive: true,
+      },
+    });
+    expect(context.prisma.responsiblePerson.findMany).toHaveBeenCalledWith({
+      where: { externalAccountingCode: '0099', isActive: true },
+      take: 2,
+    });
+    expect(context.prisma.importBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rows: {
+            create: [
+              expect.objectContaining({
+                responsiblePersonId: undefined,
+                status: ImportRowStatus.ERROR,
+                message: 'МВО не знайдено',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
   it('blocks commit for UPLOADED batch', async () => {
     const { service, tx } = createService();
     tx.importBatch.findUnique.mockResolvedValue({

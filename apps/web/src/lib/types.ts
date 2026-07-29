@@ -338,6 +338,58 @@ export type TransferredMyPropertyItem = {
 export type MyPropertyItem = DirectMyPropertyItem | TransferredMyPropertyItem;
 export type MyPropertyResponse = PaginatedResponse<MyPropertyItem>;
 
+export type MyInventoryItemTransferHistoryItem = {
+  documentId: string;
+  displayNumber: number;
+  documentDate: string;
+  status: Extract<StockDocumentStatus, 'POSTED' | 'CANCELLED'>;
+  quantity: string;
+  recipient: {
+    id: string;
+    number: string;
+    fullName: string;
+  } | null;
+};
+
+export type MyInventoryItemTransferHistory = {
+  inventoryItem: {
+    id: string;
+    code: string;
+    name: string;
+    unit: string | null;
+  };
+  currentBalance: string;
+  items: MyInventoryItemTransferHistoryItem[];
+  pagination: Pagination;
+};
+
+export type InventoryItemTransferHistory = {
+  inventoryItem: {
+    id: string;
+    code: string;
+    name: string;
+    unit: string | null;
+  };
+  items: Array<{
+    documentId: string;
+    displayNumber: number;
+    documentDate: string;
+    status: Extract<StockDocumentStatus, 'POSTED' | 'CANCELLED'>;
+    quantity: string;
+    sender: {
+      id: string;
+      number: string;
+      fullName: string;
+    };
+    recipient: {
+      id: string;
+      number: string;
+      fullName: string;
+    } | null;
+  }>;
+  pagination: Pagination;
+};
+
 export type MyPropertyQuery = {
   search?: string;
   section: MyPropertySection;

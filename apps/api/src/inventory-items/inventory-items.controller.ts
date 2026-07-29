@@ -12,6 +12,8 @@ import {
 import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
+import { CurrentUserParam } from '../auth/current-user.decorator';
+import type { CurrentUser } from '../auth/auth.types';
 import {
   INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES,
   REFERENCE_DATA_READ_ROLES,
@@ -23,7 +25,10 @@ import {
   InventoryItemAccountingCardQueryDto,
   InventoryMovementFiltersDto,
 } from './dto/inventory-item-accounting-card-query.dto';
-import { InventoryItemsService } from './inventory-items.service';
+import {
+  InventoryItemsService,
+  type TransferHistoryQuery,
+} from './inventory-items.service';
 
 @Controller('inventory-items')
 @Roles(...REFERENCE_DATA_READ_ROLES)
@@ -33,6 +38,25 @@ export class InventoryItemsController {
   @Get()
   findAll(@Query() query: ListInventoryItemsQueryDto) {
     return this.inventoryItemsService.findAll(query);
+  }
+
+  @Get(':id/my-transfer-history')
+  @Roles(UserRole.MVO)
+  myTransferHistory(
+    @Param('id') id: string,
+    @Query() query: TransferHistoryQuery,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.inventoryItemsService.myTransferHistory(id, actor, query);
+  }
+
+  @Get(':id/transfer-history')
+  @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES)
+  transferHistory(
+    @Param('id') id: string,
+    @Query() query: TransferHistoryQuery,
+  ) {
+    return this.inventoryItemsService.transferHistory(id, query);
   }
 
   @Get(':id')
