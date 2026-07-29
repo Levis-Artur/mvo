@@ -181,6 +181,25 @@ export function useStockDocumentsController(user: AuthUser) {
     setSaving(true); setActionError('');
     let savedDocument: StockDocument | null = null;
     try {
+      if (!editing && input.type === 'MVO_TRANSFER') {
+        await stockDocumentsService.createAndPostMvoTransfer({
+          documentDate: input.documentDate,
+          destinationResponsiblePersonId:
+            input.destinationResponsiblePersonId!,
+          note: input.note,
+          lines: input.lines,
+        });
+        setFormType(null);
+        setSelected(null);
+        setSuccess(null);
+        setToast('Передачу проведено. Залишки оновлено.');
+        await load();
+        window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
+        return;
+      }
       let result = editing
         ? await stockDocumentsService.update(editing.id, input)
         : await stockDocumentsService.create(input);

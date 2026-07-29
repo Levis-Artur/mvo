@@ -79,6 +79,25 @@ export class CreateStockDocumentDto {
   lines!: StockDocumentLineDto[];
 }
 
+export class CreateMvoTransferDto {
+  @IsDateString()
+  documentDate!: string;
+
+  @IsUUID()
+  destinationResponsiblePersonId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StockDocumentLineDto)
+  lines!: StockDocumentLineDto[];
+}
+
 export class UpdateStockDocumentDto extends CreateStockDocumentDto {}
 
 export class ListStockDocumentsQueryDto extends PaginationQueryDto {

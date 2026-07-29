@@ -27,6 +27,7 @@ import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
 import { getRequestContext } from '../auth/request-context';
 import { attachmentFileSizeLimitBytes } from '../config/env';
 import {
+  CreateMvoTransferDto,
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
@@ -54,6 +55,20 @@ export class StockDocumentsController {
   @Roles(UserRole.OWNER)
   attachmentOrphans() {
     return this.attachmentsService.findOrphans();
+  }
+
+  @Post('mvo-transfer')
+  @Roles(UserRole.MVO)
+  createAndPostMvoTransfer(
+    @Body() dto: CreateMvoTransferDto,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.createAndPostMvoTransfer(
+      dto,
+      actor,
+      getRequestContext(request),
+    );
   }
 
   @Post(':id/attachments')

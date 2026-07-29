@@ -1,5 +1,6 @@
 import type {
   CreateManagementDto,
+  CreateMvoTransferInput,
   CreateInventoryItemDto,
   CreateResponsiblePersonDto,
   CreateServiceDto,
@@ -440,6 +441,11 @@ export const apiClient = {
     request<StockDocument>(`/stock-documents/${id}`),
   createStockDocument: (body: StockDocumentInput) =>
     request<StockDocument>('/stock-documents', mutation('POST', body)),
+  createAndPostMvoTransfer: (body: CreateMvoTransferInput) =>
+    request<StockDocument>(
+      '/stock-documents/mvo-transfer',
+      mutation('POST', body),
+    ),
   updateStockDocument: (id: string, body: StockDocumentInput) =>
     request<StockDocument>(`/stock-documents/${id}`, mutation('PATCH', body)),
   deleteStockDocument: (id: string) =>

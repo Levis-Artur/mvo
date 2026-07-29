@@ -40,7 +40,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
   return <section className={`stock-documents-page grid min-w-0 gap-4 ${user.role === 'MVO' ? 'stock-documents-page--mvo' : ''}`}>
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
-        {writable ? <Button type="button" onClick={() => controller.openCreate('MVO_TRANSFER')}>Нова передача</Button> : null}
+        {writable && user.role === 'MVO' ? <Button type="button" onClick={() => controller.openCreate('MVO_TRANSFER')}>Нова передача</Button> : null}
         {writable ? <Button type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button> : null}
         {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}

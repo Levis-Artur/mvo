@@ -231,11 +231,15 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             form="stock-document-form"
             type="submit"
           >
-            {saving
-              ? files.length
-                ? 'Завантаження вкладень…'
-                : 'Збереження…'
-              : 'Зберегти чернетку'}
+            {transfer && !document
+              ? saving
+                ? 'Передаємо…'
+                : 'Підтвердити передачу'
+              : saving
+                ? files.length
+                  ? 'Завантаження вкладень…'
+                  : 'Збереження…'
+                : 'Зберегти чернетку'}
           </Button>
         </>
       }

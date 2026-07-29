@@ -25,6 +25,7 @@ import {
   StockDocumentAttachmentStorageService,
 } from './stock-document-attachment-storage.service';
 import {
+  CreateMvoTransferDto,
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
@@ -147,6 +148,11 @@ export class StockDocumentsService {
   ) {
     this.assertCanWrite(actor);
     this.assertNewDocumentType(dto.type);
+    if (dto.type === StockDocumentType.MVO_TRANSFER) {
+      throw new BadRequestException(
+        'Нову передачу потрібно одразу підтвердити та провести',
+      );
+    }
     const normalized = this.validateDto(dto, actor);
     await this.assertActiveTransferRecipient(
       this.prisma,
@@ -176,6 +182,101 @@ export class StockDocumentsService {
     });
     await this.audit(actor, document.id, 'CREATE', document.status, true, context);
     return this.serialize(document);
+  }
+
+  async createAndPostMvoTransfer(
+    dto: CreateMvoTransferDto,
+    actor: CurrentUser,
+    context: AuditContext,
+  ) {
+    this.assertCanWrite(actor);
+    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
+      throw new ForbiddenException(
+        'Передачу може створити лише користувач із пов’язаною карткою МВО',
+      );
+    }
+
+    const documentId = randomUUID();
+    const normalized = this.validateDto(
+      {
+        ...dto,
+        type: StockDocumentType.MVO_TRANSFER,
+        sourceResponsiblePersonId: actor.responsiblePersonId,
+      },
+      actor,
+    );
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.assertActiveTransferRecipient(
+          tx,
+          StockDocumentType.MVO_TRANSFER,
+          normalized.sourceResponsiblePersonId,
+          normalized.destinationResponsiblePersonId,
+        );
+        const now = new Date();
+        const document = await tx.stockDocument.create({
+          data: {
+            id: documentId,
+            documentNumber: `MOV-${randomUUID().slice(0, 8).toUpperCase()}`,
+            documentDate: new Date(dto.documentDate),
+            type: StockDocumentType.MVO_TRANSFER,
+            accountingModel: StockAccountingModel.DIRECT_BALANCE,
+            status: StockDocumentStatus.POSTED,
+            sourceResponsiblePersonId: actor.responsiblePersonId,
+            destinationResponsiblePersonId:
+              normalized.destinationResponsiblePersonId,
+            recipientName: null,
+            recipientUnit: null,
+            basis: null,
+            note: dto.note?.trim() || null,
+            createdByUserId: actor.id,
+            postedByUserId: actor.id,
+            postedAt: now,
+            lines: { create: normalized.lines },
+          },
+          include: {
+            lines: true,
+            attachments: { select: { id: true, storagePath: true } },
+          },
+        });
+
+        for (const line of document.lines) {
+          await this.postLine(tx, document, line);
+        }
+        await this.auditInTx(
+          tx,
+          actor,
+          documentId,
+          'CREATE',
+          StockDocumentStatus.POSTED,
+          true,
+          context,
+        );
+        await this.auditInTx(
+          tx,
+          actor,
+          documentId,
+          'POST',
+          StockDocumentStatus.POSTED,
+          true,
+          context,
+        );
+      });
+    } catch (error) {
+      await this.audit(
+        actor,
+        documentId,
+        'CREATE_AND_POST',
+        'FAILED',
+        false,
+        context,
+        error,
+      );
+      throw error;
+    }
+
+    return this.findOne(documentId, actor);
   }
 
   async update(
