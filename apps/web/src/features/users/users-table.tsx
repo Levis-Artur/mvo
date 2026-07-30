@@ -1,9 +1,8 @@
-'use client';
-
-import { Button, DataTable, StatusBadge } from '@/components/ui';
+import { DataTable, StatusBadge } from '@/components/ui';
 import { formatDateTime, isUserLocked, responsiblePersonShortName } from '@/components/common';
 import { roleLabels } from '@/lib/authz';
 import type { ResponsiblePerson, UserSummary } from '@/lib/types';
+import { UserActionsMenu } from './user-actions-menu';
 
 type UserAction = (user: UserSummary) => void;
 
@@ -36,20 +35,29 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
       <span className="tabular-nums" key="attempts">{item.failedLoginAttempts}</span>,
       locked ? <StatusBadge key="locked" tone="danger">До {formatDateTime(item.lockedUntil)}</StatusBadge> : 'Не заблоковано',
       formatDateTime(item.lastLoginAt),
-      <div className="flex flex-wrap justify-end gap-1" key="actions">
-        {canWrite ? <Button variant="outline" type="button" onClick={() => onEdit(item)}>Редагувати</Button> : null}
-        {canResetPassword ? <Button variant="outline" type="button" onClick={() => onResetPassword(item)}>Скинути пароль</Button> : null}
-        {canWrite ? <Button variant="outline" type="button" onClick={() => locked ? onUnblock(item) : onBlock(item)}>{locked ? 'Розблокувати' : 'Заблокувати'}</Button> : null}
-        {canRevokeSessions ? <Button variant="outline" type="button" onClick={() => onRevokeSessions(item)}>Відкликати сесії</Button> : null}
-        {canWrite ? <Button variant="outline" type="button" onClick={() => item.isActive ? onDeactivate(item) : onActivate(item)}>{item.isActive ? 'Деактивувати' : 'Активувати'}</Button> : null}
-        {canDelete ? <Button variant="danger" type="button" onClick={() => onDelete(item)}>Видалити</Button> : null}
-      </div>,
+      <UserActionsMenu
+        canDelete={canDelete}
+        canResetPassword={canResetPassword}
+        canRevokeSessions={canRevokeSessions}
+        canWrite={canWrite}
+        key="actions"
+        locked={locked}
+        user={item}
+        onActivate={onActivate}
+        onBlock={onBlock}
+        onDeactivate={onDeactivate}
+        onDelete={onDelete}
+        onEdit={onEdit}
+        onResetPassword={onResetPassword}
+        onRevokeSessions={onRevokeSessions}
+        onUnblock={onUnblock}
+      />,
     ];
   });
 
   return <DataTable ariaLabel="Користувачі системи" columns={[
-    { label: 'Логін' }, { label: 'Роль' }, { label: 'Пов’язаний МВО' }, { label: 'Управління' },
+    { label: 'Логін' }, { label: 'Роль' }, { label: 'Пов’язаний МВО', className: 'users-table__person' }, { label: 'Управління', className: 'users-table__management' },
     { label: 'Активність' }, { label: 'Тимчасовий пароль' }, { label: 'Невдалі входи', numeric: true },
-    { label: 'Блокування' }, { label: 'Останній вхід' }, { label: 'Дії', actions: true },
-  ]} emptyMessage="Користувачів не знайдено." rows={rows} />;
+    { label: 'Блокування' }, { label: 'Останній вхід' }, { label: 'Дії', actions: true, className: 'users-table__actions' },
+  ]} emptyMessage="Користувачів не знайдено." rowKeys={users.map((item) => item.id)} rows={rows} tableClassName="users-table" />;
 }

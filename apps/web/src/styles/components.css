@@ -44,10 +44,15 @@
 .persons-table td { height: 50px; padding-block: var(--space-2); }
 .persons-table__code { width: 108px; white-space: nowrap; }
 .persons-table__actions { width: 54px; padding-inline: var(--space-1) !important; }
-.person-actions-menu__trigger { width: 34px; min-width: 34px; padding: 0; font-size: 1.25rem; line-height: 1; }
-.person-actions-menu { position: fixed; z-index: 70; display: grid; width: min(14rem, calc(100vw - 1rem)); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); box-shadow: var(--shadow-modal); padding: var(--space-1); }
-.person-actions-menu__item { width: 100%; justify-content: flex-start; border: 0; text-align: left; }
-.person-actions-menu__danger { margin-top: var(--space-1); border-top: 1px solid var(--color-border-light); padding-top: var(--space-1); }
+.action-menu__trigger { width: 34px; min-width: 34px; padding: 0; font-size: 1.25rem; line-height: 1; }
+.action-menu { position: fixed; z-index: 70; display: grid; width: min(14rem, calc(100vw - 1rem)); overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); box-shadow: var(--shadow-modal); padding: var(--space-1); }
+.action-menu__item { width: 100%; justify-content: flex-start; border: 0; text-align: left; }
+.action-menu__danger { margin-top: var(--space-1); border-top: 1px solid var(--color-border-light); padding-top: var(--space-1); }
+.users-table th,
+.users-table td { height: 50px; padding-block: var(--space-2); }
+.users-table__person,
+.users-table__management { min-width: 180px; max-width: 280px; overflow-wrap: anywhere; word-break: normal; }
+.users-table__actions { width: 54px; padding-inline: var(--space-1) !important; white-space: nowrap; }
 .data-table__footer { border-top: 1px solid var(--color-border-light); background: var(--color-surface-muted); padding: 0.4rem 0.65rem; color: var(--color-text-secondary); font-size: var(--text-xs); }
 .data-table-state { max-width: 100%; }
 .stock-source-picker { display: grid; min-width: 0; gap: var(--space-3); }

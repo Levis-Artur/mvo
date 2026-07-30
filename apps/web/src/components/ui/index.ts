@@ -1,4 +1,5 @@
 export * from './action-list';
+export * from './action-menu';
 export * from './button';
 export * from './card';
 export * from './data-table';
