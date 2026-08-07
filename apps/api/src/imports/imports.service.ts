@@ -134,9 +134,13 @@ export class ImportsService {
       }),
       this.prisma.importBatch.count({ where }),
     ]);
+    const uploaders = await this.findUploaders(items.map((item) => item.id));
 
     return {
-      items,
+      items: items.map((item) => ({
+        ...item,
+        uploadedByUser: uploaders.get(item.id) ?? null,
+      })),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -205,6 +209,9 @@ export class ImportsService {
     return {
       items: items.map((row) => ({
         ...row,
+        externalAccountingCode:
+          parseAccountingCounterparty(row.counterpartyRaw)
+            .externalAccountingCode ?? null,
         parsedQuantity: row.parsedQuantity?.toString() ?? null,
         systemBalance: row.systemBalance?.toString() ?? null,
         fileEndingBalance: row.fileEndingBalance?.toString() ?? null,
@@ -692,29 +699,83 @@ export class ImportsService {
     const rows = await this.prisma.importRow.findMany({
       where: { importBatchId: id },
     });
-    const newItems = rows.filter(
+    const readyRows = rows.filter(
       (row) =>
-        !row.inventoryItemId &&
         row.status !== ImportRowStatus.ERROR &&
         row.status !== ImportRowStatus.SKIPPED,
-    ).length;
+    );
+    const newItems = new Set(
+      readyRows
+        .filter((row) => !row.inventoryItemId)
+        .map((row) => row.nomenclatureCodeRaw),
+    ).size;
+    const updatedItems = new Set(
+      readyRows
+        .filter((row) => row.inventoryItemId)
+        .map((row) => row.inventoryItemId),
+    ).size;
     const matchedPersons = new Set(
       rows
         .filter((row) => row.responsiblePersonId)
-        .map((row) => row.counterpartyRaw),
+        .map((row) => row.responsiblePersonId),
     ).size;
     const missingPersons = new Set(
       rows
-        .filter((row) => !row.responsiblePersonId)
+        .filter(
+          (row) =>
+            !row.responsiblePersonId && row.status === ImportRowStatus.ERROR,
+        )
         .map((row) => row.counterpartyRaw),
     ).size;
 
     return {
       ...this.countRows(rows),
       newItems,
+      updatedItems,
       matchedPersons,
       missingPersons,
     };
+  }
+
+  private async findUploaders(importBatchIds: string[]) {
+    const uploaders = new Map<string, { id: string; username: string }>();
+    if (!importBatchIds.length) return uploaders;
+
+    const events = await this.prisma.securityEvent.findMany({
+      where: {
+        type: SecurityEventType.IMPORT_ACTION,
+        success: true,
+        AND: [
+          { metadata: { path: ['action'], equals: 'UPLOAD' } },
+          {
+            OR: importBatchIds.map((importBatchId) => ({
+              metadata: { path: ['importBatchId'], equals: importBatchId },
+            })),
+          },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        metadata: true,
+        actorUser: { select: { id: true, username: true } },
+      },
+    });
+
+    for (const event of events) {
+      if (
+        !event.actorUser ||
+        !event.metadata ||
+        typeof event.metadata !== 'object' ||
+        Array.isArray(event.metadata)
+      ) continue;
+      const importBatchId = (event.metadata as Prisma.JsonObject).importBatchId;
+      if (typeof importBatchId !== 'string' || uploaders.has(importBatchId)) {
+        continue;
+      }
+      uploaders.set(importBatchId, event.actorUser);
+    }
+
+    return uploaders;
   }
 
   private ensureMutable(status: ImportStatus): void {

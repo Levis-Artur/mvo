@@ -28,6 +28,28 @@ describe('AccountingController access', () => {
     expect(roles).not.toContain(UserRole.MVO);
   });
 
+  it('limits the accounting workspace overview to OWNER and ACCOUNTANT', () => {
+    const roles = Reflect.getMetadata(
+      ROLES_KEY,
+      AccountingController.prototype.overview,
+    ) as UserRole[];
+
+    expect(roles).toEqual([UserRole.OWNER, UserRole.ACCOUNTANT]);
+  });
+
+  it.each(['movements', 'exportMovements', 'movementDetails'] as const)(
+    'limits %s to OWNER and ACCOUNTANT and keeps MVO denied',
+    (method) => {
+      const roles = Reflect.getMetadata(
+        ROLES_KEY,
+        AccountingController.prototype[method],
+      ) as UserRole[];
+
+      expect(roles).toEqual([UserRole.OWNER, UserRole.ACCOUNTANT]);
+      expect(roles).not.toContain(UserRole.MVO);
+    },
+  );
+
   it('keeps batch history and download under read access for AUDITOR', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, AccountingController.prototype.downloadBatch),

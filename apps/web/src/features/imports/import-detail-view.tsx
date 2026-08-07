@@ -25,6 +25,7 @@ export function ImportDetailView({
   canWrite, isOwner, canCommit, missingCounterparties,
   setFilters, setMappings, onBack, onApplyFilters, onSaveMappings,
   onValidate, onCommit, onCancel, onRollback, onDelete,
+  accountingWorkspace = false,
 }: {
   batch: ImportBatch | null;
   rows: ImportRow[];
@@ -50,6 +51,7 @@ export function ImportDetailView({
   onCancel: () => void;
   onRollback: () => void;
   onDelete: () => void;
+  accountingWorkspace?: boolean;
 }) {
   if (detailLoading && !batch) return <LoadingState label="Завантаження імпорту…" />;
   if (!batch) return <ErrorState message={error || 'Імпорт не знайдено.'} />;
@@ -60,9 +62,11 @@ export function ImportDetailView({
     <section className="grid min-w-0 gap-4">
       <PageHeader
         action={<Button variant="outline" type="button" onClick={onBack}>До списку імпортів</Button>}
-        description="Перевірка рядків і керування проведенням файлу."
+        description={accountingWorkspace
+          ? 'Завантажте CSV-файл оборотної відомості для оновлення облікових залишків МВО.'
+          : 'Перевірка рядків і керування проведенням файлу.'}
         icon="upload"
-        title="Імпорт"
+        title={accountingWorkspace ? 'Імпорт бухгалтерських даних' : 'Імпорт'}
       />
       {error ? <ErrorState message={error} /> : null}
       <Card title="Загальні дані файлу">
@@ -110,10 +114,9 @@ export function ImportDetailView({
       >
         <label className="filter-bar__field"><span>Статус рядка</span>
           <Select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value, page: 1 }))}>
-            <option value="">Усі статуси</option>
-            <option value="VALID">VALID</option><option value="WARNING">WARNING</option>
-            <option value="ERROR">ERROR</option><option value="SKIPPED">SKIPPED</option>
-            <option value="IMPORTED">IMPORTED</option>
+            <option value="">Усі</option>
+            <option value="VALID">Готові</option>
+            <option value="ERROR">З помилками</option>
           </Select>
         </label>
       </FilterBar>

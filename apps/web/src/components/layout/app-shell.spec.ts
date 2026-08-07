@@ -2,7 +2,15 @@ import { APP_SHELL_REGIONS } from './app-shell-model';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isNavigationActive } from './navigation-model';
-import { can, getAccessRedirectPath, getNavigationItems } from '../../lib/authz';
+import {
+  can,
+  canAccessPath,
+  getAccessRedirectPath,
+  getAssignableUserRoles,
+  getDefaultAppPath,
+  getNavigationItems,
+  requiresResponsiblePerson,
+} from '../../lib/authz';
 import type { AuthUser } from '../../lib/types';
 
 const user = (role: AuthUser['role']) => ({ id: role, username: role, role, isActive: true, mustChangePassword: false, responsiblePersonId: role === 'MVO' ? 'person-1' : null }) as AuthUser;
@@ -30,7 +38,7 @@ describe('AppShell presentation model', () => {
 
     expect(paths('OWNER')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers', '/accounting/mvo-transfers', '/admin/users', '/admin',
+      '/transactions', '/transfers', '/accounting', '/accounting/mvo-transfers', '/admin/users', '/admin',
     ]);
     expect(paths('DPP_ADMIN')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
@@ -41,8 +49,7 @@ describe('AppShell presentation model', () => {
       '/transactions', '/transfers', '/accounting/mvo-transfers',
     ]);
     expect(paths('ACCOUNTANT')).toEqual([
-      '/persons', '/nomenclature', '/stock', '/imports', '/transactions',
-      '/transfers', '/accounting/mvo-transfers', '/profile',
+      '/accounting', '/profile',
     ]);
     expect(paths('MVO')).toEqual([
       '/my-stock', '/transfers', '/profile',
@@ -58,6 +65,12 @@ describe('AppShell presentation model', () => {
     expect(can(accountant, 'read', 'stockDocuments')).toBe(true);
     expect(can(accountant, 'write', 'stockDocuments')).toBe(false);
     expect(can(accountant, 'read', 'users')).toBe(false);
+    expect(can(accountant, 'read', 'accounting')).toBe(true);
+    expect(getDefaultAppPath(accountant)).toBe('/accounting');
+    expect(canAccessPath(accountant, '/accounting', 'accounting')).toBe(true);
+    expect(canAccessPath(user('MVO'), '/accounting', 'accounting')).toBe(false);
+    expect(requiresResponsiblePerson('ACCOUNTANT')).toBe(false);
+    expect(getAssignableUserRoles('users')).toContain('ACCOUNTANT');
   });
 
   it('зберігає AUDITOR у read-only режимі та не відкриває користувачів для MVO', () => {

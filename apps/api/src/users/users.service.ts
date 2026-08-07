@@ -86,17 +86,19 @@ export class UsersService {
 
     const role = this.resolveCreateRole(actor, dto.role);
     const username = this.authService.normalizeUsername(dto.username);
+    const responsiblePersonId =
+      role === UserRole.MVO ? dto.responsiblePersonId : null;
 
     if (role === UserRole.OWNER) {
       throw new BadRequestException('Неможливо створити другого OWNER');
     }
 
-    if (role === UserRole.MVO && !dto.responsiblePersonId) {
+    if (role === UserRole.MVO && !responsiblePersonId) {
       throw new BadRequestException('Для MVO потрібно вказати МВО');
     }
 
-    if (dto.responsiblePersonId) {
-      await this.ensureResponsiblePersonCanBeLinked(dto.responsiblePersonId);
+    if (responsiblePersonId) {
+      await this.ensureResponsiblePersonCanBeLinked(responsiblePersonId);
     }
 
     const temporaryPassword = this.generateTemporaryPassword();
@@ -108,7 +110,7 @@ export class UsersService {
           username,
           passwordHash,
           role,
-          responsiblePersonId: dto.responsiblePersonId,
+          responsiblePersonId,
           mustChangePassword: true,
           createdById: actor.id,
         },
@@ -140,10 +142,11 @@ export class UsersService {
     }
 
     const role = dto.role ?? existing.role;
-    const responsiblePersonId =
-      dto.responsiblePersonId === undefined
+    const responsiblePersonId = role === UserRole.MVO
+      ? dto.responsiblePersonId === undefined
         ? existing.responsiblePersonId
-        : dto.responsiblePersonId;
+        : dto.responsiblePersonId
+      : null;
 
     if (role === UserRole.MVO && !responsiblePersonId) {
       throw new BadRequestException('Для MVO потрібно вказати МВО');

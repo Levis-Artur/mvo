@@ -18,6 +18,7 @@ import { PersonsView } from '@/features/responsible-persons/persons-view';
 import { StockDocumentsView } from '@/features/stock-documents/stock-documents-view';
 import { UsersView } from '@/features/users/users-view';
 import { AccountingTransfersView } from '@/features/accounting/accounting-transfers-view';
+import { AccountingWorkspaceView } from '@/features/accounting/accounting-workspace-view';
 
 export type View = AppView;
 
@@ -53,6 +54,7 @@ export function MvoApp({ initialView = 'home', initialImportId, initialAccountin
     {view === 'users' ? <UsersView /> : null}
     {view === 'my-stock' ? <MyStockView /> : null}
     {view === 'transfers' ? <StockDocumentsView /> : null}
+    {view === 'accounting' ? <AccountingWorkspaceView user={user} /> : null}
     {view === 'accounting-transfers' ? <AccountingTransfersView initialTab={initialAccountingTab} user={user} /> : null}
     {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних можливостей API." /> : null}
     {view === 'administration' ? <AdministrationView /> : null}

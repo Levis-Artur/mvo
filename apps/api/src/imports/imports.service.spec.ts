@@ -23,7 +23,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     inventoryItem: {
       upsert: jest.fn(),
     },
-    securityEvent: { create: jest.fn() },
+    securityEvent: { create: jest.fn(), findMany: jest.fn() },
   };
   const prisma = {
     importBatch: {
@@ -52,7 +52,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     stockTransaction: {
       findFirst: jest.fn(),
     },
-    securityEvent: { create: jest.fn() },
+    securityEvent: { create: jest.fn(), findMany: jest.fn() },
     $transaction: jest.fn((callback: (client: typeof tx) => Promise<unknown>) =>
       callback(tx),
     ),
@@ -124,6 +124,97 @@ function uploadResponsiblePersonFixture(
 }
 
 describe('ImportsService', () => {
+  it('returns the uploader in import history from the existing audit event', async () => {
+    const { service, prisma } = createService();
+    const batch = {
+      id: 'batch-id',
+      createdAt: new Date('2026-08-07T10:00:00.000Z'),
+    };
+    prisma.importBatch.findMany.mockResolvedValue([batch]);
+    prisma.importBatch.count.mockResolvedValue(1);
+    prisma.securityEvent.findMany.mockResolvedValue([
+      {
+        metadata: { action: 'UPLOAD', importBatchId: 'batch-id' },
+        actorUser: { id: 'accountant-id', username: 'accountant' },
+      },
+    ]);
+
+    await expect(service.findAll({ page: 1, limit: 20 })).resolves.toEqual({
+      items: [{
+        ...batch,
+        uploadedByUser: { id: 'accountant-id', username: 'accountant' },
+      }],
+      pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+  });
+
+  it('counts distinct matched MVO and new or updated inventory positions', async () => {
+    const { service, prisma } = createService();
+    prisma.importBatch.findUnique.mockResolvedValue({ id: 'batch-id' });
+    prisma.importRow.findMany.mockResolvedValue([
+      {
+        status: ImportRowStatus.VALID,
+        responsiblePersonId: 'person-1',
+        inventoryItemId: 'item-1',
+        counterpartyRaw: 'МВО_0057',
+        nomenclatureCodeRaw: 'A-1',
+      },
+      {
+        status: ImportRowStatus.WARNING,
+        responsiblePersonId: 'person-1',
+        inventoryItemId: 'item-1',
+        counterpartyRaw: 'МВО_0057',
+        nomenclatureCodeRaw: 'A-1',
+      },
+      {
+        status: ImportRowStatus.WARNING,
+        responsiblePersonId: 'person-2',
+        inventoryItemId: null,
+        counterpartyRaw: 'Інший МВО_0061',
+        nomenclatureCodeRaw: 'NEW-1',
+      },
+      {
+        status: ImportRowStatus.ERROR,
+        responsiblePersonId: null,
+        inventoryItemId: null,
+        counterpartyRaw: 'Невідомий_0099',
+        nomenclatureCodeRaw: 'NEW-2',
+      },
+    ]);
+
+    const result = await service.findOne('batch-id');
+
+    expect(result.preview).toMatchObject({
+      matchedPersons: 2,
+      missingPersons: 1,
+      newItems: 1,
+      updatedItems: 1,
+      errorRows: 1,
+    });
+  });
+
+  it('returns the parsed accounting code in preview rows without losing zeros', async () => {
+    const { service, prisma } = createService();
+    prisma.importBatch.findUnique.mockResolvedValue({ id: 'batch-id' });
+    prisma.importRow.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: 'row-id',
+        counterpartyRaw: 'Жигульський А.В._0057',
+        parsedQuantity: null,
+        systemBalance: null,
+        fileEndingBalance: null,
+        balanceDifference: null,
+        responsiblePerson: null,
+        inventoryItem: null,
+      }]);
+    prisma.importRow.count.mockResolvedValue(1);
+
+    const result = await service.rows('batch-id', { page: 1, limit: 20 });
+
+    expect(result.items[0].externalAccountingCode).toBe('0057');
+  });
+
   it('matches an active responsible person only by exact accounting code', async () => {
     const context = createService();
     arrangeResponsiblePersonUpload(context, '  Жигульський А.В._0057  ');

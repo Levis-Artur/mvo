@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import {
+  ACCOUNTING_WORKSPACE_ROLES,
   hasCapability,
   IMPORT_WRITE_ROLES,
   STOCK_DOCUMENT_WRITE_ROLES,
@@ -25,6 +26,8 @@ describe('ACCOUNTANT access policy', () => {
     expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.ACCOUNTANT);
     expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.AUDITOR);
     expect(hasCapability(UserRole.MVO, 'REFERENCE_DATA_READ')).toBe(false);
+    expect(hasCapability(UserRole.MVO, 'IMPORT_READ')).toBe(false);
+    expect(hasCapability(UserRole.MVO, 'IMPORT_WRITE')).toBe(false);
     expect(hasCapability(UserRole.MVO, 'MVO_SCOPED_ACCESS')).toBe(true);
     expect(TRANSACTION_READ_ROLES).not.toContain(UserRole.MVO);
     expect(TRANSACTION_READ_ROLES).toEqual(expect.arrayContaining([
@@ -44,5 +47,22 @@ describe('ACCOUNTANT access policy', () => {
     expect(
       hasCapability(UserRole.ACCOUNTANT, 'OWNER_DESTRUCTIVE_ADMINISTRATION'),
     ).toBe(false);
+  });
+
+  it('limits the accounting workspace to OWNER and ACCOUNTANT', () => {
+    expect(ACCOUNTING_WORKSPACE_ROLES).toEqual([
+      UserRole.OWNER,
+      UserRole.ACCOUNTANT,
+    ]);
+    expect(hasCapability(UserRole.ACCOUNTANT, 'ACCOUNTING_WORKSPACE_READ')).toBe(
+      true,
+    );
+    expect(hasCapability(UserRole.DPP_ADMIN, 'ACCOUNTING_WORKSPACE_READ')).toBe(
+      false,
+    );
+    expect(hasCapability(UserRole.AUDITOR, 'ACCOUNTING_WORKSPACE_READ')).toBe(
+      false,
+    );
+    expect(hasCapability(UserRole.MVO, 'ACCOUNTING_WORKSPACE_READ')).toBe(false);
   });
 });

@@ -20,7 +20,10 @@ describe('AccountingTransfersView', () => {
     'shows the accounting register to %s',
     (role) => {
       expect(can(user(role), 'read', 'accountingTransfers')).toBe(true);
-      expect(getNavigationItems(user(role)).some((item) => item.href === '/accounting/mvo-transfers')).toBe(true);
+      const expectedHref = role === 'ACCOUNTANT'
+        ? '/accounting'
+        : '/accounting/mvo-transfers';
+      expect(getNavigationItems(user(role)).some((item) => item.href === expectedHref)).toBe(true);
     },
   );
 
@@ -38,7 +41,8 @@ describe('AccountingTransfersView', () => {
     expect(view).toContain('dateFrom={draft.dateFrom}');
     expect(view).toContain('dateTo={draft.dateTo}');
     expect(view).toContain('Завантажити повторно');
-    expect(view).toContain("router.push('/accounting/mvo-transfers/exports')");
+    expect(view).toContain("'/accounting/mvo-transfers/exports'");
+    expect(view).toContain('if (!embedded)');
   });
 
   it('keeps the document-level nomenclature filter operable by mouse and keyboard', () => {

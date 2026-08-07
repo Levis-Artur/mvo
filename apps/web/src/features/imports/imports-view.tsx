@@ -11,14 +11,18 @@ import { ImportUploadModal } from './import-upload-modal';
 import { ImportsTable } from './imports-table';
 import { useImportsController } from './use-imports-controller';
 
-export function ImportsView({ initialImportId }: { initialImportId?: string }) {
-  const controller = useImportsController(initialImportId);
+export function ImportsView({ initialImportId, embedded = false, accountingWorkspace = false }: {
+  initialImportId?: string;
+  embedded?: boolean;
+  accountingWorkspace?: boolean;
+}) {
+  const controller = useImportsController(initialImportId, !embedded);
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
   const showDetail = Boolean(initialImportId || controller.selected);
 
   function returnToList() {
     controller.setSelected(null);
-    controller.router.push('/imports');
+    if (!embedded) controller.router.push('/imports');
   }
 
   return (
@@ -26,6 +30,7 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
       {showDetail ? (
         <ImportDetailView
           actionLoading={controller.actionLoading}
+          accountingWorkspace={accountingWorkspace}
           batch={controller.selected}
           canCommit={controller.canCommit}
           canWrite={controller.canWriteImports}
@@ -60,11 +65,14 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
               <Button disabled={controller.listLoading} icon="refresh" variant="outline" type="button" onClick={() => void controller.loadList(controller.listPagination.page, controller.listPagination.limit)}>Оновити</Button>
               {controller.canWriteImports ? <Button icon="upload" type="button" onClick={() => controller.setUploadOpen(true)}>Новий імпорт</Button> : null}
             </div>}
-            description="Завантаження початкових залишків і нових надходжень."
+            description={accountingWorkspace
+              ? 'Завантажте CSV-файл оборотної відомості для оновлення облікових залишків МВО.'
+              : 'Завантаження початкових залишків і нових надходжень.'}
             icon="upload"
-            title="Імпорт"
+            title={accountingWorkspace ? 'Імпорт бухгалтерських даних' : 'Імпорт'}
           />
           {controller.error ? <ErrorState message={controller.error} /> : null}
+          {accountingWorkspace ? <h2 className="text-lg font-bold">Історія імпортів</h2> : null}
           <ImportsTable imports={controller.imports} loading={controller.listLoading} onOpen={(batch) => void controller.openImport(batch)} />
           <Pagination
             limit={controller.listPagination.limit}
@@ -79,7 +87,7 @@ export function ImportsView({ initialImportId }: { initialImportId?: string }) {
       {controller.uploadOpen && controller.canWriteImports ? (
         <ImportUploadModal onClose={() => controller.setUploadOpen(false)} onSaved={(batch) => {
           controller.setUploadOpen(false);
-          controller.router.push(`/imports/${batch.id}`);
+          if (!embedded) controller.router.push(`/imports/${batch.id}`);
           void controller.loadList();
           void controller.loadImport(batch.id);
         }} />

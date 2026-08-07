@@ -5,13 +5,18 @@ import { importSummary } from './import-model';
 export function ImportSummaryCards({ batch }: { batch: ImportBatch }) {
   const summary = importSummary(batch);
   const values: [string, number][] = [
-    ['Усього рядків', summary.total], ['Валідні', summary.valid],
-    ['Попередження', summary.warnings], ['Помилки', summary.errors],
-    ['Пропущені', summary.skipped], ['Проведені', summary.imported],
+    ['Кількість рядків', summary.total],
+    ['Знайдено МВО', batch.preview?.matchedPersons ?? 0],
+    ['Невідомі МВО', batch.preview?.missingPersons ?? 0],
+    ['Помилки', summary.errors],
     ['Нові позиції', summary.newItems],
+    ['Позиції, що оновлюються', summary.updatedItems],
   ];
+  if (batch.status === 'COMPLETED' || batch.status === 'PARTIALLY_COMPLETED') {
+    values.push(['Успішно проведено', summary.imported]);
+  }
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {values.map(([label, value]) => (
         <Card key={label} title={label}><p className="text-2xl font-bold tabular-nums">{value}</p></Card>
       ))}

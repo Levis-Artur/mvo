@@ -3,12 +3,19 @@ import type { Response } from 'express';
 import {
   ACCOUNTING_TRANSFER_EXPORT_ROLES,
   ACCOUNTING_TRANSFER_READ_ROLES,
+  ACCOUNTING_WORKSPACE_ROLES,
 } from '../auth/access-policy';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
 import { getRequestContext } from '../auth/request-context';
 import { AccountingService } from './accounting.service';
+import { AccountingOverviewService } from './accounting-overview.service';
+import { AccountingMovementsService } from './accounting-movements.service';
+import {
+  AccountingMovementFiltersDto,
+  ListAccountingMovementsQueryDto,
+} from './dto/accounting-movement-query.dto';
 import {
   AccountingTransferFiltersDto,
   ListAccountingExportBatchesQueryDto,
@@ -18,7 +25,44 @@ import {
 @Controller('accounting')
 @Roles(...ACCOUNTING_TRANSFER_READ_ROLES)
 export class AccountingController {
-  constructor(private readonly service: AccountingService) {}
+  constructor(
+    private readonly service: AccountingService,
+    private readonly overviewService: AccountingOverviewService,
+    private readonly movementsService: AccountingMovementsService,
+  ) {}
+
+  @Get('overview')
+  @Roles(...ACCOUNTING_WORKSPACE_ROLES)
+  overview() {
+    return this.overviewService.overview();
+  }
+
+  @Get('movements')
+  @Roles(...ACCOUNTING_WORKSPACE_ROLES)
+  movements(@Query() query: ListAccountingMovementsQueryDto) {
+    return this.movementsService.list(query);
+  }
+
+  @Get('movements/export.csv')
+  @Roles(...ACCOUNTING_WORKSPACE_ROLES)
+  async exportMovements(
+    @Query() query: AccountingMovementFiltersDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const exported = await this.movementsService.exportCsv(query);
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(Buffer.from(exported.csv, 'utf8'), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="${exported.filename}"`,
+    });
+  }
+
+  @Get('movements/:id')
+  @Roles(...ACCOUNTING_WORKSPACE_ROLES)
+  movementDetails(@Param('id') id: string) {
+    return this.movementsService.details(id);
+  }
 
   @Get('mvo-transfers')
   list(@Query() query: ListAccountingTransfersQueryDto) {

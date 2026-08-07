@@ -25,7 +25,10 @@ const DEFAULT_ROW_FILTERS: ImportRowFilters = {
   limit: 20,
 };
 
-export function useImportsController(initialImportId?: string) {
+export function useImportsController(
+  initialImportId?: string,
+  syncRoute = true,
+) {
   const { user } = useAuth();
   const router = useRouter();
   const canWriteImports = can(user, 'write', 'imports');
@@ -159,7 +162,7 @@ export function useImportsController(initialImportId?: string) {
   }
 
   async function openImport(batch: ImportBatch) {
-    router.push(`/imports/${batch.id}`);
+    if (syncRoute) router.push(`/imports/${batch.id}`);
     await loadImport(batch.id, DEFAULT_ROW_FILTERS);
   }
 

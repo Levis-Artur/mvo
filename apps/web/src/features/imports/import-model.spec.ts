@@ -13,7 +13,8 @@ const batch: ImportBatch = {
   validRows: 2, warningRows: 3, errorRows: 1, skippedRows: 3,
   importedRows: 0, createdAt: '2026-01-01T00:00:00.000Z', completedAt: null,
   preview: { validRows: 2, warningRows: 3, errorRows: 1, skippedRows: 3,
-    importedRows: 0, newItems: 2, matchedPersons: 1, missingPersons: 0 },
+    importedRows: 0, newItems: 2, updatedItems: 4,
+    matchedPersons: 1, missingPersons: 0 },
 };
 
 describe('import presentation model', () => {
@@ -28,7 +29,10 @@ describe('import presentation model', () => {
   });
 
   it('never presents SKIPPED as WARNING', () => {
-    expect(importRowStatusPresentation('SKIPPED')).toEqual({ label: 'SKIPPED', tone: 'neutral' });
+    expect(importRowStatusPresentation('VALID').label).toBe('Готово');
+    expect(importRowStatusPresentation('WARNING').label).toBe('Попередження');
+    expect(importRowStatusPresentation('ERROR').label).toBe('Помилка');
+    expect(importRowStatusPresentation('SKIPPED')).toEqual({ label: 'Пропущено', tone: 'neutral' });
     expect(importRowStatusPresentation('SKIPPED')).not.toEqual(importRowStatusPresentation('WARNING'));
   });
 

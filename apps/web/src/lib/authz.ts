@@ -21,6 +21,7 @@ export type PermissionResource =
   | 'profile'
   | 'ownStock'
   | 'stockDocuments'
+  | 'accounting'
   | 'accountingTransfers'
   | 'administration';
 
@@ -39,6 +40,7 @@ export type AppView =
   | 'my-stock'
   | 'my-transactions'
   | 'transfers'
+  | 'accounting'
   | 'accounting-transfers'
   | 'profile';
 
@@ -100,6 +102,7 @@ const permissions: Record<
     profile: ['read', 'write'],
     administration: ['read'],
     stockDocuments: ['read', 'write'],
+    accounting: ['read'],
     accountingTransfers: ['read'],
   },
   AUDITOR: {
@@ -123,6 +126,7 @@ const permissions: Record<
     transactions: ['read'],
     profile: ['read', 'write'],
     stockDocuments: ['read'],
+    accounting: ['read'],
     accountingTransfers: ['read'],
   },
   DPP_ADMIN: {
@@ -155,6 +159,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Імпорт', '/imports', 'imports', 'imports'),
     nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Бухгалтерія', '/accounting', 'accounting', 'accounting'),
     nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
     nav('Користувачі', '/admin/users', 'users', 'users'),
     nav('Адміністрування', '#', 'administration', 'administration', {
@@ -178,13 +183,7 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     }),
   ],
   ACCOUNTANT: [
-    nav('МВО', '/persons', 'persons', 'responsiblePersons'),
-    nav('Номенклатура', '/nomenclature', 'nomenclature', 'nomenclature'),
-    nav('Залишки', '/stock', 'stock', 'stock'),
-    nav('Імпорт', '/imports', 'imports', 'imports'),
-    nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
-    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
-    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
+    nav('Бухгалтерія', '/accounting', 'accounting', 'accounting'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
   DPP_ADMIN: [
@@ -321,6 +320,7 @@ const navigationLabels: Record<AppView, string> = {
   transactions: 'Журнал операцій', users: 'Користувачі', reports: 'Звіти',
   administration: 'Адміністрування', 'my-card': 'Моя картка', 'my-stock': 'Моє майно',
   'my-transactions': 'Мої операції', transfers: 'Передачі', profile: 'Профіль',
+  accounting: 'Бухгалтерія',
   'accounting-transfers': 'Передачі МВО для бухгалтерії',
 };
 

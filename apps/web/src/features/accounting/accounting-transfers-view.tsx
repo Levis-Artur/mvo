@@ -50,9 +50,10 @@ const EMPTY_FILTERS: FilterState = {
 };
 const EMPTY_PAGINATION: PaginationType = { page: 1, limit: 20, total: 0, totalPages: 0 };
 
-export function AccountingTransfersView({ initialTab = 'register', user }: {
+export function AccountingTransfersView({ initialTab = 'register', user, embedded = false }: {
   initialTab?: Tab;
   user: Pick<AuthUser, 'role'> | null;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -75,6 +76,15 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
   const [toast, setToast] = useState('');
 
   useEffect(() => setTab(initialTab), [initialTab]);
+
+  function selectTab(nextTab: Tab) {
+    setTab(nextTab);
+    if (!embedded) {
+      router.push(nextTab === 'register'
+        ? '/accounting/mvo-transfers'
+        : '/accounting/mvo-transfers/exports');
+    }
+  }
 
   const loadRegister = useCallback(async () => {
     setLoading(true);
@@ -164,8 +174,8 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
       title="Передачі МВО для бухгалтерії"
     />
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Бухгалтерські передачі">
-      <Button aria-selected={tab === 'register'} role="tab" variant={tab === 'register' ? 'primary' : 'outline'} type="button" onClick={() => { setTab('register'); router.push('/accounting/mvo-transfers'); }}>Реєстр передач</Button>
-      <Button aria-selected={tab === 'exports'} role="tab" variant={tab === 'exports' ? 'primary' : 'outline'} type="button" onClick={() => { setTab('exports'); router.push('/accounting/mvo-transfers/exports'); }}>Історія експортів</Button>
+      <Button aria-selected={tab === 'register'} role="tab" variant={tab === 'register' ? 'primary' : 'outline'} type="button" onClick={() => selectTab('register')}>Реєстр передач</Button>
+      <Button aria-selected={tab === 'exports'} role="tab" variant={tab === 'exports' ? 'primary' : 'outline'} type="button" onClick={() => selectTab('exports')}>Історія експортів</Button>
     </div>
     {referenceError ? <div className="ui-alert" data-tone="warning" role="status">{referenceError}</div> : null}
     {error ? <ErrorState message={error} /> : null}

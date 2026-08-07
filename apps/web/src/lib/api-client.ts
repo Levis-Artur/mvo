@@ -12,6 +12,10 @@ import type {
   AccountingTransferExportFilters,
   AccountingTransferFilters,
   AccountingTransferRow,
+  AccountingOverview,
+  AccountingMovementDetails,
+  AccountingMovementFilters,
+  AccountingMovementRow,
   DashboardStats,
   DeletionPreview,
   ImportBatch,
@@ -430,6 +434,22 @@ export const apiClient = {
       {},
       query,
     ),
+  accountingOverview: () =>
+    request<AccountingOverview>('/accounting/overview'),
+  accountingMovements: (
+    query: AccountingMovementFilters & { page?: number; limit?: number },
+  ) =>
+    request<PaginatedResponse<AccountingMovementRow>>(
+      '/accounting/movements',
+      {},
+      query,
+    ),
+  accountingMovementDetails: (id: string) =>
+    request<AccountingMovementDetails>(
+      `/accounting/movements/${encodeURIComponent(id)}`,
+    ),
+  exportAccountingMovements: (query: AccountingMovementFilters) =>
+    downloadRequest('/accounting/movements/export.csv', query),
   exportAccountingMvoTransfers: (query: AccountingTransferExportFilters) =>
     downloadRequest('/accounting/mvo-transfers/export.csv', query),
   accountingMvoTransferExportBatches: (query: { page?: number; limit?: number }) =>

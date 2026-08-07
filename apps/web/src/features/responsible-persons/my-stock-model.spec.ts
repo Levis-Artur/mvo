@@ -127,7 +127,7 @@ describe('my-stock frontend model', () => {
     );
     expect(css).toContain('.my-stock-table--direct { table-layout: auto; }');
     expect(css).toContain(
-      '.my-stock-table--direct .my-stock-table__code,',
+      '.my-stock-table--direct .my-stock-table__code { width: 1%; min-width: 12ch;',
     );
     expect(css).toContain(
       '.my-stock-table--direct td.my-stock-table__quantity { white-space: nowrap; }',

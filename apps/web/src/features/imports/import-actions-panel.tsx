@@ -18,7 +18,7 @@ export function ImportActionsPanel({ batch, canWrite, isOwner, canCommit, loadin
       <div className="flex flex-wrap gap-2">
         {canWrite ? <>
           <Button disabled={loading} variant="outline" type="button" onClick={onValidate}>Перевірити повторно</Button>
-          <Button disabled={!canCommit || loading} type="button" onClick={onCommit}>Провести</Button>
+          <Button disabled={!canCommit || loading} type="button" onClick={onCommit}>Провести імпорт</Button>
           <Button disabled={batch.status === 'COMPLETED' || loading} variant="outline" type="button" onClick={onCancel}>Скасувати</Button>
         </> : null}
         {isOwner && batch.status === 'COMPLETED' ? (

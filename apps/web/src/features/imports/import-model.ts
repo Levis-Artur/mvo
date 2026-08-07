@@ -12,11 +12,11 @@ const importStatuses: Record<ImportStatus, { label: string; tone: StatusTone }> 
 };
 
 const rowStatuses: Record<ImportRowStatus, { label: string; tone: StatusTone }> = {
-  VALID: { label: 'VALID', tone: 'success' },
-  WARNING: { label: 'WARNING', tone: 'warning' },
-  ERROR: { label: 'ERROR', tone: 'danger' },
-  SKIPPED: { label: 'SKIPPED', tone: 'neutral' },
-  IMPORTED: { label: 'IMPORTED', tone: 'info' },
+  VALID: { label: 'Готово', tone: 'success' },
+  WARNING: { label: 'Попередження', tone: 'warning' },
+  ERROR: { label: 'Помилка', tone: 'danger' },
+  SKIPPED: { label: 'Пропущено', tone: 'neutral' },
+  IMPORTED: { label: 'Проведено', tone: 'info' },
 };
 
 export const importStatusPresentation = (status: ImportStatus) => importStatuses[status];
@@ -33,6 +33,7 @@ export function importSummary(batch: ImportBatch) {
     skipped: batch.preview?.skippedRows ?? batch.skippedRows,
     imported: batch.preview?.importedRows ?? batch.importedRows,
     newItems: batch.preview?.newItems ?? 0,
+    updatedItems: batch.preview?.updatedItems ?? 0,
     operations: valid + warnings,
   };
 }

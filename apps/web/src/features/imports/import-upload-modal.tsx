@@ -21,7 +21,8 @@ export function ImportUploadModal({ onClose, onSaved }: {
     setSaving(true);
     setError('');
     try {
-      onSaved(await apiClient.uploadImport(file, importType));
+      const uploaded = await apiClient.uploadImport(file, importType);
+      onSaved(await apiClient.validateImport(uploaded.id));
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
@@ -32,8 +33,8 @@ export function ImportUploadModal({ onClose, onSaved }: {
   return (
     <Modal closeOnEscape={!saving} footer={<>
       <Button disabled={saving} variant="outline" type="button" onClick={onClose}>Скасувати</Button>
-      <Button disabled={saving || !file} form="import-upload-form" type="submit">{saving ? 'Завантаження…' : 'Завантажити'}</Button>
-    </>} onClose={onClose} title="Новий імпорт">
+      <Button disabled={saving || !file} form="import-upload-form" type="submit">{saving ? 'Аналізуємо файл…' : 'Завантажити й проаналізувати'}</Button>
+    </>} onClose={onClose} title="Новий бухгалтерський імпорт">
       <form className="grid gap-4" id="import-upload-form" onSubmit={submit}>
         {error ? <ErrorState message={error} /> : null}
         <FormField label="Режим" required>

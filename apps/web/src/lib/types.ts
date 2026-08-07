@@ -592,6 +592,120 @@ export type AccountingTransferRow = {
   quantity: string;
 };
 
+export type AccountingOverview = {
+  metrics: {
+    activeResponsiblePersons: number;
+    inventoryItems: number;
+    unexportedTransfers: number;
+    currentMonthTransactions: number;
+  };
+  lastImport: {
+    id: string;
+    originalFilename: string;
+    status: ImportStatus;
+    createdAt: string;
+    completedAt: string | null;
+  } | null;
+  recentOperations: {
+    id: string;
+    type: StockTransactionType;
+    quantity: string;
+    occurredAt: string;
+    sourceDocument: string | null;
+    comment: string | null;
+    document: { displayNumber: number } | null;
+    responsiblePerson: {
+      personnelNumber: string;
+      externalAccountingCode: string | null;
+      lastName: string;
+      firstName: string;
+      middleName: string | null;
+    };
+    inventoryItem: {
+      externalCode: string;
+      name: string;
+      unitOfMeasure: string | null;
+    };
+  }[];
+};
+
+export type AccountingMovementType =
+  | 'IMPORT'
+  | 'MVO_TRANSFER'
+  | 'ISSUE'
+  | 'CANCELLATION';
+
+export type AccountingMovementFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  operationType?: AccountingMovementType;
+  responsiblePersonId?: string;
+  mvoCode?: string;
+  inventoryCode?: string;
+  inventoryName?: string;
+  status?: 'POSTED' | 'CANCELLED' | 'COMPLETED';
+  search?: string;
+};
+
+export type AccountingMovementPerson = {
+  id: string;
+  personnelNumber: string;
+  externalAccountingCode: string | null;
+  fullName: string;
+};
+
+export type AccountingMovementRow = {
+  id: string;
+  occurredAt: string;
+  operationType: AccountingMovementType;
+  operationLabel: string;
+  documentLabel: string;
+  responsiblePerson: AccountingMovementPerson;
+  inventoryItem: Pick<
+    InventoryItem,
+    'id' | 'externalCode' | 'name' | 'unitOfMeasure'
+  >;
+  quantity: string;
+  direction: string;
+  status: StockDocumentStatus | ImportStatus;
+  statusLabel: string;
+};
+
+export type AccountingMovementDetails = {
+  kind: 'IMPORT' | 'STOCK_DOCUMENT';
+  sourceId: string;
+  operationType: AccountingMovementType;
+  documentLabel: string;
+  documentDate: string;
+  status: StockDocumentStatus | ImportStatus;
+  author: { id: string; username: string } | null;
+  responsiblePerson: AccountingMovementPerson;
+  counterparty: Pick<
+    AccountingMovementPerson,
+    'fullName' | 'externalAccountingCode'
+  > | null;
+  recipientUnit: string | null;
+  basis: string | null;
+  note: string | null;
+  lines: {
+    inventoryItem: Pick<
+      InventoryItem,
+      'id' | 'externalCode' | 'name' | 'unitOfMeasure'
+    >;
+    responsiblePerson: AccountingMovementPerson;
+    quantity: string;
+    note: string | null;
+  }[];
+  attachments: {
+    id: string;
+    documentId: string;
+    originalFileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    createdAt: string;
+  }[];
+};
+
 export type AccountingTransferExportBatch = {
   id: string;
   filename: string;
@@ -651,6 +765,7 @@ export type ImportBatch = {
   importedRows: number;
   createdAt: string;
   completedAt: string | null;
+  uploadedByUser?: Pick<AuthUser, 'id' | 'username'> | null;
   preview?: {
     validRows: number;
     warningRows: number;
@@ -658,6 +773,7 @@ export type ImportBatch = {
     skippedRows: number;
     importedRows: number;
     newItems: number;
+    updatedItems: number;
     matchedPersons: number;
     missingPersons: number;
   };
@@ -668,6 +784,7 @@ export type ImportRow = {
   rowNumber: number;
   status: ImportRowStatus;
   counterpartyRaw: string;
+  externalAccountingCode: string | null;
   nomenclatureCodeRaw: string;
   itemNameRaw: string;
   unitOfMeasureRaw: string | null;

@@ -35,12 +35,19 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
     setSaving(true);
     setError('');
     const selectedRole = resolveUserFormRole(mode, role);
+    const selectedResponsiblePersonId = requiresResponsiblePerson(selectedRole)
+      ? responsiblePersonId || null
+      : null;
     try {
       if (user) {
-        await usersService.updateUser(user.id, { username: username.trim(), role: selectedRole, responsiblePersonId: responsiblePersonId || null, mustChangePassword });
+        await usersService.updateUser(user.id, { username: username.trim(), role: selectedRole, responsiblePersonId: selectedResponsiblePersonId, mustChangePassword });
         onSaved();
       } else {
-        const response = await usersService.createUser({ username: username.trim(), role: selectedRole, responsiblePersonId: responsiblePersonId || undefined });
+        const response = await usersService.createUser({
+          username: username.trim(),
+          role: selectedRole,
+          responsiblePersonId: selectedResponsiblePersonId ?? undefined,
+        });
         onSaved(response.temporaryPassword);
       }
     } catch (reason) {
@@ -58,10 +65,14 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
         {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
         <FormField label="Логін" required><Input autoFocus minLength={3} value={username} onChange={(event) => setUsername(event.target.value)} /></FormField>
         <FormField label="Роль" required>
-          {ownerMode ? <Select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{roleLabels[option]}</option>)}</Select> : <Input readOnly value={roleLabels.MVO} />}
+          {ownerMode ? <Select value={role} onChange={(event) => {
+            const nextRole = event.target.value as UserRole;
+            setRole(nextRole);
+            if (!requiresResponsiblePerson(nextRole)) setResponsiblePersonId('');
+          }}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{roleLabels[option]}</option>)}</Select> : <Input readOnly value={roleLabels.MVO} />}
         </FormField>
         <FormField label="Пов’язаний МВО" required={requiresResponsiblePerson(role)}>
-          <Select value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>
+          <Select disabled={!requiresResponsiblePerson(role)} value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>
             <option value="">Без прив’язки</option>
             {persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
           </Select>

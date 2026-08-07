@@ -10,11 +10,15 @@ export function ImportRowsTable({ rows, loading }: { rows: ImportRow[]; loading:
     <DataTable
       ariaLabel="Рядки імпортованого файлу"
       columns={[
-        { label: '№', numeric: true }, { label: 'Контрагент' }, { label: 'МВО' },
-        { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
-        { label: 'Кількість', numeric: true }, { label: 'Поточний', numeric: true },
-        { label: 'Кінцевий у файлі', numeric: true }, { label: 'Розбіжність', numeric: true },
-        { label: 'Статус' }, { label: 'Повідомлення' },
+        { label: '№ рядка', numeric: true },
+        { label: 'Контрагент' },
+        { label: 'Код МВО' },
+        { label: 'МВО у системі' },
+        { label: 'Код номенклатури' },
+        { label: 'Назва' },
+        { label: 'Кількість', numeric: true },
+        { label: 'Статус' },
+        { label: 'Помилка' },
       ]}
       emptyMessage="Рядків за вказаними фільтрами не знайдено."
       loading={loading}
@@ -23,11 +27,13 @@ export function ImportRowsTable({ rows, loading }: { rows: ImportRow[]; loading:
       rows={rows.map((row) => [
         row.rowNumber,
         <span className="block max-w-56 break-words" key="counterparty">{row.counterpartyRaw}</span>,
-        row.responsiblePerson ? `${row.responsiblePerson.lastName} ${row.responsiblePerson.firstName}` : '—',
+        <span className="font-mono whitespace-nowrap" key="mvo-code">{row.externalAccountingCode ?? '—'}</span>,
+        row.responsiblePerson
+          ? [row.responsiblePerson.lastName, row.responsiblePerson.firstName, row.responsiblePerson.middleName].filter(Boolean).join(' ')
+          : '—',
         <span className="font-mono" key="code">{row.nomenclatureCodeRaw}</span>,
         <span className="block max-w-64 break-words" key="name">{row.itemNameRaw}</span>,
-        row.unitOfMeasureRaw ?? '—', quantity(row.parsedQuantity), quantity(row.systemBalance),
-        quantity(row.fileEndingBalance), quantity(row.balanceDifference),
+        quantity(row.parsedQuantity),
         <ImportRowStatusBadge key="status" status={row.status} />,
         row.message ? (
           <details className="max-w-64" key="message">

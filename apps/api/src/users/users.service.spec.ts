@@ -124,6 +124,55 @@ describe('UsersService', () => {
     );
   });
 
+  it('creates ACCOUNTANT without a ResponsiblePerson link', async () => {
+    const { service, prisma } = createService();
+    prisma.user.create.mockResolvedValue(user(UserRole.ACCOUNTANT));
+
+    await service.create(
+      owner,
+      {
+        username: 'accountant',
+        role: UserRole.ACCOUNTANT,
+        responsiblePersonId: 'person-id',
+      },
+      context,
+    );
+
+    expect(prisma.responsiblePerson.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: UserRole.ACCOUNTANT,
+          responsiblePersonId: null,
+        }),
+      }),
+    );
+  });
+
+  it('clears a ResponsiblePerson link when changing a user to ACCOUNTANT', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findFirst.mockResolvedValue(
+      user(UserRole.MVO, { responsiblePersonId: 'person-id' }),
+    );
+    prisma.user.update.mockResolvedValue(user(UserRole.ACCOUNTANT));
+
+    await service.update(
+      owner,
+      'mvo-id',
+      { role: UserRole.ACCOUNTANT },
+      context,
+    );
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: UserRole.ACCOUNTANT,
+          responsiblePersonId: null,
+        }),
+      }),
+    );
+  });
+
   it('allows OWNER to create MVO', async () => {
     const { service, prisma } = createService();
     prisma.responsiblePerson.findUnique.mockResolvedValue({
@@ -271,4 +320,3 @@ describe('UsersService', () => {
     );
   });
 });
-
