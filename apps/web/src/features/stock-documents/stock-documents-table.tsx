@@ -35,6 +35,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
       ]}
       emptyMessage="Передач і видач поки немає."
       loading={loading}
+      responsiveMode="cards-wide"
       tableClassName="stock-documents-table stock-documents-table--mvo"
       rows={documents.map((document) => {
         const actions = lifecycleActions(document, user);
@@ -61,6 +62,8 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
     ]}
     emptyMessage="Документи за вказаними фільтрами не знайдено."
     loading={loading}
+    responsiveMode="cards-wide"
+    scrollMode="horizontal"
     rows={documents.map((document) => {
       const direction = documentDirectionPresentation(document);
       const actions = lifecycleActions(document, user);

@@ -18,6 +18,8 @@ export function ImportRowsTable({ rows, loading }: { rows: ImportRow[]; loading:
       ]}
       emptyMessage="Рядків за вказаними фільтрами не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={rows.map((row) => [
         row.rowNumber,
         <span className="block max-w-56 break-words" key="counterparty">{row.counterpartyRaw}</span>,

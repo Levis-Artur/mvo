@@ -20,6 +20,8 @@ export function TransactionsTable({ transactions, loading, onOpen }: {
       ]}
       emptyMessage="Операцій за вказаними фільтрами не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={transactions.map((item) => [
         new Date(item.occurredAt).toLocaleString('uk-UA'),
         transactionTypeLabel(item.type),

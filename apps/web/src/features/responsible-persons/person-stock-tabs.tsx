@@ -121,6 +121,7 @@ export function PersonStockTab({
             ]}
             emptyMessage="Архівних записів старої моделі немає."
             loading={loading}
+            responsiveMode="cards"
             rows={rows}
           />
         </>
@@ -179,6 +180,7 @@ export function PersonOperationsTab({ personId }: { personId: string }) {
       ]}
       emptyMessage="Операцій не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
       rows={transactions.map((transaction) => [
         new Date(transaction.occurredAt).toLocaleDateString('uk-UA'),
         transactionTypeLabel(transaction.type),
@@ -226,6 +228,7 @@ export function PersonTransfersTab({ personId }: { personId: string }) {
       ]}
       emptyMessage="Передач і видач не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
       rows={documents.map((document) => [
         documentNumberLabel(document.displayNumber),
         new Date(document.documentDate).toLocaleDateString('uk-UA'),

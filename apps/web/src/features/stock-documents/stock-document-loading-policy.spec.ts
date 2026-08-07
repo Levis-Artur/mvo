@@ -160,14 +160,16 @@ describe('stock document lazy loading policy', () => {
 
     expect(css).toContain('.stock-documents-page { width: min(100%, 1440px); margin-inline: auto; }');
     expect(css).toContain('.stock-documents-page--mvo .filter-bar > .filter-bar__field:first-child { flex: 1 1 360px; }');
-    expect(css).toContain('.stock-documents-table--mvo { width: 100%; min-width: 1040px; table-layout: fixed; }');
+    expect(css).toContain('.stock-documents-table--mvo { width: 100%; table-layout: fixed; }');
+    expect(mvoTable).toContain('responsiveMode="cards-wide"');
     expect(css).toContain('.stock-documents-table__date { width: 116px; white-space: nowrap; }');
     expect(css).toContain('.stock-documents-table__document { width: 210px; white-space: nowrap; }');
     expect(css).toContain('.stock-documents-table__volume { width: 150px; white-space: nowrap;');
     expect(css).toContain('.stock-documents-table__status { width: 140px; white-space: nowrap; }');
     expect(css).toContain('.stock-documents-table__actions { width: 230px; white-space: nowrap; }');
     expect(css).toContain('.stock-document-actions--mvo { flex-wrap: nowrap; gap: var(--space-2); }');
-    expect(css).toContain('.data-table-scroll { max-width: 100%; max-height: 560px; overflow: auto; }');
+    expect(css).toContain(".data-table-scroll[data-scroll-mode='bounded']");
+    expect(css).not.toContain('.data-table-scroll { max-width: 100%; max-height:');
     expect(css).toContain('text-overflow: ellipsis; white-space: nowrap;');
   });
 

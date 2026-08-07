@@ -104,7 +104,7 @@ describe('stock source picker model', () => {
     expect(picker).not.toContain('Обліковий власник');
   });
 
-  it('renders loading, empty, API error, refresh and mobile overflow', () => {
+  it('renders loading, empty, API error, refresh and responsive cards', () => {
     const picker = readFileSync(join(__dirname, 'stock-source-picker-modal.tsx'), 'utf8');
     const controller = readFileSync(join(__dirname, 'use-stock-documents-controller.ts'), 'utf8');
     const css = readFileSync(join(__dirname, '../../styles/components.css'), 'utf8');
@@ -113,6 +113,10 @@ describe('stock source picker model', () => {
     expect(picker).toContain('Оновити список');
     expect(controller).toContain('await stockDocumentsService.availableToMe()');
     expect(controller).not.toContain('card.assignedToMe');
-    expect(css).toContain('.stock-source-picker-table { min-width: 620px; }');
+    expect(picker).toContain('responsiveMode="cards"');
+    expect(css).toContain(
+      '.stock-source-picker-table { width: 100%; table-layout: fixed; }',
+    );
+    expect(css).not.toContain('.stock-source-picker-table { min-width:');
   });
 });

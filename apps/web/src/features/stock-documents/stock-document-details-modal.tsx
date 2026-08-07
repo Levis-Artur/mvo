@@ -64,6 +64,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           { label: 'Код' }, { label: 'Номенклатура' }, { label: 'Джерело' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ]}
+        responsiveMode="cards-wide"
         rows={document.lines.map((line) => user.role === 'MVO' ? [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',

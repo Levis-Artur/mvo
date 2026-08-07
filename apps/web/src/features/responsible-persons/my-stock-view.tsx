@@ -276,6 +276,7 @@ export function MyStockView() {
             : myStockEmptyMessage(section)
         }
         loading={loading}
+        responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}
         rows={(data?.items ?? []).map((item) =>
           myStockRow(item, setSelectedInventoryItemId),
         )}

@@ -108,6 +108,7 @@ export function StockDocumentLines({
             }
             columns={columns}
             loading={loading}
+            responsiveMode="cards-wide"
             rowKeys={lines.map(documentLineSourceKey)}
             rows={lines.map((line, index) => {
               const current = findStockSourceForLine(sources, line);

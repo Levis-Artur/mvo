@@ -122,6 +122,7 @@ export function MyInventoryItemCard({
               ]}
               emptyMessage="Цю позицію ще не передавали іншим МВО."
               loading={loading}
+              responsiveMode="cards"
               rows={data.items.map((item) => {
                 const recipient = item.recipient
                   ? `${item.recipient.externalAccountingCode ?? 'Не вказано'} — ${item.recipient.fullName}`

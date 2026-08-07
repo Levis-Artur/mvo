@@ -198,6 +198,8 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
         ]}
         emptyMessage="Нових передач MVO_TRANSFER за вибраними фільтрами немає."
         loading={loading}
+        responsiveMode="cards-wide"
+        scrollMode="horizontal"
         rows={rows.map((row) => [
           formatDate(row.documentDate),
           documentNumberLabel(row.displayNumber),
@@ -222,6 +224,7 @@ export function AccountingTransfersView({ initialTab = 'register', user }: {
         columns={[{ label: 'Дата' }, { label: 'Файл' }, { label: 'Документів', numeric: true }, { label: 'Рядків', numeric: true }, { label: 'Користувач' }, { label: 'Дії', actions: true }]}
         emptyMessage="Пакети експорту ще не створювалися."
         loading={loading}
+        responsiveMode="cards-wide"
         rows={batches.map((batch) => [
           formatDateTime(batch.createdAt), batch.filename, batch.documentCount, batch.rowCount,
           batch.createdByUser.username,

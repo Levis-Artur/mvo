@@ -111,15 +111,19 @@ describe('stock document workspace modal', () => {
     );
   });
 
-  it('uses compact fixed-width position columns with internal overflow only', () => {
+  it('uses responsive position columns without a forced table width', () => {
     expect(lines).toContain("className: 'stock-document-lines__code'");
     expect(lines).toContain("className: 'stock-document-lines__quantity'");
     expect(lines).toContain("className: 'stock-document-lines__actions'");
     expect(componentsCss).toContain(
       '.stock-document-lines-table { width: 100%; table-layout: fixed; }',
     );
+    expect(lines).toContain('responsiveMode="cards-wide"');
+    expect(componentsCss).not.toContain(
+      '.stock-document-lines-table--issue { min-width:',
+    );
     expect(componentsCss).toContain(
-      '.stock-document-lines__quantity { width: 140px; }',
+      '.stock-document-lines__name { width: auto; min-width: 0; }',
     );
     expect(lines).toContain("...(!transfer");
     expect(lines).toContain('title={current?.inventoryItem.name}');

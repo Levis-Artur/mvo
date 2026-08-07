@@ -53,6 +53,8 @@ export function PersonsTable({
       ]}
       emptyMessage="МВО за вказаними фільтрами не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       tableClassName="persons-table"
       rowKeys={persons.map((person) => person.id)}
       rows={persons.map((person) => {

@@ -59,5 +59,5 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
     { label: 'Логін' }, { label: 'Роль' }, { label: 'Пов’язаний МВО', className: 'users-table__person' }, { label: 'Управління', className: 'users-table__management' },
     { label: 'Активність' }, { label: 'Тимчасовий пароль' }, { label: 'Невдалі входи', numeric: true },
     { label: 'Блокування' }, { label: 'Останній вхід' }, { label: 'Дії', actions: true, className: 'users-table__actions' },
-  ]} emptyMessage="Користувачів не знайдено." rowKeys={users.map((item) => item.id)} rows={rows} tableClassName="users-table" />;
+  ]} emptyMessage="Користувачів не знайдено." responsiveMode="cards-wide" rowKeys={users.map((item) => item.id)} rows={rows} scrollMode="horizontal" tableClassName="users-table" />;
 }

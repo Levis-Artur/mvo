@@ -39,6 +39,8 @@ export function InventoryTable({
       ]}
       emptyMessage="Номенклатуру за вказаними фільтрами не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={items.map((item) => {
         const statuses = inventoryItemStatuses(item);
         return [

@@ -21,6 +21,8 @@ export function ImportsTable({ imports, loading, onOpen }: {
       ]}
       emptyMessage="Імпорти ще не завантажувалися."
       loading={loading}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={imports.map((batch) => [
         <Button className="max-w-72 break-all" key="file" variant="link" type="button" onClick={() => onOpen(batch)}>{batch.originalFilename}</Button>,
         importTypeLabel(batch.type),

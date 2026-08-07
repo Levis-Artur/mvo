@@ -125,6 +125,7 @@ export function StockSourcePickerModal({
               : 'Доступного майна немає або всі позиції вже додано до документа.'
           }
           loading={loading}
+          responsiveMode="cards"
           rows={options.map((source) => {
             const key = stockSourceKey(source);
             return [

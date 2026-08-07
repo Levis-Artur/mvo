@@ -122,12 +122,14 @@ describe('my-stock frontend model', () => {
     expect(view).toContain("{ label: 'Номер', className: 'my-stock-table__document' }");
     expect(view).toContain("{ label: 'Кому передано', className: 'my-stock-table__person' }");
     expect(view).toContain('<StockDocumentStatusBadge');
-    expect(css).toContain(
-      '.my-stock-table--transferred { min-width: 900px; }',
+    expect(view).toContain(
+      "responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}",
     );
+    expect(css).not.toContain('.my-stock-table--transferred { min-width:');
     expect(css).not.toContain('.my-stock-table--assigned_to_me');
-    expect(css).toContain(
-      '.data-table-scroll { max-width: 100%; max-height: 560px; overflow: auto; }',
+    expect(css).toContain(".data-table-scroll[data-scroll-mode='bounded']");
+    expect(css).not.toContain(
+      '.data-table-scroll { max-width: 100%; max-height:',
     );
   });
 });

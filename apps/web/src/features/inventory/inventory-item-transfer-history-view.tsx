@@ -126,6 +126,7 @@ export function InventoryItemTransferHistoryView({
               ]}
               emptyMessage="Цю позицію ще не передавали між МВО."
               loading={loading}
+              responsiveMode="cards-wide"
               rows={data.items.map((item) => {
                 const sender = `${item.sender.fullName} — код МВО ${item.sender.externalAccountingCode ?? 'не вказано'}`;
                 const recipient = item.recipient

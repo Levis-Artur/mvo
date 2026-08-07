@@ -23,6 +23,7 @@ export function StockBalancesTable({
       ]}
       emptyMessage="Залишків за вказаними фільтрами не знайдено."
       loading={loading}
+      responsiveMode="cards-wide"
       rows={balances.map((balance) => {
         const quantity = formatQuantity(balance.quantity);
         return [

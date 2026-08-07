@@ -32,6 +32,7 @@ export function InventoryBalancesTable({
       ]}
       emptyMessage="Поточних залишків за цією позицією немає."
       loading={loading && !card}
+      responsiveMode="cards-wide"
       rows={(card?.currentBalances ?? []).map((balance) => [
         balance.responsiblePerson.externalAccountingCode ?? 'Не вказано',
         balance.responsiblePerson.fullName,
@@ -69,6 +70,8 @@ export function InventoryMovementsTable({
       ]}
       emptyMessage="Рухів за вибраними фільтрами не знайдено."
       loading={loading && !card}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={(card?.movements.items ?? []).map((movement) => [
         formatDateTime(movement.occurredAt),
         <StatusBadge key="type" tone={movementTone(movement.category)}>
@@ -120,6 +123,8 @@ export function InventoryDocumentsTable({
       ]}
       emptyMessage="Пов’язаних документів немає."
       loading={loading && !card}
+      responsiveMode="cards-wide"
+      scrollMode="horizontal"
       rows={(card?.documents.items ?? []).map((document) => [
         formatDateTime(document.occurredAt),
         document.title,
