@@ -136,6 +136,13 @@
 .my-stock-table__name-text { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .my-stock-table__unit { width: clamp(5rem, 9%, 6.5rem); white-space: nowrap; }
 .my-stock-table__quantity { width: clamp(7.5rem, 13%, 10rem); white-space: normal; font-variant-numeric: tabular-nums; }
+.my-stock-table--direct { table-layout: auto; }
+.my-stock-table--direct .my-stock-table__code,
+.my-stock-table--direct .my-stock-table__unit,
+.my-stock-table--direct .my-stock-table__quantity { width: 1%; }
+.my-stock-table--direct .my-stock-table__name { width: auto; min-width: 0; }
+.my-stock-table--direct th.my-stock-table__quantity { white-space: normal; }
+.my-stock-table--direct td.my-stock-table__quantity { white-space: nowrap; }
 .my-stock-table__person { width: 24%; overflow-wrap: anywhere; word-break: normal; }
 .my-stock-table__date { width: 7.5rem; white-space: nowrap; }
 .my-stock-table__document { width: 7rem; white-space: nowrap; }

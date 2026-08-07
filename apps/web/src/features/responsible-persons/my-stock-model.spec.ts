@@ -125,6 +125,13 @@ describe('my-stock frontend model', () => {
     expect(view).toContain(
       "responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}",
     );
+    expect(css).toContain('.my-stock-table--direct { table-layout: auto; }');
+    expect(css).toContain(
+      '.my-stock-table--direct .my-stock-table__code,',
+    );
+    expect(css).toContain(
+      '.my-stock-table--direct td.my-stock-table__quantity { white-space: nowrap; }',
+    );
     expect(css).not.toContain('.my-stock-table--transferred { min-width:');
     expect(css).not.toContain('.my-stock-table--assigned_to_me');
     expect(css).toContain(".data-table-scroll[data-scroll-mode='bounded']");
