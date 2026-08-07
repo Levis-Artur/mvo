@@ -89,7 +89,9 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const [validationError, setValidationError] = useState('');
   const recipientMode = documentRecipientMode(type);
   const transfer = type === 'MVO_TRANSFER';
+  const issue = type === 'ISSUE';
   const createAndPostTransfer = transfer && !document;
+  const createAndPostIssue = issue && !document;
 
   useEffect(() => {
     const uploaded = document?.attachments ?? [];
@@ -117,10 +119,13 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
       recipientName:
         recipientMode === 'EXTERNAL' ? recipientName.trim() : undefined,
       recipientUnit:
-        recipientMode === 'EXTERNAL'
+        recipientMode === 'EXTERNAL' && !createAndPostIssue
           ? recipientUnit.trim() || undefined
           : undefined,
-      basis: type === 'MVO_TRANSFER' ? undefined : basis.trim() || undefined,
+      basis:
+        type === 'MVO_TRANSFER' || createAndPostIssue
+          ? undefined
+          : basis.trim() || undefined,
       note: note.trim() || undefined,
       lines: lines.map((line) => ({
         inventoryItemId: line.inventoryItemId,
@@ -129,9 +134,17 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         note: line.note.trim() || undefined,
       })),
     };
-    const message = validateDocumentInput(input, availableSources);
+    const message = validateDocumentInput(input, availableSources, {
+      requireIssueBasis: !createAndPostIssue,
+    });
     if (message) {
       setValidationError(message);
+      return;
+    }
+    if (createAndPostIssue && !files.length) {
+      setValidationError(
+        'Для видачі додайте хоча б одне фото або скан накладної',
+      );
       return;
     }
     setValidationError('');
@@ -204,8 +217,9 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         title="Закрити форму без збереження?"
       >
         <p>
-          Ви внесли дані, але ще не зберегли чернетку. Закрити форму без
-          збереження?
+          {createAndPostTransfer || createAndPostIssue
+            ? 'Ви внесли дані, але ще не підтвердили операцію. Закрити форму без підтвердження?'
+            : 'Ви внесли дані, але ще не зберегли чернетку. Закрити форму без збереження?'}
         </p>
       </Modal>
     );
@@ -236,6 +250,10 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
               ? saving
                 ? 'Передаємо…'
                 : 'Підтвердити передачу'
+              : createAndPostIssue
+                ? saving
+                  ? 'Видаємо…'
+                  : 'Підтвердити видачу'
               : saving
                 ? files.length
                   ? 'Завантаження вкладень…'
@@ -326,18 +344,20 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                     }}
                   />
                 </FormField>
-                <FormField label="Підрозділ одержувача">
-                  <Input
-                    value={recipientUnit}
-                    onChange={(event) => {
-                      setRecipientUnit(event.target.value);
-                      setDirty(true);
-                    }}
-                  />
-                </FormField>
+                {!createAndPostIssue ? (
+                  <FormField label="Підрозділ одержувача">
+                    <Input
+                      value={recipientUnit}
+                      onChange={(event) => {
+                        setRecipientUnit(event.target.value);
+                        setDirty(true);
+                      }}
+                    />
+                  </FormField>
+                ) : null}
               </>
             )}
-            {!transfer ? (
+            {!transfer && !createAndPostIssue ? (
               <FormField label="Мета або підстава" required>
                 <Input
                   required
@@ -351,7 +371,11 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
             ) : null}
             <FormField label="Примітка">
               <Textarea
-                placeholder="За потреби вкажіть додаткову інформацію"
+                placeholder={
+                  createAndPostIssue
+                    ? 'За потреби вкажіть призначення або додаткову інформацію'
+                    : 'За потреби вкажіть додаткову інформацію'
+                }
                 value={note}
                 onChange={(event) => {
                   setNote(event.target.value);

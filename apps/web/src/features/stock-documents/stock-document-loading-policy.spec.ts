@@ -76,6 +76,40 @@ describe('stock document lazy loading policy', () => {
     expect(rules).toContain("document.type === 'ISSUE' || document.type === 'MVO_TRANSFER'");
   });
 
+  it('creates a new ISSUE through the atomic multipart endpoint without a draft success modal', () => {
+    const controller = readFileSync(
+      join(__dirname, 'use-stock-documents-controller.ts'),
+      'utf8',
+    );
+    const apiClient = readFileSync(
+      join(__dirname, '../../lib/api-client.ts'),
+      'utf8',
+    );
+    const branchStart = controller.indexOf(
+      "if (!editing && input.type === 'ISSUE')",
+    );
+    const branchEnd = controller.indexOf('\n      let result = editing', branchStart);
+    const createAndPostBranch = controller.slice(branchStart, branchEnd);
+
+    expect(createAndPostBranch).toContain('submitNewIssue');
+    expect(createAndPostBranch).toContain(
+      'stockDocumentsService.createAndPostIssue',
+    );
+    expect(createAndPostBranch).not.toContain('stockDocumentsService.create(');
+    expect(createAndPostBranch).not.toContain('uploadAttachment');
+    expect(createAndPostBranch).not.toContain("mode: 'draft'");
+    expect(createAndPostBranch).toContain('setFormType(null)');
+    expect(createAndPostBranch).toContain(
+      "setToast('Видачу проведено. Залишки оновлено.')",
+    );
+    expect(createAndPostBranch).toContain(
+      "new CustomEvent('mvo:refresh-stock')",
+    );
+    expect(apiClient).toContain("'/stock-documents/issue'");
+    expect(apiClient).toContain("formData.set('lines', JSON.stringify(body.lines))");
+    expect(apiClient).toContain("formData.append('files', file)");
+  });
+
   it('uses a compact MVO list without technical status labels', () => {
     const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
     const table = readFileSync(join(__dirname, 'stock-documents-table.tsx'), 'utf8');

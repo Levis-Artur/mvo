@@ -21,10 +21,12 @@ import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import {
+  type StoredAttachment,
   type StagedAttachmentFile,
   StockDocumentAttachmentStorageService,
 } from './stock-document-attachment-storage.service';
 import {
+  CreateIssueDto,
   CreateMvoTransferDto,
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
@@ -151,6 +153,11 @@ export class StockDocumentsService {
     if (dto.type === StockDocumentType.MVO_TRANSFER) {
       throw new BadRequestException(
         'Нову передачу потрібно одразу підтвердити та провести',
+      );
+    }
+    if (dto.type === StockDocumentType.ISSUE) {
+      throw new BadRequestException(
+        'Нову видачу потрібно одразу підтвердити та провести',
       );
     }
     const normalized = this.validateDto(dto, actor);
@@ -288,6 +295,138 @@ export class StockDocumentsService {
     }
 
     return this.findOne(documentId, actor);
+  }
+
+  async createAndPostIssue(
+    dto: CreateIssueDto,
+    files: Express.Multer.File[],
+    actor: CurrentUser,
+    context: AuditContext,
+  ) {
+    this.assertCanWrite(actor);
+    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
+      throw new ForbiddenException(
+        'Видачу може створити лише користувач із пов’язаною карткою МВО',
+      );
+    }
+    if (!files.length) {
+      throw new BadRequestException(
+        'Для видачі додайте хоча б одне фото або скан накладної',
+      );
+    }
+
+    const sourceResponsiblePersonId = actor.responsiblePersonId;
+    const documentId = randomUUID();
+    const normalized = this.validateDto(
+      {
+        ...dto,
+        type: StockDocumentType.ISSUE,
+        sourceResponsiblePersonId,
+      },
+      actor,
+      { requireIssueBasis: false },
+    );
+    const storedAttachments: StoredAttachment[] = [];
+
+    let postedDocument: Prisma.StockDocumentGetPayload<{
+      include: typeof documentInclude;
+    }>;
+    try {
+      for (const file of files) {
+        storedAttachments.push(await this.attachmentStorage.store(file));
+      }
+      await this.attachmentStorage.assertStoredFilesExist(
+        storedAttachments.map((attachment) => attachment.storagePath),
+      );
+
+      postedDocument = await this.prisma.$transaction(async (tx) => {
+        await this.assertActiveMvoSender(tx, sourceResponsiblePersonId);
+        const now = new Date();
+        const document = await tx.stockDocument.create({
+          data: {
+            id: documentId,
+            documentNumber: `MOV-${randomUUID().slice(0, 8).toUpperCase()}`,
+            documentDate: new Date(dto.documentDate),
+            type: StockDocumentType.ISSUE,
+            accountingModel: StockAccountingModel.DIRECT_BALANCE,
+            status: StockDocumentStatus.POSTED,
+            sourceResponsiblePersonId,
+            destinationResponsiblePersonId: null,
+            recipientName: normalized.recipientName,
+            recipientUnit: null,
+            basis: null,
+            note: dto.note?.trim() || null,
+            createdByUserId: actor.id,
+            postedByUserId: actor.id,
+            postedAt: now,
+            lines: { create: normalized.lines },
+            attachments: {
+              create: storedAttachments.map((attachment) => ({
+                ...attachment,
+                uploadedByUserId: actor.id,
+              })),
+            },
+          },
+          include: {
+            lines: true,
+            attachments: { select: { id: true, storagePath: true } },
+          },
+        });
+
+        for (const line of document.lines) {
+          await this.postLine(tx, document, line);
+        }
+        await this.auditInTx(
+          tx,
+          actor,
+          documentId,
+          'CREATE',
+          StockDocumentStatus.POSTED,
+          true,
+          context,
+        );
+        await this.auditInTx(
+          tx,
+          actor,
+          documentId,
+          'POST',
+          StockDocumentStatus.POSTED,
+          true,
+          context,
+        );
+        const persisted = await tx.stockDocument.findUnique({
+          where: { id: documentId },
+          include: documentInclude,
+        });
+        if (!persisted) {
+          throw new NotFoundException('Документ руху майна не знайдено');
+        }
+        return persisted;
+      });
+    } catch (error) {
+      let cleanupError: unknown;
+      for (const attachment of [...storedAttachments].reverse()) {
+        try {
+          await this.attachmentStorage.removeAfterMetadataFailure(
+            attachment.storagePath,
+          );
+        } catch (reason) {
+          cleanupError ??= reason;
+        }
+      }
+      await this.audit(
+        actor,
+        documentId,
+        'CREATE_AND_POST',
+        'FAILED',
+        false,
+        context,
+        error,
+      );
+      throw cleanupError ?? error;
+    }
+
+    return this.serialize(postedDocument);
   }
 
   async update(
@@ -822,7 +961,11 @@ export class StockDocumentsService {
     }
   }
 
-  private validateDto(dto: CreateStockDocumentDto, actor: CurrentUser) {
+  private validateDto(
+    dto: CreateStockDocumentDto,
+    actor: CurrentUser,
+    options: { requireIssueBasis?: boolean } = {},
+  ) {
     this.assertMvoOwnSource(actor, dto.sourceResponsiblePersonId);
     const isMvoTransfer = dto.type === StockDocumentType.MVO_TRANSFER;
 
@@ -859,7 +1002,7 @@ export class StockDocumentsService {
           'Для видачі обов’язково вкажіть одержувача',
         );
       }
-      if (!dto.basis?.trim()) {
+      if (options.requireIssueBasis !== false && !dto.basis?.trim()) {
         throw new BadRequestException(
           'Для видачі обов’язково вкажіть мету або підставу',
         );

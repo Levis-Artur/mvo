@@ -66,13 +66,14 @@ function rawDocument(
     displayNumber: 7,
     documentDate: new Date('2026-07-21T00:00:00.000Z'),
     type,
-    accountingModel: type === StockDocumentType.MVO_TRANSFER
+    accountingModel: type === StockDocumentType.MVO_TRANSFER || type === StockDocumentType.ISSUE
       ? StockAccountingModel.DIRECT_BALANCE
       : StockAccountingModel.OWNER_CUSTODY,
     accountingExportState: AccountingExportState.NOT_EXPORTED,
     status,
     sourceResponsiblePersonId: sourceId,
-    destinationResponsiblePersonId: destinationId,
+    destinationResponsiblePersonId:
+      type === StockDocumentType.ISSUE ? null : destinationId,
     recipientName: type === StockDocumentType.ISSUE ? 'Одержувач' : null,
     recipientUnit: null,
     basis: type === StockDocumentType.ISSUE ? 'Підстава' : null,
@@ -141,6 +142,49 @@ function atomicDto(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function issueDto(overrides: Record<string, unknown> = {}) {
+  return {
+    documentDate: '2026-07-21T00:00:00.000Z',
+    recipientName: 'Отримувач майна',
+    note: 'Видано для службового використання',
+    lines: [
+      {
+        inventoryItemId: itemId,
+        sourceBalanceId: balanceId,
+        quantity: '2',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function attachmentFile(name = 'invoice.pdf'): Express.Multer.File {
+  const buffer = Buffer.from('%PDF-1.7 invoice');
+  return {
+    fieldname: 'files',
+    originalname: name,
+    encoding: '7bit',
+    mimetype: 'application/pdf',
+    size: buffer.length,
+    buffer,
+    destination: '',
+    filename: '',
+    path: '',
+    stream: null as never,
+  };
+}
+
+function storedAttachment(index = 1) {
+  return {
+    originalFileName: `invoice-${index}.pdf`,
+    storedFileName: `stored-${index}.pdf`,
+    mimeType: 'application/pdf' as const,
+    sizeBytes: 128,
+    sha256: `sha-${index}`,
+    storagePath: `stored-${index}.pdf`,
+  };
+}
+
 function harness() {
   const tx = {
     stockDocument: {
@@ -155,6 +199,11 @@ function harness() {
       deleteMany: jest.fn(),
     },
     stockDocumentAttachment: { deleteMany: jest.fn() },
+    custodyBalance: {
+      create: jest.fn(),
+      update: jest.fn(),
+      upsert: jest.fn(),
+    },
     stockBalance: { findUnique: jest.fn() },
     responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true, externalAccountingCode: '0057' }) },
     securityEvent: { create: jest.fn() },
@@ -176,6 +225,8 @@ function harness() {
     createIncreasingTransactionInTx: jest.fn(),
   };
   const storage = {
+    store: jest.fn().mockResolvedValue(storedAttachment()),
+    removeAfterMetadataFailure: jest.fn().mockResolvedValue(undefined),
     assertStoredFilesExist: jest.fn(),
     stageForDeletion: jest.fn(),
     restoreStaged: jest.fn(),
@@ -186,6 +237,7 @@ function harness() {
     prisma,
     tx,
     stock,
+    storage,
   };
 }
 
@@ -225,6 +277,37 @@ function prepareAtomicTransfer(
   });
   h.prisma.stockDocument.findUnique.mockResolvedValue(
     viewDocument(StockDocumentStatus.POSTED),
+  );
+}
+
+function prepareAtomicIssue(
+  h: ReturnType<typeof harness>,
+  lines = [line()],
+) {
+  h.tx.stockDocument.create.mockResolvedValue({
+    ...rawDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.ISSUE,
+      lines,
+    ),
+    attachments: [{ id: 'attachment-id', storagePath: 'stored-1.pdf' }],
+  });
+  h.tx.stockBalance.findUnique.mockResolvedValue({
+    id: balanceId,
+    responsiblePersonId: sourceId,
+    inventoryItemId: itemId,
+  });
+  h.stock.createDecreasingTransactionInTx.mockResolvedValue({
+    id: 'issue-out',
+    balanceBefore: new Prisma.Decimal(10),
+    balanceAfter: new Prisma.Decimal(8),
+  });
+  h.tx.stockDocument.findUnique.mockResolvedValue(
+    viewDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.ISSUE,
+      lines,
+    ),
   );
 }
 
@@ -280,6 +363,9 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
       }),
     );
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.create).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.update).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.upsert).not.toHaveBeenCalled();
   });
 
   it('forbids transfer to the sender before creating a document', async () => {
@@ -678,5 +764,329 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
       sourceResponsiblePersonId: destinationId,
     });
     await expect(h.service.findOne(documentId, mvo)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('StockDocumentsService atomic ISSUE', () => {
+  it('rejects new ISSUE in the generic draft endpoint', async () => {
+    const h = harness();
+
+    await expect(
+      h.service.create(
+        dto({
+          type: StockDocumentType.ISSUE,
+          destinationResponsiblePersonId: undefined,
+          recipientName: 'Отримувач майна',
+          basis: 'Legacy basis',
+        }),
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('Нову видачу потрібно одразу підтвердити та провести');
+    expect(h.prisma.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it('requires at least one confirming attachment', async () => {
+    const h = harness();
+
+    await expect(
+      h.service.createAndPostIssue(issueDto(), [], mvo, {}),
+    ).rejects.toThrow('додайте хоча б одне фото або скан накладної');
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('requires recipient text and at least one line before storing files', async () => {
+    const h = harness();
+
+    await expect(
+      h.service.createAndPostIssue(
+        issueDto({ recipientName: '   ' }),
+        [attachmentFile()],
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('обов’язково вкажіть одержувача');
+    await expect(
+      h.service.createAndPostIssue(
+        issueDto({ lines: [] }),
+        [attachmentFile()],
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('щонайменше одну позицію');
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('atomically creates ISSUE as POSTED with attachment metadata and decreases only the sender', async () => {
+    const h = harness();
+    prepareAtomicIssue(h);
+
+    const result = await h.service.createAndPostIssue(
+      issueDto(),
+      [attachmentFile()],
+      mvo,
+      { requestId: 'atomic-issue' },
+    );
+
+    expect(result.status).toBe(StockDocumentStatus.POSTED);
+    expect(result.displayNumber).toBe(7);
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: StockDocumentType.ISSUE,
+          status: StockDocumentStatus.POSTED,
+          accountingModel: StockAccountingModel.DIRECT_BALANCE,
+          sourceResponsiblePersonId: sourceId,
+          destinationResponsiblePersonId: null,
+          recipientName: 'Отримувач майна',
+          recipientUnit: null,
+          basis: null,
+          postedByUserId: mvo.id,
+          postedAt: expect.any(Date),
+          attachments: {
+            create: [
+              expect.objectContaining({
+                storagePath: 'stored-1.pdf',
+                uploadedByUserId: mvo.id,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
+      h.tx,
+      expect.objectContaining({
+        type: StockTransactionType.ISSUE_OUT,
+        responsiblePersonId: sourceId,
+        quantity: new Prisma.Decimal(2),
+      }),
+    );
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.create).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.update).not.toHaveBeenCalled();
+    expect(h.tx.custodyBalance.upsert).not.toHaveBeenCalled();
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          requestId: 'atomic-issue',
+          success: true,
+        }),
+      }),
+    );
+  });
+
+  it('takes the ISSUE sender exclusively from auth context', async () => {
+    const h = harness();
+    prepareAtomicIssue(h);
+
+    await h.service.createAndPostIssue(
+      {
+        ...issueDto(),
+        sourceResponsiblePersonId: destinationId,
+      } as never,
+      [attachmentFile()],
+      mvo,
+      {},
+    );
+
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceResponsiblePersonId: sourceId,
+        }),
+      }),
+    );
+  });
+
+  it.each([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR])(
+    '%s cannot create an ISSUE without the current MVO auth context',
+    async (role) => {
+      const h = harness();
+
+      await expect(
+        h.service.createAndPostIssue(
+          issueDto(),
+          [attachmentFile()],
+          user(role, null),
+          {},
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(h.storage.store).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an inactive sender before creating the document', async () => {
+    const h = harness();
+    prepareAtomicIssue(h);
+    h.tx.responsiblePerson.findUnique.mockResolvedValueOnce({
+      id: sourceId,
+      isActive: false,
+    });
+
+    await expect(
+      h.service.createAndPostIssue(issueDto(), [attachmentFile()], mvo, {}),
+    ).rejects.toThrow('МВО-відправника');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
+      'stored-1.pdf',
+    );
+  });
+
+  it.each(['0', '-1', 'NaN', 'Infinity', '1.00001'])(
+    'rejects invalid ISSUE quantity %s before storing files',
+    async (quantity) => {
+      const h = harness();
+
+      await expect(
+        h.service.createAndPostIssue(
+          issueDto({
+            lines: [
+              {
+                inventoryItemId: itemId,
+                sourceBalanceId: balanceId,
+                quantity,
+              },
+            ],
+          }),
+          [attachmentFile()],
+          mvo,
+          {},
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(h.storage.store).not.toHaveBeenCalled();
+    },
+  );
+
+  it('cleans stored files and leaves no readable document when balance is insufficient', async () => {
+    const h = harness();
+    prepareAtomicIssue(h);
+    h.stock.createDecreasingTransactionInTx.mockRejectedValue(
+      new BadRequestException('Недостатній залишок'),
+    );
+
+    await expect(
+      h.service.createAndPostIssue(
+        issueDto(),
+        [attachmentFile()],
+        mvo,
+        { requestId: 'insufficient-issue' },
+      ),
+    ).rejects.toThrow('Недостатній залишок');
+    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
+      'stored-1.pdf',
+    );
+    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('rolls back every database effect and cleans attachments when a later line fails', async () => {
+    const h = harness();
+    const secondLine = line({
+      id: '88888888-8888-4888-8888-888888888888',
+      inventoryItemId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      sourceBalanceId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+    prepareAtomicIssue(h, [line(), secondLine]);
+    h.tx.stockBalance.findUnique
+      .mockResolvedValueOnce({
+        id: balanceId,
+        responsiblePersonId: sourceId,
+        inventoryItemId: itemId,
+      })
+      .mockResolvedValueOnce({
+        id: secondLine.sourceBalanceId,
+        responsiblePersonId: sourceId,
+        inventoryItemId: secondLine.inventoryItemId,
+      });
+    h.stock.createDecreasingTransactionInTx
+      .mockResolvedValueOnce({
+        id: 'first-issue-out',
+        balanceBefore: new Prisma.Decimal(10),
+        balanceAfter: new Prisma.Decimal(8),
+      })
+      .mockRejectedValueOnce(new Error('second issue line failed'));
+
+    await expect(
+      h.service.createAndPostIssue(
+        issueDto({
+          lines: [
+            {
+              inventoryItemId: itemId,
+              sourceBalanceId: balanceId,
+              quantity: '2',
+            },
+            {
+              inventoryItemId: secondLine.inventoryItemId,
+              sourceBalanceId: secondLine.sourceBalanceId,
+              quantity: '1',
+            },
+          ],
+        }),
+        [attachmentFile()],
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('second issue line failed');
+    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledTimes(2);
+    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
+      'stored-1.pdf',
+    );
+    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('cleans previously stored attachments when a later file is rejected', async () => {
+    const h = harness();
+    h.storage.store
+      .mockResolvedValueOnce(storedAttachment(1))
+      .mockRejectedValueOnce(new BadRequestException('Непідтримуваний MIME'));
+
+    await expect(
+      h.service.createAndPostIssue(
+        issueDto(),
+        [attachmentFile('first.pdf'), attachmentFile('second.pdf')],
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('Непідтримуваний MIME');
+    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
+      'stored-1.pdf',
+    );
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('allows only one of two concurrent overdraw attempts to complete', async () => {
+    const h = harness();
+    prepareAtomicIssue(h);
+    h.stock.createDecreasingTransactionInTx
+      .mockResolvedValueOnce({
+        id: 'first-issue-out',
+        balanceBefore: new Prisma.Decimal(10),
+        balanceAfter: new Prisma.Decimal(3),
+      })
+      .mockRejectedValueOnce(
+        new BadRequestException('Недостатній залишок для проведення документа'),
+      );
+
+    const results = await Promise.allSettled([
+      h.service.createAndPostIssue(
+        issueDto({ lines: [{ inventoryItemId: itemId, sourceBalanceId: balanceId, quantity: '7' }] }),
+        [attachmentFile('first.pdf')],
+        mvo,
+        {},
+      ),
+      h.service.createAndPostIssue(
+        issueDto({ lines: [{ inventoryItemId: itemId, sourceBalanceId: balanceId, quantity: '7' }] }),
+        [attachmentFile('second.pdf')],
+        mvo,
+        {},
+      ),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 });

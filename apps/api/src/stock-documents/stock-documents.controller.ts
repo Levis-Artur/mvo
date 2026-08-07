@@ -11,9 +11,10 @@ import {
   Res,
   StreamableFile,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
@@ -28,6 +29,7 @@ import { getRequestContext } from '../auth/request-context';
 import { attachmentFileSizeLimitBytes } from '../config/env';
 import {
   CreateMvoTransferDto,
+  CreateIssueDto,
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
@@ -66,6 +68,28 @@ export class StockDocumentsController {
   ) {
     return this.service.createAndPostMvoTransfer(
       dto,
+      actor,
+      getRequestContext(request),
+    );
+  }
+
+  @Post('issue')
+  @Roles(UserRole.MVO)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: { fileSize: attachmentFileSizeLimitBytes() },
+    }),
+  )
+  createAndPostIssue(
+    @Body() dto: CreateIssueDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.service.createAndPostIssue(
+      dto,
+      files ?? [],
       actor,
       getRequestContext(request),
     );

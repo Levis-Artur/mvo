@@ -18,6 +18,7 @@ import { stockDocumentsService } from './stock-documents.service';
 import { shouldLoadGlobalResponsiblePersons } from './stock-document-loading-policy';
 import { successfulDocumentActionMessage } from './stock-document-rules';
 import { loadTransferTargets } from './transfer-targets';
+import { submitNewIssue } from './issue-submit';
 import { submitNewMvoTransfer } from './mvo-transfer-submit';
 
 export type DocumentFilters = {
@@ -191,6 +192,23 @@ export function useStockDocumentsController(user: AuthUser) {
         setSelected(null);
         setSuccess(null);
         setToast('Передачу проведено. Залишки оновлено.');
+        await load();
+        window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
+        return;
+      }
+      if (!editing && input.type === 'ISSUE') {
+        await submitNewIssue(
+          input,
+          files,
+          stockDocumentsService.createAndPostIssue,
+        );
+        setFormType(null);
+        setSelected(null);
+        setSuccess(null);
+        setToast('Видачу проведено. Залишки оновлено.');
         await load();
         window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
         window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));

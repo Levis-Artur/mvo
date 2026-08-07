@@ -32,7 +32,7 @@ export function StockDocumentAttachments({
   }), [previews]);
 
   return (
-    <Card title="Фото або PDF видаткової накладної">
+    <Card title="Підтверджуючий документ">
       <div className="grid gap-3">
         <FormField
           label="Додати файл"
@@ -52,7 +52,7 @@ export function StockDocumentAttachments({
         </FormField>
 
         {!attachments.length && !files.length ? (
-          <EmptyState message="До чернетки ще не додано накладну. Без вкладення провести видачу неможливо." />
+          <EmptyState message="Додайте фото або PDF накладної. Без вкладення підтвердити видачу неможливо." />
         ) : null}
 
         {attachments.map((attachment) => (

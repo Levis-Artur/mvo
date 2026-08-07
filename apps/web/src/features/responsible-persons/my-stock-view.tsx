@@ -331,7 +331,7 @@ function myStockColumns(section: MyPropertySection): DataTableColumn[] {
     { label: 'Назва', className: 'my-stock-table__name' },
     { label: 'Одиниця', className: 'my-stock-table__unit' },
     {
-      label: 'Кількість',
+      label: 'Кількість на складі',
       className: 'my-stock-table__quantity',
       numeric: true,
     },

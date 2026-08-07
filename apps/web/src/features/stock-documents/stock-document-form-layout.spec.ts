@@ -40,14 +40,12 @@ describe('stock document workspace modal', () => {
     expect(form).not.toContain('label="Пошук МВО"');
     expect(form).toContain("{user.role !== 'MVO' ? (");
     expect(form).toContain('<FormField label="МВО-відправник" required>');
-    expect(form).toContain(
-      "basis: type === 'MVO_TRANSFER' ? undefined : basis.trim() || undefined",
-    );
-    expect(form).toContain('{!transfer ? (');
+    expect(form).toContain("type === 'MVO_TRANSFER' || createAndPostIssue");
+    expect(form).toContain('{!transfer && !createAndPostIssue ? (');
     expect(form).toContain('<FormField label="Мета або підстава" required>');
     expect(form).toContain('<FormField label="Примітка">');
     expect(form).toContain(
-      'placeholder="За потреби вкажіть додаткову інформацію"',
+      "? 'За потреби вкажіть призначення або додаткову інформацію'",
     );
   });
 
@@ -87,7 +85,7 @@ describe('stock document workspace modal', () => {
     );
   });
 
-  it('uses create-and-post for a new transfer and keeps draft submission for ISSUE', () => {
+  it('uses create-and-post actions for new transfers and issues', () => {
     expect(form).toContain('form="stock-document-form"');
     expect(form).toContain(
       "const createAndPostTransfer = transfer && !document;",
@@ -95,10 +93,18 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('{createAndPostTransfer');
     expect(form).toContain('Підтвердити передачу');
     expect(form).toContain('Передаємо…');
+    expect(form).toContain("const createAndPostIssue = issue && !document;");
+    expect(form).toContain('Підтвердити видачу');
+    expect(form).toContain('Видаємо…');
+    expect(form).toContain(
+      "requireIssueBasis: !createAndPostIssue",
+    );
+    expect(form).toContain(
+      'Для видачі додайте хоча б одне фото або скан накладної',
+    );
     expect(form).toContain(
       'disabled={saving || loadingSources || loadingTargets}',
     );
-    expect(form).toContain('Зберегти чернетку');
     expect(form).toContain('onClick={requestClose}');
     expect(componentsCss).toContain(
       '.ui-modal__footer { position: sticky; bottom: 0;',
@@ -126,5 +132,9 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('<StockDocumentLines');
     expect(form).toContain("{type === 'ISSUE' ? (");
     expect(form).toContain('<StockDocumentAttachments');
+    expect(lines).toContain("transfer ? 'Доступно' : 'Кількість на складі'");
+    expect(lines).toContain(
+      "transfer ? 'Кількість' : 'Кількість до видачі'",
+    );
   });
 });

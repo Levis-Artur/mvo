@@ -1,5 +1,6 @@
 import type {
   CreateManagementDto,
+  CreateIssueInput,
   CreateMvoTransferInput,
   CreateInventoryItemDto,
   CreateResponsiblePersonDto,
@@ -448,6 +449,15 @@ export const apiClient = {
       '/stock-documents/mvo-transfer',
       mutation('POST', body),
     ),
+  createAndPostIssue: (body: CreateIssueInput, files: File[]) => {
+    const formData = new FormData();
+    formData.set('documentDate', body.documentDate);
+    formData.set('recipientName', body.recipientName);
+    if (body.note) formData.set('note', body.note);
+    formData.set('lines', JSON.stringify(body.lines));
+    for (const file of files) formData.append('files', file);
+    return uploadRequest<StockDocument>('/stock-documents/issue', formData);
+  },
   updateStockDocument: (id: string, body: StockDocumentInput) =>
     request<StockDocument>(`/stock-documents/${id}`, mutation('PATCH', body)),
   deleteStockDocument: (id: string) =>

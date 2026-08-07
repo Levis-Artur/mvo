@@ -69,7 +69,11 @@ export function documentLineError(
   return '';
 }
 
-export function validateDocumentInput(input: StockDocumentInput, sources: AvailableStockSource[]) {
+export function validateDocumentInput(
+  input: StockDocumentInput,
+  sources: AvailableStockSource[],
+  options: { requireIssueBasis?: boolean } = {},
+) {
   if (!input.sourceResponsiblePersonId) return 'Виберіть МВО-відправника';
   if (input.type === 'TRANSFER' || input.type === 'ASSIGNMENT') {
     return 'Старі типи передач доступні лише для перегляду';
@@ -84,7 +88,11 @@ export function validateDocumentInput(input: StockDocumentInput, sources: Availa
     return 'Відправник і одержувач не можуть бути одним МВО';
   }
   if (input.type === 'ISSUE' && !input.recipientName?.trim()) return 'Вкажіть одержувача';
-  if (input.type === 'ISSUE' && !input.basis?.trim()) return 'Вкажіть мету або підставу видачі';
+  if (
+    input.type === 'ISSUE' &&
+    options.requireIssueBasis !== false &&
+    !input.basis?.trim()
+  ) return 'Вкажіть мету або підставу видачі';
   if (!input.lines.length) return 'Додайте хоча б одну позицію';
   const sourceKeys = new Set<string>();
   for (const line of input.lines) {

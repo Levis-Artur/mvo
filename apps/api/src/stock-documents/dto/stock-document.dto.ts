@@ -2,7 +2,7 @@ import {
   StockDocumentStatus,
   StockDocumentType,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
@@ -91,6 +91,39 @@ export class CreateMvoTransferDto {
   @MaxLength(1000)
   note?: string;
 
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => StockDocumentLineDto)
+  lines!: StockDocumentLineDto[];
+}
+
+export class CreateIssueDto {
+  @IsDateString()
+  documentDate!: string;
+
+  @IsString()
+  @MaxLength(255)
+  recipientName!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
+
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.map((line) =>
+            Object.assign(new StockDocumentLineDto(), line),
+          )
+        : parsed;
+    } catch {
+      return value;
+    }
+  })
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

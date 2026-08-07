@@ -52,12 +52,12 @@ export function StockDocumentLines({
     { label: 'Код', className: 'stock-document-lines__code' },
     { label: 'Назва', className: 'stock-document-lines__name' },
     {
-      label: 'Доступно',
+      label: transfer ? 'Доступно' : 'Кількість на складі',
       numeric: true,
       className: 'stock-document-lines__available',
     },
     {
-      label: 'Кількість',
+      label: transfer ? 'Кількість' : 'Кількість до видачі',
       numeric: true,
       className: 'stock-document-lines__quantity',
     },

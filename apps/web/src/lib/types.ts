@@ -313,6 +313,13 @@ export type CreateMvoTransferInput = {
   lines: StockDocumentInput['lines'];
 };
 
+export type CreateIssueInput = {
+  documentDate: string;
+  recipientName: string;
+  note?: string;
+  lines: StockDocumentInput['lines'];
+};
+
 export type AvailableStockSource = {
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
   balanceId: string;

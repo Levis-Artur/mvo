@@ -41,7 +41,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
         {writable && user.role === 'MVO' ? <Button type="button" onClick={() => controller.openCreate('MVO_TRANSFER')}>Нова передача</Button> : null}
-        {writable ? <Button type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button> : null}
+        {writable && user.role === 'MVO' ? <Button type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button> : null}
         {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}
       description="Історія передач майна між МВО та оформлення видач зовнішнім одержувачам."
