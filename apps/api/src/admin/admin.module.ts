@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { StockDocumentsModule } from '../stock-documents/stock-documents.module';
 import { AdminController } from './admin.controller';
+import { BusinessDataResetService } from './business-data-reset.service';
 import { OwnerDestructiveActionsService } from './owner-destructive-actions.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, StockDocumentsModule],
   controllers: [AdminController],
-  providers: [OwnerDestructiveActionsService],
+  providers: [BusinessDataResetService, OwnerDestructiveActionsService],
   exports: [OwnerDestructiveActionsService],
 })
 export class AdminModule {}

@@ -6,6 +6,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "db:reset-business-data": "node dist/admin/business-data-reset.cli.js",
     "test": "jest"
   },
   "dependencies": {

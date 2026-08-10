@@ -13,5 +13,6 @@ import { StockDocumentAttachmentsService } from './stock-document-attachments.se
     StockDocumentAttachmentStorageService,
     StockDocumentAttachmentsService,
   ],
+  exports: [StockDocumentAttachmentStorageService],
 })
 export class StockDocumentsModule {}

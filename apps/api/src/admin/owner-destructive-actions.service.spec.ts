@@ -57,11 +57,16 @@ function createService() {
       callback(tx),
     ),
   };
+  const businessDataReset = { run: jest.fn().mockResolvedValue({}) };
 
   return {
-    service: new OwnerDestructiveActionsService(prisma as never),
+    service: new OwnerDestructiveActionsService(
+      prisma as never,
+      businessDataReset as never,
+    ),
     prisma,
     tx,
+    businessDataReset,
   };
 }
 
@@ -72,6 +77,7 @@ describe('OwnerDestructiveActionsService', () => {
 
   afterEach(() => {
     delete process.env.OWNER_DESTRUCTIVE_ACTIONS_ENABLED;
+    delete process.env.ALLOW_BUSINESS_DATA_RESET;
   });
 
   it.each([UserRole.MVO, UserRole.DPP_ADMIN, UserRole.AUDITOR])(
@@ -189,6 +195,30 @@ describe('OwnerDestructiveActionsService', () => {
           success: true,
           requestId: 'request-2',
         }),
+      }),
+    );
+  });
+
+  it('refuses the API reset without the separate business reset flag', async () => {
+    const { service, businessDataReset } = createService();
+
+    await expect(service.resetTestData(owner, {})).rejects.toThrow(
+      'REFUSED: set ALLOW_BUSINESS_DATA_RESET=YES',
+    );
+    expect(businessDataReset.run).not.toHaveBeenCalled();
+  });
+
+  it('delegates the API reset to the preserving business-data reset service', async () => {
+    process.env.ALLOW_BUSINESS_DATA_RESET = 'YES';
+    const { service, businessDataReset } = createService();
+
+    await expect(service.resetTestData(owner, {})).resolves.toEqual({
+      reset: true,
+    });
+    expect(businessDataReset.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedFlag: 'YES',
+        onBeforeCommit: expect.any(Function),
       }),
     );
   });

@@ -13,6 +13,11 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentUser } from '../auth/auth.types';
+import {
+  BUSINESS_DATA_RESET_REFUSAL,
+  BusinessDataResetService,
+  isBusinessDataResetAllowed,
+} from './business-data-reset.service';
 
 export type AdminEntityType =
   | 'imports'
@@ -46,7 +51,10 @@ export type DeletionPreview = {
 
 @Injectable()
 export class OwnerDestructiveActionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly businessDataReset: BusinessDataResetService,
+  ) {}
 
   async deletionPreview(
     actor: CurrentUser,
@@ -211,26 +219,21 @@ export class OwnerDestructiveActionsService {
     context: RequestAuditContext,
   ): Promise<{ reset: true }> {
     this.assertEnabledOwner(actor);
-    return this.prisma.$transaction(async (tx) => {
-      await tx.stockTransaction.deleteMany({});
-      await tx.stockBalance.deleteMany({});
-      await tx.importRow.deleteMany({});
-      await tx.importBatch.deleteMany({});
-      await tx.userSession.deleteMany({ where: { userId: { not: actor.id } } });
-      await tx.user.deleteMany({ where: { id: { not: actor.id } } });
-      await tx.responsiblePerson.deleteMany({});
-      await tx.inventoryItem.deleteMany({});
-      await tx.unit.deleteMany({});
-      await tx.service.deleteMany({});
-      await tx.management.deleteMany({});
-      await this.audit(tx, actor, 'users', actor.id, actor.username, {
-        action: 'TEST_DATA_RESET',
-        deletedDependencies: 0,
-        success: true,
-        ...context,
-      });
-      return { reset: true as const };
+    if (!isBusinessDataResetAllowed(process.env.ALLOW_BUSINESS_DATA_RESET)) {
+      throw new ForbiddenException(BUSINESS_DATA_RESET_REFUSAL);
+    }
+    await this.businessDataReset.run({
+      allowedFlag: process.env.ALLOW_BUSINESS_DATA_RESET,
+      onBeforeCommit: async (tx) => {
+        await this.audit(tx, actor, 'inventory-items', 'ALL', 'Business data', {
+          action: 'TEST_DATA_RESET',
+          deletedDependencies: 0,
+          success: true,
+          ...context,
+        });
+      },
     });
+    return { reset: true as const };
   }
 
   private assertEnabledOwner(actor: CurrentUser | undefined): void {
