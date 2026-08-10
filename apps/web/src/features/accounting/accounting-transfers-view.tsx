@@ -20,6 +20,7 @@ import type {
   AccountingTransferExportBatch,
   AccountingTransferFilters,
   AccountingTransferRow,
+  AccountingMovementDetails,
   AuthUser,
   InventoryItem,
   Pagination as PaginationType,
@@ -29,6 +30,7 @@ import { downloadFileInBrowser } from '@/features/responsible-persons/my-stock-m
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import { documentNumberLabel } from '@/features/stock-documents/stock-document-rules';
 import { accountingTransfersService } from './accounting-transfers.service';
+import { AccountingMovementDetailsModal } from './accounting-movement-details-modal';
 
 type Tab = 'register' | 'exports';
 type FilterState = Required<Pick<AccountingTransferFilters,
@@ -74,6 +76,8 @@ export function AccountingTransfersView({ initialTab = 'register', user, embedde
   const [error, setError] = useState('');
   const [referenceError, setReferenceError] = useState('');
   const [toast, setToast] = useState('');
+  const [selected, setSelected] = useState<AccountingMovementDetails | null>(null);
+  const [detailsLoadingId, setDetailsLoadingId] = useState('');
 
   useEffect(() => setTab(initialTab), [initialTab]);
 
@@ -166,6 +170,18 @@ export function AccountingTransfersView({ initialTab = 'register', user, embedde
     }
   }
 
+  async function openDocument(id: string) {
+    setDetailsLoadingId(id);
+    setError('');
+    try {
+      setSelected(await accountingTransfersService.documentDetails(id));
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setDetailsLoadingId('');
+    }
+  }
+
   return <section className="grid min-w-0 gap-4">
     <PageHeader
       action={tab === 'register' && user && user.role !== 'AUDITOR' ? <Button disabled={exporting} type="button" onClick={() => void exportCsv()}>{exporting ? 'Формування…' : 'Експортувати CSV'}</Button> : undefined}
@@ -201,29 +217,31 @@ export function AccountingTransfersView({ initialTab = 'register', user, embedde
       <DataTable
         ariaLabel="Передачі МВО для бухгалтерії"
         columns={[
-          { label: 'Дата' }, { label: 'Номер документа' }, { label: 'МВО-відправник' },
-          { label: 'МВО-одержувач' }, { label: 'Код' }, { label: 'Назва' },
-          { label: 'Одиниця' }, { label: 'Кількість', numeric: true },
-          { label: 'Статус' }, { label: 'Дата проведення' },
+          { label: 'Документ' }, { label: 'Дата' },
+          { label: 'МВО A' }, { label: 'Код МВО A' },
+          { label: 'МВО B' }, { label: 'Код МВО B' },
+          { label: 'Позицій', numeric: true }, { label: 'Загальна кількість', numeric: true },
+          { label: 'Оформлено видач', numeric: true }, { label: 'Залишилось оформити', numeric: true },
+          { label: 'Статус' }, { label: 'Експорт' }, { label: 'Дія', actions: true },
         ]}
         emptyMessage="Нових передач MVO_TRANSFER за вибраними фільтрами немає."
         loading={loading}
         responsiveMode="cards-wide"
         scrollMode="horizontal"
         rows={rows.map((row) => [
-          formatDate(row.documentDate),
           documentNumberLabel(row.displayNumber),
-          `${row.sourceResponsiblePerson.externalAccountingCode ?? 'Не вказано'} — ${row.sourceResponsiblePerson.fullName}`,
-          row.destinationResponsiblePerson ? `${row.destinationResponsiblePerson.externalAccountingCode ?? 'Не вказано'} — ${row.destinationResponsiblePerson.fullName}` : '—',
-          row.inventoryItem.externalCode,
-          row.inventoryItem.name,
-          row.inventoryItem.unitOfMeasure ?? '—',
-          formatQuantity(row.quantity),
-          <div className="flex flex-wrap gap-1" key="status">
-            <StatusBadge tone={statusTone(row.status)}>{statusLabel(row.status)}</StatusBadge>
-            {row.exportState === 'EXPORTED' ? <StatusBadge tone="info">Передано бухгалтерії</StatusBadge> : null}
-          </div>,
-          row.postedAt ? formatDateTime(row.postedAt) : '—',
+          formatDate(row.documentDate),
+          row.sourceResponsiblePerson.fullName,
+          row.sourceResponsiblePerson.externalAccountingCode ?? 'Не вказано',
+          row.destinationResponsiblePerson?.fullName ?? '—',
+          row.destinationResponsiblePerson?.externalAccountingCode ?? '—',
+          row.totalPositions,
+          formatQuantity(row.totalQuantity),
+          formatQuantity(row.issuedQuantity),
+          formatQuantity(row.availableToIssue),
+          <StatusBadge key="status" tone={statusTone(row.status)}>{statusLabel(row.status)}</StatusBadge>,
+          row.exportState === 'EXPORTED' ? <StatusBadge key="export" tone="info">Передано бухгалтерії</StatusBadge> : <StatusBadge key="export" tone="neutral">Не експортовано</StatusBadge>,
+          <Button disabled={detailsLoadingId === row.documentId} key="view" size="compact" type="button" variant="outline" onClick={() => void openDocument(row.documentId)}>{detailsLoadingId === row.documentId ? 'Відкриття…' : 'Переглянути'}</Button>,
         ])}
         tableClassName="accounting-transfers-table"
       />
@@ -244,6 +262,7 @@ export function AccountingTransfersView({ initialTab = 'register', user, embedde
       <Pagination limit={batchPagination.limit} page={batchPagination.page} total={batchPagination.total} totalPages={batchPagination.totalPages} onLimitChange={(next) => { setBatchLimit(Math.min(next, 100)); setBatchPage(1); }} onPage={setBatchPage} />
     </>}
     {toast ? <Toast message={toast} onClose={() => setToast('')} /> : null}
+    {selected ? <AccountingMovementDetailsModal details={selected} openingDocumentId={detailsLoadingId} onOpenDocument={(id) => void openDocument(id)} onClose={() => setSelected(null)} /> : null}
   </section>;
 }
 

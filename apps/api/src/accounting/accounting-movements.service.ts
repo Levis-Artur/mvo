@@ -52,30 +52,79 @@ const movementInclude = {
       type: true,
       status: true,
       recipientName: true,
+      sourceTransferId: true,
       sourceResponsiblePerson: { select: personSelect },
       destinationResponsiblePerson: { select: personSelect },
+      sourceTransfer: {
+        select: {
+          id: true,
+          displayNumber: true,
+          destinationResponsiblePerson: { select: personSelect },
+        },
+      },
+      attachments: { select: { id: true } },
     },
   },
 } satisfies Prisma.StockTransactionInclude;
+
+const attachmentSelect = {
+  id: true,
+  documentId: true,
+  originalFileName: true,
+  mimeType: true,
+  sizeBytes: true,
+  sha256: true,
+  uploadedByUserId: true,
+  createdAt: true,
+} satisfies Prisma.StockDocumentAttachmentSelect;
 
 const documentDetailsInclude = {
   sourceResponsiblePerson: { select: personSelect },
   destinationResponsiblePerson: { select: personSelect },
   createdByUser: { select: { id: true, username: true } },
+  sourceTransfer: {
+    select: {
+      id: true,
+      displayNumber: true,
+      documentDate: true,
+      status: true,
+      sourceResponsiblePerson: { select: personSelect },
+      destinationResponsiblePerson: { select: personSelect },
+    },
+  },
   lines: {
-    include: { inventoryItem: { select: inventoryItemSelect } },
+    include: {
+      inventoryItem: { select: inventoryItemSelect },
+      issueLines: {
+        select: {
+          quantity: true,
+          document: { select: { id: true, status: true } },
+        },
+      },
+    },
     orderBy: { createdAt: 'asc' as const },
   },
   attachments: {
-    select: {
-      id: true,
-      documentId: true,
-      originalFileName: true,
-      mimeType: true,
-      sizeBytes: true,
-      createdAt: true,
-    },
+    select: attachmentSelect,
     orderBy: { createdAt: 'asc' as const },
+  },
+  issues: {
+    where: { type: StockDocumentType.ISSUE },
+    include: {
+      createdByUser: { select: { id: true, username: true } },
+      lines: {
+        include: { inventoryItem: { select: inventoryItemSelect } },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      attachments: {
+        select: attachmentSelect,
+        orderBy: { createdAt: 'asc' as const },
+      },
+    },
+    orderBy: [
+      { documentDate: 'desc' as const },
+      { displayNumber: 'desc' as const },
+    ],
   },
 } satisfies Prisma.StockDocumentInclude;
 
@@ -85,18 +134,7 @@ type Movement = Prisma.StockTransactionGetPayload<{
 
 type MovementPerson = Movement['responsiblePerson'];
 
-const ISSUE_TYPES: StockTransactionType[] = [
-  StockTransactionType.ISSUE,
-  StockTransactionType.ISSUE_FROM_DIRECT,
-  StockTransactionType.ISSUE_FROM_CUSTODY,
-  StockTransactionType.ISSUE_OUT,
-  StockTransactionType.ISSUE_REVERSAL,
-];
-
-const REVERSAL_TYPES: StockTransactionType[] = [
-  StockTransactionType.MVO_TRANSFER_REVERSAL,
-  StockTransactionType.ISSUE_REVERSAL,
-];
+const DOCUMENTARY_ISSUE_TYPE = StockTransactionType.ISSUE_OUT;
 
 @Injectable()
 export class AccountingMovementsService {
@@ -147,17 +185,25 @@ export class AccountingMovementsService {
       filename: `accounting-movements-${new Date().toISOString().slice(0, 10)}.csv`,
       csv: buildAccountingMovementCsv(rows.map((row) => ({
         occurredAt: row.occurredAt,
-        documentLabel: row.documentLabel,
         operationLabel: row.operationLabel,
+        documentLabel: row.documentLabel,
         mvoCode:
           row.responsiblePerson.externalAccountingCode
           ?? row.responsiblePerson.personnelNumber,
         mvoName: row.responsiblePerson.fullName,
+        transferredToCode:
+          row.transferredTo?.externalAccountingCode
+          ?? row.transferredTo?.personnelNumber
+          ?? '',
+        transferredToName: row.transferredTo?.fullName ?? '',
         inventoryCode: row.inventoryItem.externalCode,
         inventoryName: row.inventoryItem.name,
+        unitOfMeasure: row.inventoryItem.unitOfMeasure ?? '',
         quantity: row.quantity,
-        direction: row.direction,
+        issuedTo: row.issuedTo ?? '',
+        relatedTransfer: row.relatedDocument?.label ?? '',
         statusLabel: row.statusLabel,
+        hasAttachment: row.hasAttachment ? 'Так' : 'Ні',
       }))),
     };
   }
@@ -172,7 +218,7 @@ export class AccountingMovementsService {
     }
 
     if (movement.documentId) {
-      return this.documentDetails(movement);
+      return this.documentDetails(movement.documentId);
     }
     if (movement.importBatchId) {
       return this.importDetails(movement);
@@ -180,41 +226,125 @@ export class AccountingMovementsService {
     throw new NotFoundException('Джерело операції руху майна не знайдено');
   }
 
-  private async documentDetails(movement: Movement) {
+  async detailsByDocumentId(id: string) {
+    return this.documentDetails(id);
+  }
+
+  private async documentDetails(documentId: string) {
     const document = await this.prisma.stockDocument.findUnique({
-      where: { id: movement.documentId! },
+      where: { id: documentId },
       include: documentDetailsInclude,
     });
-    if (!document) {
+    if (
+      !document ||
+      (document.type !== StockDocumentType.MVO_TRANSFER &&
+        !(
+          document.type === StockDocumentType.ISSUE &&
+          document.sourceTransferId
+        ))
+    ) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
+
+    const operationType: AccountingMovementType =
+      document.type === StockDocumentType.MVO_TRANSFER
+        ? 'MVO_TRANSFER'
+        : 'ISSUE';
+    const sourceTransfer = document.sourceTransfer
+      ? {
+          id: document.sourceTransfer.id,
+          displayNumber: document.sourceTransfer.displayNumber,
+          documentDate: document.sourceTransfer.documentDate.toISOString(),
+          status: document.sourceTransfer.status,
+          sourceResponsiblePerson: this.person(
+            document.sourceTransfer.sourceResponsiblePerson,
+          ),
+          destinationResponsiblePerson: document.sourceTransfer
+            .destinationResponsiblePerson
+            ? this.person(
+                document.sourceTransfer.destinationResponsiblePerson,
+              )
+            : null,
+        }
+      : null;
+
+    const lines = document.lines.map((line) => {
+      const issuedQuantity = line.issueLines
+        .filter(
+          (issueLine) =>
+            issueLine.document.status === StockDocumentStatus.POSTED,
+        )
+        .reduce(
+          (sum, issueLine) => sum.plus(issueLine.quantity),
+          new Prisma.Decimal(0),
+        );
+      return {
+        inventoryItem: line.inventoryItem,
+        responsiblePerson: this.person(document.sourceResponsiblePerson),
+        quantity: line.quantity.toString(),
+        issuedQuantity:
+          document.type === StockDocumentType.MVO_TRANSFER
+            ? issuedQuantity.toString()
+            : null,
+        availableToIssue:
+          document.type === StockDocumentType.MVO_TRANSFER
+            ? Prisma.Decimal.max(
+                line.quantity.minus(issuedQuantity),
+                new Prisma.Decimal(0),
+              ).toString()
+            : null,
+        note: line.note,
+      };
+    });
 
     return {
       kind: 'STOCK_DOCUMENT' as const,
       sourceId: document.id,
-      operationType: this.operationType(movement),
+      documentType: document.type,
+      operationType,
       documentLabel: `№ ${document.displayNumber}`,
       documentDate: document.documentDate.toISOString(),
       status: document.status,
       author: document.createdByUser,
       responsiblePerson: this.person(document.sourceResponsiblePerson),
-      counterparty: document.destinationResponsiblePerson
+      destinationResponsiblePerson: document.destinationResponsiblePerson
         ? this.person(document.destinationResponsiblePerson)
-        : document.recipientName
-          ? { fullName: document.recipientName, externalAccountingCode: null }
-          : null,
+        : sourceTransfer?.destinationResponsiblePerson ?? null,
+      sourceTransfer,
+      counterparty: document.type === StockDocumentType.ISSUE && document.recipientName
+        ? { fullName: document.recipientName, externalAccountingCode: null }
+        : document.destinationResponsiblePerson
+        ? this.person(document.destinationResponsiblePerson)
+        : null,
       recipientUnit: document.recipientUnit,
       basis: document.basis,
       note: document.note,
-      lines: document.lines.map((line) => ({
-        inventoryItem: line.inventoryItem,
-        responsiblePerson: this.person(document.sourceResponsiblePerson),
-        quantity: line.quantity.toString(),
-        note: line.note,
-      })),
+      lines,
       attachments: document.attachments.map((attachment) => ({
         ...attachment,
         createdAt: attachment.createdAt.toISOString(),
+      })),
+      issues: document.issues.map((issue) => ({
+        id: issue.id,
+        displayNumber: issue.displayNumber,
+        documentDate: issue.documentDate.toISOString(),
+        status: issue.status,
+        recipientName: issue.recipientName,
+        author: issue.createdByUser,
+        quantity: issue.lines
+          .reduce(
+            (sum, line) => sum.plus(line.quantity),
+            new Prisma.Decimal(0),
+          )
+          .toString(),
+        lines: issue.lines.map((line) => ({
+          inventoryItem: line.inventoryItem,
+          quantity: line.quantity.toString(),
+        })),
+        attachments: issue.attachments.map((attachment) => ({
+          ...attachment,
+          createdAt: attachment.createdAt.toISOString(),
+        })),
       })),
     };
   }
@@ -265,12 +395,15 @@ export class AccountingMovementsService {
     return {
       kind: 'IMPORT' as const,
       sourceId: batch.id,
+      documentType: null,
       operationType: 'IMPORT' as const,
       documentLabel: batch.originalFilename,
       documentDate: batch.completedAt?.toISOString() ?? batch.createdAt.toISOString(),
       status: batch.status,
       author: uploadEvent?.actorUser ?? null,
       responsiblePerson: this.person(movement.responsiblePerson),
+      destinationResponsiblePerson: null,
+      sourceTransfer: null,
       counterparty: { fullName: 'Бухгалтерія', externalAccountingCode: null },
       recipientUnit: null,
       basis: null,
@@ -279,9 +412,12 @@ export class AccountingMovementsService {
         inventoryItem: line.inventoryItem,
         responsiblePerson: this.person(line.responsiblePerson),
         quantity: line.quantity.toString(),
+        issuedQuantity: null,
+        availableToIssue: null,
         note: line.comment,
       })),
       attachments: [],
+      issues: [],
     };
   }
 
@@ -292,6 +428,8 @@ export class AccountingMovementsService {
     const mvoCode = filters.mvoCode?.trim();
     const inventoryCode = filters.inventoryCode?.trim();
     const inventoryName = filters.inventoryName?.trim();
+    const transferRecipient = filters.transferRecipient?.trim();
+    const issueRecipient = filters.issueRecipient?.trim();
     const documentNumber = search?.replace(/^№\s*/, '');
     const displayNumber = documentNumber && /^\d+$/.test(documentNumber)
       ? Number(documentNumber)
@@ -302,6 +440,20 @@ export class AccountingMovementsService {
         this.relevantMovements(),
         this.operationFilter(filters.operationType),
         this.statusFilter(filters.status),
+        this.transferRecipientFilter(
+          filters.destinationResponsiblePersonId,
+          transferRecipient,
+        ),
+        issueRecipient
+          ? {
+              document: {
+                recipientName: {
+                  contains: issueRecipient,
+                  mode: 'insensitive',
+                },
+              },
+            }
+          : {},
         {
           occurredAt: this.dateRange(filters),
           responsiblePersonId: filters.responsiblePersonId,
@@ -377,8 +529,42 @@ export class AccountingMovementsService {
                     },
                   },
                 },
+                {
+                  document: {
+                    destinationResponsiblePerson: {
+                      externalAccountingCode: {
+                        contains: search,
+                        mode: 'insensitive',
+                      },
+                    },
+                  },
+                },
+                {
+                  document: {
+                    sourceTransfer: {
+                      destinationResponsiblePerson: {
+                        lastName: { contains: search, mode: 'insensitive' },
+                      },
+                    },
+                  },
+                },
+                {
+                  document: {
+                    sourceTransfer: {
+                      destinationResponsiblePerson: {
+                        externalAccountingCode: {
+                          contains: search,
+                          mode: 'insensitive',
+                        },
+                      },
+                    },
+                  },
+                },
                 ...(displayNumber
-                  ? [{ document: { displayNumber } }]
+                  ? [
+                      { document: { displayNumber } },
+                      { document: { sourceTransfer: { displayNumber } } },
+                    ]
                   : []),
               ],
             }
@@ -392,17 +578,15 @@ export class AccountingMovementsService {
       OR: [
         { importBatchId: { not: null } },
         {
-          type: {
-            in: [
-              StockTransactionType.MVO_TRANSFER_OUT,
-              StockTransactionType.MVO_TRANSFER_REVERSAL,
-            ],
-          },
+          type: StockTransactionType.MVO_TRANSFER_OUT,
           document: { type: StockDocumentType.MVO_TRANSFER },
         },
         {
-          type: { in: ISSUE_TYPES },
-          document: { type: StockDocumentType.ISSUE },
+          type: DOCUMENTARY_ISSUE_TYPE,
+          document: {
+            type: StockDocumentType.ISSUE,
+            sourceTransferId: { not: null },
+          },
         },
       ],
     };
@@ -420,14 +604,49 @@ export class AccountingMovementsService {
     }
     if (operationType === 'ISSUE') {
       return {
-        type: { in: ISSUE_TYPES.filter((type) => !REVERSAL_TYPES.includes(type)) },
-        document: { type: StockDocumentType.ISSUE },
+        type: DOCUMENTARY_ISSUE_TYPE,
+        document: {
+          type: StockDocumentType.ISSUE,
+          sourceTransferId: { not: null },
+        },
       };
     }
-    if (operationType === 'CANCELLATION') {
-      return { type: { in: REVERSAL_TYPES } };
-    }
     return {};
+  }
+
+  private transferRecipientFilter(
+    responsiblePersonId?: string,
+    search?: string,
+  ): Prisma.StockTransactionWhereInput {
+    if (!responsiblePersonId && !search) return {};
+    const person = {
+      ...(responsiblePersonId ? { id: responsiblePersonId } : {}),
+      ...(search
+        ? {
+            OR: [
+              {
+                externalAccountingCode: {
+                  contains: search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              { lastName: { contains: search, mode: 'insensitive' as const } },
+              { firstName: { contains: search, mode: 'insensitive' as const } },
+              { middleName: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+    return {
+      OR: [
+        { document: { destinationResponsiblePerson: person } },
+        {
+          document: {
+            sourceTransfer: { destinationResponsiblePerson: person },
+          },
+        },
+      ],
+    };
   }
 
   private statusFilter(status?: string): Prisma.StockTransactionWhereInput {
@@ -463,8 +682,11 @@ export class AccountingMovementsService {
   private serialize(movement: Movement) {
     const operationType = this.operationType(movement);
     const responsiblePerson = this.person(movement.responsiblePerson);
-    const destination = movement.document?.destinationResponsiblePerson ?? null;
-    const operationLabel = this.operationLabel(operationType, movement);
+    const destination =
+      movement.document?.type === StockDocumentType.MVO_TRANSFER
+        ? movement.document.destinationResponsiblePerson
+        : movement.document?.sourceTransfer?.destinationResponsiblePerson ?? null;
+    const operationLabel = this.operationLabel(operationType);
     const status = movement.importBatch?.status ?? movement.document?.status ?? 'POSTED';
     const statusLabel = this.statusLabel(status);
 
@@ -473,12 +695,26 @@ export class AccountingMovementsService {
       occurredAt: movement.occurredAt.toISOString(),
       operationType,
       operationLabel,
+      documentId: movement.document?.id ?? null,
       documentLabel: movement.importBatch?.originalFilename
         ?? (movement.document ? `№ ${movement.document.displayNumber}` : '—'),
       responsiblePerson,
       inventoryItem: movement.inventoryItem,
       quantity: this.signedQuantity(movement.quantity, operationType),
       direction: this.direction(movement, responsiblePerson, destination),
+      transferredTo: destination ? this.person(destination) : null,
+      issuedTo:
+        operationType === 'ISSUE'
+          ? movement.document?.recipientName ?? null
+          : null,
+      relatedDocument: movement.document?.sourceTransfer
+        ? {
+            id: movement.document.sourceTransfer.id,
+            displayNumber: movement.document.sourceTransfer.displayNumber,
+            label: `Передача № ${movement.document.sourceTransfer.displayNumber}`,
+          }
+        : null,
+      hasAttachment: Boolean(movement.document?.attachments.length),
       status,
       statusLabel,
     };
@@ -486,20 +722,16 @@ export class AccountingMovementsService {
 
   private operationType(movement: Movement): AccountingMovementType {
     if (movement.importBatchId) return 'IMPORT';
-    if (REVERSAL_TYPES.includes(movement.type)) return 'CANCELLATION';
     if (movement.document?.type === StockDocumentType.MVO_TRANSFER) {
       return 'MVO_TRANSFER';
     }
     return 'ISSUE';
   }
 
-  private operationLabel(type: AccountingMovementType, movement: Movement) {
+  private operationLabel(type: AccountingMovementType) {
     if (type === 'IMPORT') return 'Надходження';
-    if (type === 'MVO_TRANSFER') return 'Передача';
-    if (type === 'ISSUE') return 'Видача';
-    return movement.document?.type === StockDocumentType.MVO_TRANSFER
-      ? 'Скасування передачі'
-      : 'Скасування видачі';
+    if (type === 'MVO_TRANSFER') return 'Передача МВО';
+    return 'Видача з передачі';
   }
 
   private signedQuantity(
@@ -507,9 +739,9 @@ export class AccountingMovementsService {
     operationType: AccountingMovementType,
   ) {
     const value = quantity.abs().toString();
-    return operationType === 'MVO_TRANSFER' || operationType === 'ISSUE'
-      ? `-${value}`
-      : `+${value}`;
+    if (operationType === 'MVO_TRANSFER') return `-${value}`;
+    if (operationType === 'IMPORT') return `+${value}`;
+    return value;
   }
 
   private direction(
@@ -523,14 +755,10 @@ export class AccountingMovementsService {
       const target = destination
         ? this.personLabel(this.person(destination))
         : 'Одержувача не вказано';
-      return movement.type === StockTransactionType.MVO_TRANSFER_REVERSAL
-        ? `Скасування: ${target} → ${source}`
-        : `${source} → ${target}`;
+      return `${source} → ${target}`;
     }
     const recipient = movement.document?.recipientName ?? 'Одержувача не вказано';
-    return movement.type === StockTransactionType.ISSUE_REVERSAL
-      ? `Скасування видачі: ${recipient} → ${source}`
-      : `${source} → ${recipient}`;
+    return `${source} → ${recipient}`;
   }
 
   private person(person: {

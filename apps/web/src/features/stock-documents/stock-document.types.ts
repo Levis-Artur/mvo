@@ -11,6 +11,7 @@ import type {
 export type DocumentFormLine = {
   inventoryItemId: string;
   sourceBalanceId: string;
+  sourceTransferLineId?: string;
   quantity: string;
   note: string;
 };
@@ -19,6 +20,8 @@ export type StockDocumentFormProps = {
   user: AuthUser;
   type: StockDocumentType;
   document?: StockDocument | null;
+  sourceTransfer?: StockDocument | null;
+  initialIssueLineId?: string;
   initialSourceId: string;
   persons: ResponsiblePerson[];
   transferTargets: TransferTarget[];

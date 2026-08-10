@@ -282,6 +282,7 @@ export function InventoryItemAccountingCardView({
           onClose={() => controller.setSelectedDocument(null)}
           onDelete={() => undefined}
           onEdit={() => undefined}
+          onIssue={() => undefined}
           onPost={() => undefined}
         />
       ) : null}

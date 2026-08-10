@@ -45,12 +45,14 @@ function line(overrides: Record<string, unknown> = {}) {
     sourceCustodianResponsiblePersonId: null,
     sourceCustodyBalanceId: null,
     sourceBalanceId: balanceId,
+    sourceTransferLineId: null,
     quantityBefore: null,
     quantityAfter: null,
     quantity: new Prisma.Decimal(2),
     note: null,
     createdAt: new Date('2026-07-21T00:00:00.000Z'),
     transactions: [],
+    issueLines: [],
     ...overrides,
   };
 }
@@ -85,10 +87,13 @@ function rawDocument(
     cancelledAt: null,
     exportedByUserId: null,
     exportedAt: null,
+    sourceTransferId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     lines,
     attachments: [],
+    sourceTransfer: null,
+    issues: [],
   };
 }
 
@@ -190,6 +195,7 @@ function harness() {
     stockDocument: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn(),
       delete: jest.fn(),
@@ -197,7 +203,9 @@ function harness() {
     stockDocumentLine: {
       update: jest.fn(),
       deleteMany: jest.fn(),
+      groupBy: jest.fn().mockResolvedValue([]),
     },
+    stockTransaction: { create: jest.fn() },
     stockDocumentAttachment: { deleteMany: jest.fn() },
     custodyBalance: {
       create: jest.fn(),
@@ -207,6 +215,7 @@ function harness() {
     stockBalance: { findUnique: jest.fn() },
     responsiblePerson: { findUnique: jest.fn().mockResolvedValue({ id: destinationId, isActive: true, externalAccountingCode: '0057' }) },
     securityEvent: { create: jest.fn() },
+    $queryRaw: jest.fn().mockResolvedValue([]),
   };
   const prisma = {
     stockDocument: {
@@ -280,44 +289,15 @@ function prepareAtomicTransfer(
   );
 }
 
-function prepareAtomicIssue(
-  h: ReturnType<typeof harness>,
-  lines = [line()],
-) {
-  h.tx.stockDocument.create.mockResolvedValue({
-    ...rawDocument(
-      StockDocumentStatus.POSTED,
-      StockDocumentType.ISSUE,
-      lines,
-    ),
-    attachments: [{ id: 'attachment-id', storagePath: 'stored-1.pdf' }],
-  });
-  h.tx.stockBalance.findUnique.mockResolvedValue({
-    id: balanceId,
-    responsiblePersonId: sourceId,
-    inventoryItemId: itemId,
-  });
-  h.stock.createDecreasingTransactionInTx.mockResolvedValue({
-    id: 'issue-out',
-    balanceBefore: new Prisma.Decimal(10),
-    balanceAfter: new Prisma.Decimal(8),
-  });
-  h.tx.stockDocument.findUnique.mockResolvedValue(
-    viewDocument(
-      StockDocumentStatus.POSTED,
-      StockDocumentType.ISSUE,
-      lines,
-    ),
-  );
-}
 
 describe('StockDocumentsService MVO_TRANSFER', () => {
-  it('scopes an MVO list to documents created by or sent from the current MVO', async () => {
+  it('scopes an MVO list strictly to outgoing documents of the current MVO', async () => {
     const h = harness();
     await h.service.list({ page: 1, limit: 20, sourceResponsiblePersonId: destinationId }, mvo);
     expect(h.prisma.stockDocument.findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
-        OR: [{ createdByUserId: mvo.id }, { sourceResponsiblePersonId: sourceId }],
+        sourceResponsiblePersonId: sourceId,
+        destinationResponsiblePersonId: undefined,
       }),
     }));
   });
@@ -620,7 +600,7 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
-  it('keeps new ISSUE on the direct balance path', async () => {
+  it('keeps a legacy standalone ISSUE read-only', async () => {
     const h = harness();
     const issue = {
       ...rawDocument(StockDocumentStatus.DRAFT, StockDocumentType.ISSUE),
@@ -636,8 +616,48 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
     h.tx.stockBalance.findUnique.mockResolvedValue({ responsiblePersonId: sourceId, inventoryItemId: itemId });
     h.stock.createDecreasingTransactionInTx.mockResolvedValue({ id: 'issue-out', balanceBefore: new Prisma.Decimal(8), balanceAfter: new Prisma.Decimal(6) });
     h.prisma.stockDocument.findUnique.mockResolvedValue(viewDocument(StockDocumentStatus.POSTED, StockDocumentType.ISSUE));
-    await h.service.post(documentId, mvo, {});
-    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(h.tx, expect.objectContaining({ type: StockTransactionType.ISSUE_OUT }));
+    await expect(h.service.post(documentId, mvo, {})).rejects.toThrow(
+      'Видача старої моделі доступна лише для перегляду',
+    );
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('does not allow changing a transfer draft into a standalone ISSUE', async () => {
+    const h = harness();
+    h.prisma.stockDocument.findUnique.mockResolvedValue(
+      rawDocument(StockDocumentStatus.DRAFT, StockDocumentType.MVO_TRANSFER),
+    );
+
+    await expect(
+      h.service.update(
+        documentId,
+        dto({
+          type: StockDocumentType.ISSUE,
+          destinationResponsiblePersonId: undefined,
+          recipientName: 'Одержувач',
+        }),
+        mvo,
+        {},
+      ),
+    ).rejects.toThrow('Тип документа не можна змінювати');
+    expect(h.tx.stockDocument.update).not.toHaveBeenCalled();
+  });
+
+  it('does not post a child ISSUE through the legacy draft workflow', async () => {
+    const h = harness();
+    h.tx.stockDocument.findUnique.mockResolvedValueOnce({
+      type: StockDocumentType.ISSUE,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      status: StockDocumentStatus.DRAFT,
+      sourceResponsiblePersonId: sourceId,
+      sourceTransferId: documentId,
+    });
+
+    await expect(h.service.post(documentId, mvo, {})).rejects.toThrow(
+      'однією операцією без чернетки',
+    );
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
   });
 
   it('forbids a source balance owned by another MVO', async () => {
@@ -765,69 +785,158 @@ describe('StockDocumentsService MVO_TRANSFER', () => {
     });
     await expect(h.service.findOne(documentId, mvo)).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('does not grant transfer or child ISSUE access to the recipient MVO', async () => {
+    const h = harness();
+    h.prisma.stockDocument.findUnique.mockResolvedValue(
+      viewDocument(StockDocumentStatus.POSTED),
+    );
+    const recipient = user(UserRole.MVO, destinationId);
+
+    await expect(h.service.findOne(documentId, recipient)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+
+    h.prisma.stockDocument.findUnique.mockResolvedValue({
+      ...viewDocument(
+        StockDocumentStatus.POSTED,
+        StockDocumentType.ISSUE,
+      ),
+      sourceTransferId: documentId,
+    });
+    await expect(h.service.findOne(documentId, recipient)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
 });
 
-describe('StockDocumentsService atomic ISSUE', () => {
-  it('rejects new ISSUE in the generic draft endpoint', async () => {
+
+function transferIssueDto(overrides: Record<string, unknown> = {}) {
+  return {
+    documentDate: '2026-07-22T00:00:00.000Z',
+    recipientName: 'Зовнішній одержувач',
+    note: 'Накладна',
+    lines: [{ sourceTransferLineId: lineId, quantity: '2' }],
+    ...overrides,
+  };
+}
+
+function prepareTransferIssue(
+  h: ReturnType<typeof harness>,
+  options: {
+    status?: StockDocumentStatus;
+    transferred?: string;
+    issued?: string;
+  } = {},
+) {
+  const transferLine = line({
+    quantity: new Prisma.Decimal(options.transferred ?? '5'),
+  });
+  h.tx.stockDocument.findUnique.mockResolvedValueOnce({
+    ...rawDocument(
+      options.status ?? StockDocumentStatus.POSTED,
+      StockDocumentType.MVO_TRANSFER,
+      [transferLine],
+    ),
+  });
+  h.tx.stockDocumentLine.groupBy.mockResolvedValue(
+    options.issued
+      ? [
+          {
+            sourceTransferLineId: lineId,
+            _sum: { quantity: new Prisma.Decimal(options.issued) },
+          },
+        ]
+      : [],
+  );
+  const issueLine = line({
+    sourceBalanceId: null,
+    sourceTransferLineId: lineId,
+    quantity: new Prisma.Decimal('2'),
+  });
+  h.tx.stockDocument.create.mockResolvedValue({
+    ...rawDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.ISSUE,
+      [issueLine],
+    ),
+    sourceTransferId: documentId,
+  });
+  h.tx.stockBalance.findUnique.mockResolvedValue({
+    quantity: new Prisma.Decimal('5'),
+  });
+  h.prisma.stockDocument.findUnique.mockResolvedValue({
+    ...viewDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.ISSUE,
+      [issueLine],
+    ),
+    sourceTransferId: documentId,
+  });
+}
+
+describe('StockDocumentsService transfer-based ISSUE', () => {
+  it('forbids the legacy standalone create endpoint', async () => {
     const h = harness();
 
     await expect(
-      h.service.create(
-        dto({
-          type: StockDocumentType.ISSUE,
-          destinationResponsiblePersonId: undefined,
-          recipientName: 'Отримувач майна',
-          basis: 'Legacy basis',
-        }),
+      h.service.createAndPostIssue(
+        issueDto(),
+        [attachmentFile()],
         mvo,
         {},
       ),
-    ).rejects.toThrow('Нову видачу потрібно одразу підтвердити та провести');
-    expect(h.prisma.stockDocument.create).not.toHaveBeenCalled();
+    ).rejects.toThrow(
+      'Нову видачу можна оформити лише з власної проведеної передачі',
+    );
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('requires at least one confirming attachment', async () => {
+  it('requires an attachment before starting the transaction', async () => {
     const h = harness();
 
     await expect(
-      h.service.createAndPostIssue(issueDto(), [], mvo, {}),
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto(),
+        [],
+        mvo,
+        {},
+      ),
     ).rejects.toThrow('додайте хоча б одне фото або скан накладної');
-    expect(h.storage.store).not.toHaveBeenCalled();
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('requires recipient text and at least one line before storing files', async () => {
+  it.each([
+    UserRole.OWNER,
+    UserRole.DPP_ADMIN,
+    UserRole.ACCOUNTANT,
+    UserRole.AUDITOR,
+  ])('%s cannot create an ISSUE without MVO auth context', async (role) => {
     const h = harness();
 
     await expect(
-      h.service.createAndPostIssue(
-        issueDto({ recipientName: '   ' }),
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto(),
         [attachmentFile()],
-        mvo,
+        user(role, null),
         {},
       ),
-    ).rejects.toThrow('обов’язково вкажіть одержувача');
-    await expect(
-      h.service.createAndPostIssue(
-        issueDto({ lines: [] }),
-        [attachmentFile()],
-        mvo,
-        {},
-      ),
-    ).rejects.toThrow('щонайменше одну позицію');
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(h.storage.store).not.toHaveBeenCalled();
-    expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('atomically creates ISSUE as POSTED with attachment metadata and decreases only the sender', async () => {
+  it('creates a POSTED child ISSUE without changing either MVO balance', async () => {
     const h = harness();
-    prepareAtomicIssue(h);
+    prepareTransferIssue(h);
 
-    const result = await h.service.createAndPostIssue(
-      issueDto(),
+    const result = await h.service.createAndPostTransferIssue(
+      documentId,
+      transferIssueDto(),
       [attachmentFile()],
       mvo,
-      { requestId: 'atomic-issue' },
+      { requestId: 'transfer-issue' },
     );
 
     expect(result.status).toBe(StockDocumentStatus.POSTED);
@@ -837,14 +946,19 @@ describe('StockDocumentsService atomic ISSUE', () => {
         data: expect.objectContaining({
           type: StockDocumentType.ISSUE,
           status: StockDocumentStatus.POSTED,
-          accountingModel: StockAccountingModel.DIRECT_BALANCE,
+          sourceTransferId: documentId,
           sourceResponsiblePersonId: sourceId,
           destinationResponsiblePersonId: null,
-          recipientName: 'Отримувач майна',
-          recipientUnit: null,
-          basis: null,
-          postedByUserId: mvo.id,
-          postedAt: expect.any(Date),
+          recipientName: 'Зовнішній одержувач',
+          lines: {
+            create: [
+              expect.objectContaining({
+                sourceTransferLineId: lineId,
+                sourceBalanceId: null,
+                quantity: new Prisma.Decimal(2),
+              }),
+            ],
+          },
           attachments: {
             create: [
               expect.objectContaining({
@@ -856,171 +970,240 @@ describe('StockDocumentsService atomic ISSUE', () => {
         }),
       }),
     );
-    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(
-      h.tx,
-      expect.objectContaining({
-        type: StockTransactionType.ISSUE_OUT,
-        responsiblePersonId: sourceId,
-        quantity: new Prisma.Decimal(2),
-      }),
-    );
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
     expect(h.tx.custodyBalance.create).not.toHaveBeenCalled();
     expect(h.tx.custodyBalance.update).not.toHaveBeenCalled();
     expect(h.tx.custodyBalance.upsert).not.toHaveBeenCalled();
-    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(
+    expect(h.tx.stockTransaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          requestId: 'atomic-issue',
-          success: true,
+          type: StockTransactionType.ISSUE_OUT,
+          balanceBefore: new Prisma.Decimal(5),
+          balanceAfter: new Prisma.Decimal(5),
         }),
       }),
     );
   });
 
-  it('takes the ISSUE sender exclusively from auth context', async () => {
+  it.each([
+    ['recipient', destinationId],
+    ['unrelated MVO', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+  ])('does not let the %s create an ISSUE', async (_label, personId) => {
     const h = harness();
-    prepareAtomicIssue(h);
+    prepareTransferIssue(h);
 
-    await h.service.createAndPostIssue(
-      {
-        ...issueDto(),
-        sourceResponsiblePersonId: destinationId,
-      } as never,
+    await expect(
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto(),
+        [attachmentFile()],
+        user(UserRole.MVO, personId),
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it.each([StockDocumentStatus.DRAFT, StockDocumentStatus.CANCELLED])(
+    'rejects a %s parent transfer',
+    async (status) => {
+      const h = harness();
+      prepareTransferIssue(h, { status });
+
+      await expect(
+        h.service.createAndPostTransferIssue(
+          documentId,
+          transferIssueDto(),
+          [attachmentFile()],
+          mvo,
+          {},
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects quantity above the derived available amount', async () => {
+    const h = harness();
+    prepareTransferIssue(h, { transferred: '5', issued: '3' });
+
+    await expect(
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto({
+          lines: [{ sourceTransferLineId: lineId, quantity: '3' }],
+        }),
+        [attachmentFile()],
+        mvo,
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+  });
+
+  it('allows issuing exactly the remaining transferred quantity', async () => {
+    const h = harness();
+    prepareTransferIssue(h, { transferred: '5', issued: '2' });
+
+    await expect(
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto({
+          lines: [{ sourceTransferLineId: lineId, quantity: '3' }],
+        }),
+        [attachmentFile()],
+        mvo,
+        {},
+      ),
+    ).resolves.toMatchObject({ status: StockDocumentStatus.POSTED });
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('derives issued and available quantities from POSTED child lines only', async () => {
+    const h = harness();
+    const transfer = viewDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.MVO_TRANSFER,
+      [
+        line({
+          quantity: new Prisma.Decimal('5'),
+          issueLines: [
+            {
+              quantity: new Prisma.Decimal('2'),
+              document: { status: StockDocumentStatus.POSTED },
+            },
+            {
+              quantity: new Prisma.Decimal('1'),
+              document: { status: StockDocumentStatus.CANCELLED },
+            },
+          ],
+        }),
+      ],
+    );
+    h.prisma.stockDocument.findUnique.mockResolvedValue(transfer);
+
+    const result = await h.service.findOne(documentId, mvo);
+
+    expect(result.lines[0]).toMatchObject({
+      quantity: '5',
+      issuedQuantity: '2',
+      availableToIssue: '3',
+    });
+  });
+
+  it('locks the parent transfer before calculating availability', async () => {
+    const h = harness();
+    prepareTransferIssue(h);
+
+    await h.service.createAndPostTransferIssue(
+      documentId,
+      transferIssueDto(),
       [attachmentFile()],
       mvo,
       {},
     );
 
-    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(
+    expect(h.tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(h.tx.stockDocumentLine.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          sourceResponsiblePersonId: sourceId,
+        where: expect.objectContaining({
+          document: {
+            type: StockDocumentType.ISSUE,
+            status: StockDocumentStatus.POSTED,
+          },
         }),
       }),
     );
   });
 
-  it.each([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR])(
-    '%s cannot create an ISSUE without the current MVO auth context',
-    async (role) => {
-      const h = harness();
-
-      await expect(
-        h.service.createAndPostIssue(
-          issueDto(),
-          [attachmentFile()],
-          user(role, null),
-          {},
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(h.storage.store).not.toHaveBeenCalled();
-    },
-  );
-
-  it('rejects an inactive sender before creating the document', async () => {
+  it('blocks cancelling a transfer with an active child ISSUE', async () => {
     const h = harness();
-    prepareAtomicIssue(h);
-    h.tx.responsiblePerson.findUnique.mockResolvedValueOnce({
-      id: sourceId,
-      isActive: false,
+    h.tx.stockDocument.findUnique.mockResolvedValueOnce({
+      type: StockDocumentType.MVO_TRANSFER,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      accountingExportState: AccountingExportState.NOT_EXPORTED,
+      status: StockDocumentStatus.POSTED,
+      sourceResponsiblePersonId: sourceId,
+      sourceTransferId: null,
     });
+    h.tx.stockDocument.count.mockResolvedValue(1);
 
-    await expect(
-      h.service.createAndPostIssue(issueDto(), [attachmentFile()], mvo, {}),
-    ).rejects.toThrow('МВО-відправника');
-    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
-    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
-      'stored-1.pdf',
+    await expect(h.service.cancel(documentId, mvo, {})).rejects.toThrow(
+      'Передачу неможливо скасувати, оскільки з переданого майна вже оформлено видачу.',
     );
-  });
-
-  it.each(['0', '-1', 'NaN', 'Infinity', '1.00001'])(
-    'rejects invalid ISSUE quantity %s before storing files',
-    async (quantity) => {
-      const h = harness();
-
-      await expect(
-        h.service.createAndPostIssue(
-          issueDto({
-            lines: [
-              {
-                inventoryItemId: itemId,
-                sourceBalanceId: balanceId,
-                quantity,
-              },
-            ],
-          }),
-          [attachmentFile()],
-          mvo,
-          {},
-        ),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(h.storage.store).not.toHaveBeenCalled();
-    },
-  );
-
-  it('cleans stored files and leaves no readable document when balance is insufficient', async () => {
-    const h = harness();
-    prepareAtomicIssue(h);
-    h.stock.createDecreasingTransactionInTx.mockRejectedValue(
-      new BadRequestException('Недостатній залишок'),
-    );
-
-    await expect(
-      h.service.createAndPostIssue(
-        issueDto(),
-        [attachmentFile()],
-        mvo,
-        { requestId: 'insufficient-issue' },
-      ),
-    ).rejects.toThrow('Недостатній залишок');
-    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
-      'stored-1.pdf',
-    );
-    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
-  it('rolls back every database effect and cleans attachments when a later line fails', async () => {
+  it('cancels a child ISSUE without restoring StockBalance', async () => {
     const h = harness();
-    const secondLine = line({
-      id: '88888888-8888-4888-8888-888888888888',
-      inventoryItemId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      sourceBalanceId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    const issueLine = line({
+      sourceBalanceId: null,
+      sourceTransferLineId: lineId,
+      transactions: [
+        { id: 'issue-out', type: StockTransactionType.ISSUE_OUT },
+      ],
     });
-    prepareAtomicIssue(h, [line(), secondLine]);
-    h.tx.stockBalance.findUnique
+    h.tx.stockDocument.findUnique
       .mockResolvedValueOnce({
-        id: balanceId,
-        responsiblePersonId: sourceId,
-        inventoryItemId: itemId,
+        type: StockDocumentType.ISSUE,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
+        accountingExportState: AccountingExportState.NOT_EXPORTED,
+        status: StockDocumentStatus.POSTED,
+        sourceResponsiblePersonId: sourceId,
+        sourceTransferId: documentId,
       })
       .mockResolvedValueOnce({
-        id: secondLine.sourceBalanceId,
-        responsiblePersonId: sourceId,
-        inventoryItemId: secondLine.inventoryItemId,
+        ...rawDocument(
+          StockDocumentStatus.POSTED,
+          StockDocumentType.ISSUE,
+          [issueLine],
+        ),
+        sourceTransferId: documentId,
       });
-    h.stock.createDecreasingTransactionInTx
-      .mockResolvedValueOnce({
-        id: 'first-issue-out',
-        balanceBefore: new Prisma.Decimal(10),
-        balanceAfter: new Prisma.Decimal(8),
-      })
-      .mockRejectedValueOnce(new Error('second issue line failed'));
+    h.tx.stockBalance.findUnique.mockResolvedValue({
+      quantity: new Prisma.Decimal('5'),
+    });
+    h.prisma.stockDocument.findUnique.mockResolvedValue({
+      ...viewDocument(
+        StockDocumentStatus.CANCELLED,
+        StockDocumentType.ISSUE,
+        [issueLine],
+      ),
+      sourceTransferId: documentId,
+    });
+
+    const result = await h.service.cancel(documentId, mvo, {});
+
+    expect(result.status).toBe(StockDocumentStatus.CANCELLED);
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.stockTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: StockTransactionType.ISSUE_REVERSAL,
+          balanceBefore: new Prisma.Decimal(5),
+          balanceAfter: new Prisma.Decimal(5),
+          reversalOfTransactionId: 'issue-out',
+        }),
+      }),
+    );
+  });
+
+  it('keeps a multi-line ISSUE atomic when one line is not in the transfer', async () => {
+    const h = harness();
+    prepareTransferIssue(h);
 
     await expect(
-      h.service.createAndPostIssue(
-        issueDto({
+      h.service.createAndPostTransferIssue(
+        documentId,
+        transferIssueDto({
           lines: [
+            { sourceTransferLineId: lineId, quantity: '1' },
             {
-              inventoryItemId: itemId,
-              sourceBalanceId: balanceId,
-              quantity: '2',
-            },
-            {
-              inventoryItemId: secondLine.inventoryItemId,
-              sourceBalanceId: secondLine.sourceBalanceId,
+              sourceTransferLineId:
+                'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
               quantity: '1',
             },
           ],
@@ -1029,64 +1212,10 @@ describe('StockDocumentsService atomic ISSUE', () => {
         mvo,
         {},
       ),
-    ).rejects.toThrow('second issue line failed');
-    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledTimes(2);
+    ).rejects.toThrow('не належить цій передачі');
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
     expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
       'stored-1.pdf',
     );
-    expect(h.prisma.stockDocument.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('cleans previously stored attachments when a later file is rejected', async () => {
-    const h = harness();
-    h.storage.store
-      .mockResolvedValueOnce(storedAttachment(1))
-      .mockRejectedValueOnce(new BadRequestException('Непідтримуваний MIME'));
-
-    await expect(
-      h.service.createAndPostIssue(
-        issueDto(),
-        [attachmentFile('first.pdf'), attachmentFile('second.pdf')],
-        mvo,
-        {},
-      ),
-    ).rejects.toThrow('Непідтримуваний MIME');
-    expect(h.storage.removeAfterMetadataFailure).toHaveBeenCalledWith(
-      'stored-1.pdf',
-    );
-    expect(h.prisma.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('allows only one of two concurrent overdraw attempts to complete', async () => {
-    const h = harness();
-    prepareAtomicIssue(h);
-    h.stock.createDecreasingTransactionInTx
-      .mockResolvedValueOnce({
-        id: 'first-issue-out',
-        balanceBefore: new Prisma.Decimal(10),
-        balanceAfter: new Prisma.Decimal(3),
-      })
-      .mockRejectedValueOnce(
-        new BadRequestException('Недостатній залишок для проведення документа'),
-      );
-
-    const results = await Promise.allSettled([
-      h.service.createAndPostIssue(
-        issueDto({ lines: [{ inventoryItemId: itemId, sourceBalanceId: balanceId, quantity: '7' }] }),
-        [attachmentFile('first.pdf')],
-        mvo,
-        {},
-      ),
-      h.service.createAndPostIssue(
-        issueDto({ lines: [{ inventoryItemId: itemId, sourceBalanceId: balanceId, quantity: '7' }] }),
-        [attachmentFile('second.pdf')],
-        mvo,
-        {},
-      ),
-    ]);
-
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
-    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 });

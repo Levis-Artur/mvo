@@ -41,7 +41,6 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     <PageHeader
       action={<div className="flex flex-wrap gap-2">
         {writable && user.role === 'MVO' ? <Button type="button" onClick={() => controller.openCreate('MVO_TRANSFER')}>Нова передача</Button> : null}
-        {writable && user.role === 'MVO' ? <Button type="button" onClick={() => controller.openCreate('ISSUE')}>Нова видача</Button> : null}
         {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}
       description="Історія передач майна між МВО та оформлення видач зовнішнім одержувачам."
@@ -104,6 +103,8 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
     {controller.formType ? <StockDocumentForm
       availableSources={controller.availableSources}
       document={controller.editing}
+      initialIssueLineId={controller.issueInitialLineId}
+      sourceTransfer={controller.issueTransfer}
       error={controller.actionError}
       initialSourceId={controller.formSourceId}
       loadingSources={controller.loadingSources}
@@ -115,7 +116,7 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       targetsError={controller.targetsError}
       type={controller.formType}
       user={user}
-      onClose={() => controller.setFormType(null)}
+      onClose={controller.closeForm}
       onRemoveAttachment={controller.removeAttachment}
       onSourceChange={controller.loadSources}
       onSubmit={controller.save}
@@ -129,6 +130,9 @@ function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof u
       onClose={() => controller.setSelected(null)}
       onDelete={() => controller.openConfirmation('remove', controller.selected!)}
       onEdit={() => void controller.openEdit(controller.selected!)}
+      onIssue={(lineId) => void controller.openIssueFromTransfer(controller.selected!, lineId)}
+      onViewIssue={(issueId) => void controller.openDetails({ id: issueId })}
+      onOpenSourceTransfer={(transferId) => void controller.openDetails({ id: transferId })}
       onPost={() => controller.openConfirmation('post', controller.selected!)}
     /> : null}
     {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}

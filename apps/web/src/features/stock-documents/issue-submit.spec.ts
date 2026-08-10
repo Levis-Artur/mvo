@@ -11,6 +11,7 @@ const input: StockDocumentInput = {
     {
       inventoryItemId: '22222222-2222-4222-8222-222222222222',
       sourceBalanceId: '33333333-3333-4333-8333-333333333333',
+      sourceTransferLineId: '44444444-4444-4444-8444-444444444444',
       quantity: '2',
     },
   ],
@@ -23,31 +24,39 @@ describe('new ISSUE submission', () => {
       .fn()
       .mockResolvedValue({ status: 'POSTED' } as StockDocument);
 
-    await submitNewIssue(input, files, createAndPost);
+    await submitNewIssue('transfer-1', input, files, createAndPost);
 
     expect(createAndPost).toHaveBeenCalledTimes(1);
     expect(createAndPost).toHaveBeenCalledWith(
+      'transfer-1',
       {
         documentDate: input.documentDate,
         recipientName: input.recipientName,
+        recipientUnit: undefined,
+        basis: input.basis,
         note: input.note,
-        lines: input.lines,
+        lines: [
+          {
+            sourceTransferLineId:
+              input.lines[0].sourceTransferLineId,
+            quantity: input.lines[0].quantity,
+            note: input.lines[0].note,
+          },
+        ],
       },
       files,
     );
-    expect(createAndPost.mock.calls[0][0]).not.toHaveProperty(
+    expect(createAndPost.mock.calls[0][1]).not.toHaveProperty(
       'sourceResponsiblePersonId',
     );
-    expect(createAndPost.mock.calls[0][0]).not.toHaveProperty('type');
-    expect(createAndPost.mock.calls[0][0]).not.toHaveProperty('basis');
-    expect(createAndPost.mock.calls[0][0]).not.toHaveProperty('recipientUnit');
+    expect(createAndPost.mock.calls[0][1]).not.toHaveProperty('type');
   });
 
   it('requires an attachment before making the API call', async () => {
     const createAndPost = jest.fn();
 
     await expect(
-      submitNewIssue(input, [], createAndPost),
+      submitNewIssue('transfer-1', input, [], createAndPost),
     ).rejects.toThrow('додайте хоча б одне фото або скан накладної');
     expect(createAndPost).not.toHaveBeenCalled();
   });
@@ -58,7 +67,7 @@ describe('new ISSUE submission', () => {
       .mockRejectedValue(new Error('Недостатній залишок'));
 
     await expect(
-      submitNewIssue(input, [{} as File], createAndPost),
+      submitNewIssue('transfer-1', input, [{} as File], createAndPost),
     ).rejects.toThrow('Недостатній залишок');
   });
 });

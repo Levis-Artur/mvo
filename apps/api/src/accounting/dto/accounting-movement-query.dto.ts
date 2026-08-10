@@ -15,7 +15,6 @@ export const ACCOUNTING_MOVEMENT_TYPES = [
   'IMPORT',
   'MVO_TRANSFER',
   'ISSUE',
-  'CANCELLATION',
 ] as const;
 
 export type AccountingMovementType =
@@ -48,6 +47,10 @@ export class AccountingMovementFiltersDto {
   responsiblePersonId?: string;
 
   @IsOptional()
+  @IsUUID()
+  destinationResponsiblePersonId?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(50)
   mvoCode?: string;
@@ -61,6 +64,16 @@ export class AccountingMovementFiltersDto {
   @IsString()
   @MaxLength(200)
   inventoryName?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  transferRecipient?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  issueRecipient?: string;
 
   @IsOptional()
   @IsIn(ACCOUNTING_MOVEMENT_STATUSES)

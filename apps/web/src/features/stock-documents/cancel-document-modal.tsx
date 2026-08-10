@@ -6,6 +6,8 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
   document: StockDocument; loading: boolean; error: string; onConfirm: () => void; onClose: () => void;
 }) {
   const state = documentActionState(error, loading);
+  const documentaryIssue =
+    document.type === 'ISSUE' && Boolean(document.sourceTransferId);
   return <Modal
     closeOnEscape={!state.loading}
     destructive
@@ -17,8 +19,16 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
       {state.error ? <ErrorState message={state.error} /> : null}
       <p>Скасувати проведений документ <strong>{documentNumberLabel(document.displayNumber)}</strong>?</p>
       <div className="ui-alert" data-tone="warning" role="status">
-        <strong>Попередній стан майна буде відновлено</strong>
-        <span>Історія документа збережеться. Якщо майно вже було передане або видане далі, скасування може бути недоступним.</span>
+        <strong>
+          {documentaryIssue
+            ? 'Доступну для оформлення кількість передачі буде відновлено'
+            : 'Попередній стан майна буде відновлено'}
+        </strong>
+        <span>
+          {documentaryIssue
+            ? 'Складський залишок не зміниться. Історія видачі збережеться.'
+            : 'Історія документа збережеться. Якщо майно вже було видане, скасування може бути недоступним.'}
+        </span>
       </div>
       <p className="text-[var(--color-text-secondary)]">Якщо документ зараз не можна скасувати, причина буде показана тут.</p>
     </div>

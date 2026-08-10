@@ -36,7 +36,7 @@ export function StockDocumentAttachments({
       <div className="grid gap-3">
         <FormField
           label="Додати файл"
-          hint="JPEG, PNG, WEBP, HEIC, HEIF або PDF. Максимальний розмір перевіряє сервер."
+          hint="Додайте фото видаткової накладної або іншого документа, що підтверджує видачу. JPEG, PNG, WEBP, HEIC, HEIF або PDF."
           required={!attachments.length && !files.length}
         >
           <Input

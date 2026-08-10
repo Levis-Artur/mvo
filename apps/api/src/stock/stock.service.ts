@@ -360,7 +360,7 @@ export class StockService {
       availableQuantity: balance.quantity.toString(),
       unit: balance.inventoryItem.unitOfMeasure,
       canTransfer: true,
-      canIssue: true,
+      canIssue: false,
     }));
   }
 
@@ -391,8 +391,12 @@ export class StockService {
           StockDocumentType.MVO_TRANSFER,
           StockDocumentType.TRANSFER,
           StockDocumentType.ASSIGNMENT,
-        ]),
-        this.recentDocumentsForPerson(id, [StockDocumentType.ISSUE]),
+        ], user.role === UserRole.MVO),
+        this.recentDocumentsForPerson(
+          id,
+          [StockDocumentType.ISSUE],
+          user.role === UserRole.MVO,
+        ),
       ]);
 
     const directTotal = this.sumQuantities(directBalances);
@@ -457,21 +461,27 @@ export class StockService {
   private async recentDocumentsForPerson(
     responsiblePersonId: string,
     types: StockDocumentType[],
+    sourceOnly = false,
   ) {
     const documents = await this.prisma.stockDocument.findMany({
       where: {
         type: { in: types },
-        OR: [
-          { sourceResponsiblePersonId: responsiblePersonId },
-          { destinationResponsiblePersonId: responsiblePersonId },
-          {
-            lines: {
-              some: {
-                accountingOwnerResponsiblePersonId: responsiblePersonId,
+        sourceResponsiblePersonId: sourceOnly
+          ? responsiblePersonId
+          : undefined,
+        OR: sourceOnly
+          ? undefined
+          : [
+              { sourceResponsiblePersonId: responsiblePersonId },
+              { destinationResponsiblePersonId: responsiblePersonId },
+              {
+                lines: {
+                  some: {
+                    accountingOwnerResponsiblePersonId: responsiblePersonId,
+                  },
+                },
               },
-            },
-          },
-        ],
+            ],
       },
       include: {
         sourceResponsiblePerson: true,

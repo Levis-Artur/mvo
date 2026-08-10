@@ -50,6 +50,28 @@ describe('AccountingController access', () => {
     },
   );
 
+  it('keeps accounting document details read-only and unavailable to MVO', () => {
+    const methodRoles = Reflect.getMetadata(
+      ROLES_KEY,
+      AccountingController.prototype.documentDetails,
+    ) as UserRole[] | undefined;
+    const controllerRoles = Reflect.getMetadata(
+      ROLES_KEY,
+      AccountingController,
+    ) as UserRole[];
+
+    expect(methodRoles).toBeUndefined();
+    expect(controllerRoles).not.toContain(UserRole.MVO);
+    expect(controllerRoles).toEqual(
+      expect.arrayContaining([
+        UserRole.OWNER,
+        UserRole.DPP_ADMIN,
+        UserRole.ACCOUNTANT,
+        UserRole.AUDITOR,
+      ]),
+    );
+  });
+
   it('keeps batch history and download under read access for AUDITOR', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, AccountingController.prototype.downloadBatch),

@@ -51,6 +51,8 @@ export function useStockDocumentsController(user: AuthUser) {
   const [formType, setFormType] = useState<StockDocumentType | null>(null);
   const [formSourceId, setFormSourceId] = useState('');
   const [editing, setEditing] = useState<StockDocument | null>(null);
+  const [issueTransfer, setIssueTransfer] = useState<StockDocument | null>(null);
+  const [issueInitialLineId, setIssueInitialLineId] = useState('');
   const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSources, setLoadingSources] = useState(false);
@@ -152,15 +154,48 @@ export function useStockDocumentsController(user: AuthUser) {
   }
 
   function openCreate(nextType: StockDocumentType) {
-    if (nextType !== 'ISSUE' && nextType !== 'MVO_TRANSFER') return;
+    if (nextType !== 'MVO_TRANSFER') return;
     setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
+    setIssueTransfer(null);
+    setIssueInitialLineId('');
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : '';
     setFormSourceId(source); setFormType(nextType);
     void loadSources(source);
     if (nextType === 'MVO_TRANSFER') void loadTargets();
   }
 
-  async function openDetails(document: StockDocument) {
+  async function openIssueFromTransfer(
+    document: StockDocument,
+    initialTransferLineId?: string,
+  ) {
+    if (document.type !== 'MVO_TRANSFER' || document.status !== 'POSTED') return;
+    setActionError(''); setSourcesError(''); setSaving(false);
+    try {
+      const transfer = await stockDocumentsService.findOne(document.id);
+      const sources = transfer.lines
+        .filter((line) => Number(line.availableToIssue ?? '0') > 0)
+        .map((line) => ({
+          inventoryItem: line.inventoryItem,
+          balanceId: line.id,
+          sourceTransferLineId: line.id,
+          availableQuantity: line.availableToIssue ?? '0',
+          unit: line.inventoryItem.unitOfMeasure,
+          canTransfer: false,
+          canIssue: true,
+        }));
+      setAvailableSources(sources);
+      setIssueTransfer(transfer);
+      setIssueInitialLineId(initialTransferLineId ?? '');
+      setEditing(null);
+      setSelected(null);
+      setFormSourceId(transfer.sourceResponsiblePersonId);
+      setFormType('ISSUE');
+    } catch (reason) {
+      setActionError(errorMessage(reason));
+    }
+  }
+
+  async function openDetails(document: Pick<StockDocument, 'id'>) {
     setActionError(''); setConfirming(null); setSuccess(null);
     try { setSelected(await stockDocumentsService.findOne(document.id)); }
     catch (reason) { setError(errorMessage(reason)); }
@@ -200,20 +235,25 @@ export function useStockDocumentsController(user: AuthUser) {
         return;
       }
       if (!editing && input.type === 'ISSUE') {
+        if (!issueTransfer) {
+          throw new Error('Спочатку відкрийте власну проведену передачу');
+        }
         await submitNewIssue(
+          issueTransfer.id,
           input,
           files,
-          stockDocumentsService.createAndPostIssue,
+          stockDocumentsService.createTransferIssue,
         );
         setFormType(null);
+        setIssueTransfer(null);
+        setIssueInitialLineId('');
         setSelected(null);
         setSuccess(null);
-        setToast('Видачу проведено. Залишки оновлено.');
+        setToast('Видачу оформлено.');
         await load();
-        window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
         window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
         window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
+        window.dispatchEvent(new CustomEvent('mvo:refresh-transferred-property'));
         return;
       }
       let result = editing
@@ -291,13 +331,20 @@ export function useStockDocumentsController(user: AuthUser) {
     setConfirming(null); setActionError('');
   }
 
+  function closeForm() {
+    setFormType(null);
+    setIssueTransfer(null);
+    setIssueInitialLineId('');
+    setActionError('');
+  }
+
   return {
     documents: filteredDocuments, persons, transferTargets, availableSources, pagination,
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
-    selected, setSelected, formType, setFormType, formSourceId, editing,
+    selected, setSelected, formType, setFormType, formSourceId, editing, issueTransfer, issueInitialLineId,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
     actionLoading, error, personsError, sourcesError, targetsError, actionError, toast, setToast, success, setSuccess,
-    load, loadReferences, loadSources, loadTargets, openCreate, openDetails, openEdit, save, removeAttachment, perform,
-    openConfirmation, closeConfirmation,
+    load, loadReferences, loadSources, loadTargets, openCreate, openIssueFromTransfer, openDetails, openEdit, save, removeAttachment, perform,
+    openConfirmation, closeConfirmation, closeForm,
   };
 }

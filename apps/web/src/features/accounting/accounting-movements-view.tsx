@@ -16,16 +16,20 @@ type FilterState = {
   dateTo: string;
   operationType: '' | NonNullable<AccountingMovementFilters['operationType']>;
   responsiblePersonId: string;
+  destinationResponsiblePersonId: string;
   mvoCode: string;
   inventoryCode: string;
   inventoryName: string;
+  transferRecipient: string;
+  issueRecipient: string;
   status: '' | NonNullable<AccountingMovementFilters['status']>;
   search: string;
 };
 
 const EMPTY_FILTERS: FilterState = {
   dateFrom: '', dateTo: '', operationType: '', responsiblePersonId: '',
-  mvoCode: '', inventoryCode: '', inventoryName: '', status: '', search: '',
+  destinationResponsiblePersonId: '', mvoCode: '', inventoryCode: '',
+  inventoryName: '', transferRecipient: '', issueRecipient: '', status: '', search: '',
 };
 
 const EMPTY_PAGINATION: PaginationType = { page: 1, limit: 25, total: 0, totalPages: 0 };
@@ -82,6 +86,18 @@ export function AccountingMovementsView() {
     }
   }
 
+  async function openDocumentDetails(id: string) {
+    setDetailsLoadingId(id);
+    setError('');
+    try {
+      setSelected(await accountingMovementsService.documentDetails(id));
+    } catch (reason) {
+      setError(getErrorMessage(reason));
+    } finally {
+      setDetailsLoadingId('');
+    }
+  }
+
   async function exportCsv() {
     setExporting(true);
     setError('');
@@ -120,12 +136,17 @@ export function AccountingMovementsView() {
       onSearchChange={(search) => setDraft((current) => ({ ...current, search }))}
     >
       <FilterField label="Тип операції"><Select value={draft.operationType} onChange={(event) => setDraft((current) => ({ ...current, operationType: event.target.value as FilterState['operationType'] }))}>
-        <option value="">Усі операції</option><option value="IMPORT">Надходження</option><option value="MVO_TRANSFER">Передача</option><option value="ISSUE">Видача</option><option value="CANCELLATION">Скасування</option>
+        <option value="">Усі операції</option><option value="IMPORT">Надходження</option><option value="MVO_TRANSFER">Передача МВО</option><option value="ISSUE">Видача з передачі</option>
       </Select></FilterField>
       <FilterField label="Код МВО"><Input value={draft.mvoCode} onChange={(event) => setDraft((current) => ({ ...current, mvoCode: event.target.value }))} /></FilterField>
       <FilterField label="МВО"><Select value={draft.responsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, responsiblePersonId: event.target.value }))}>
         <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? person.personnelNumber} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
       </Select></FilterField>
+      <FilterField label="Кому передано"><Select value={draft.destinationResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, destinationResponsiblePersonId: event.target.value }))}>
+        <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? person.personnelNumber} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
+      </Select></FilterField>
+      <FilterField label="Код/ПІБ, кому передано"><Input value={draft.transferRecipient} onChange={(event) => setDraft((current) => ({ ...current, transferRecipient: event.target.value }))} /></FilterField>
+      <FilterField label="Кому видано"><Input value={draft.issueRecipient} onChange={(event) => setDraft((current) => ({ ...current, issueRecipient: event.target.value }))} /></FilterField>
       <FilterField label="Код номенклатури"><Input value={draft.inventoryCode} onChange={(event) => setDraft((current) => ({ ...current, inventoryCode: event.target.value }))} /></FilterField>
       <FilterField label="Назва номенклатури"><Input value={draft.inventoryName} onChange={(event) => setDraft((current) => ({ ...current, inventoryName: event.target.value }))} /></FilterField>
       <FilterField label="Статус"><Select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as FilterState['status'] }))}>
@@ -137,10 +158,11 @@ export function AccountingMovementsView() {
     <DataTable
       ariaLabel="Бухгалтерський журнал руху майна"
       columns={[
-        { label: 'Дата' }, { label: 'Документ' }, { label: 'Операція' },
-        { label: 'Код МВО' }, { label: 'МВО' }, { label: 'Код номенклатури' },
-        { label: 'Назва' }, { label: 'Кількість', numeric: true },
-        { label: 'Напрямок / Одержувач' }, { label: 'Статус' },
+        { label: 'Дата' }, { label: 'Тип операції' }, { label: 'Документ' },
+        { label: 'МВО' }, { label: 'Код МВО' }, { label: 'Номенклатура' },
+        { label: 'Код номенклатури' }, { label: 'Кількість', numeric: true },
+        { label: 'Кому передано' }, { label: 'Кому видано' },
+        { label: 'Пов’язаний документ' }, { label: 'Статус' }, { label: 'Документ/файл' },
       ]}
       emptyMessage="Рухів майна за вибраними фільтрами немає."
       loading={loading}
@@ -148,15 +170,18 @@ export function AccountingMovementsView() {
       rowKeys={rows.map((row) => row.id)}
       rows={rows.map((row) => [
         formatDateTime(row.occurredAt),
-        <Button disabled={detailsLoadingId === row.id} key={`document-${row.id}`} size="compact" title={`Відкрити ${row.documentLabel}`} type="button" variant="link" onClick={() => void openDetails(row.id)}>{detailsLoadingId === row.id ? 'Відкриття…' : row.documentLabel}</Button>,
         <StatusBadge key={`operation-${row.id}`} tone={operationTone(row)}>{row.operationLabel}</StatusBadge>,
-        row.responsiblePerson.externalAccountingCode ?? row.responsiblePerson.personnelNumber,
+        <Button disabled={detailsLoadingId === row.id} key={`document-${row.id}`} size="compact" title={`Відкрити ${row.documentLabel}`} type="button" variant="link" onClick={() => void openDetails(row.id)}>{detailsLoadingId === row.id ? 'Відкриття…' : row.documentLabel}</Button>,
         row.responsiblePerson.fullName,
-        row.inventoryItem.externalCode,
+        row.responsiblePerson.externalAccountingCode ?? row.responsiblePerson.personnelNumber,
         row.inventoryItem.name,
+        row.inventoryItem.externalCode,
         formatSignedQuantity(row.quantity),
-        row.direction,
+        row.transferredTo ? `${row.transferredTo.externalAccountingCode ?? row.transferredTo.personnelNumber} — ${row.transferredTo.fullName}` : '—',
+        row.issuedTo ?? '—',
+        row.relatedDocument ? <Button disabled={detailsLoadingId === row.relatedDocument.id} key={`related-${row.id}`} size="compact" type="button" variant="link" onClick={() => void openDocumentDetails(row.relatedDocument!.id)}>{detailsLoadingId === row.relatedDocument.id ? 'Відкриття…' : row.relatedDocument.label}</Button> : '—',
         <StatusBadge key={`status-${row.id}`} tone={statusTone(row.status)}>{row.statusLabel}</StatusBadge>,
+        row.hasAttachment ? <StatusBadge key={`attachment-${row.id}`} tone="info">Є документ</StatusBadge> : '—',
       ])}
     />
     <Pagination
@@ -168,7 +193,7 @@ export function AccountingMovementsView() {
       onLimitChange={(nextLimit) => { setLimit(nextLimit); setPage(1); }}
       onPage={setPage}
     />
-    {selected ? <AccountingMovementDetailsModal details={selected} onClose={() => setSelected(null)} /> : null}
+    {selected ? <AccountingMovementDetailsModal details={selected} openingDocumentId={detailsLoadingId} onOpenDocument={(id) => void openDocumentDetails(id)} onClose={() => setSelected(null)} /> : null}
     {toast ? <Toast message={toast} tone="success" onClose={() => setToast('')} /> : null}
   </section>;
 }
@@ -183,9 +208,12 @@ function toApiFilters(filters: FilterState): AccountingMovementFilters {
     dateTo: filters.dateTo || undefined,
     operationType: filters.operationType || undefined,
     responsiblePersonId: filters.responsiblePersonId || undefined,
+    destinationResponsiblePersonId: filters.destinationResponsiblePersonId || undefined,
     mvoCode: filters.mvoCode.trim() || undefined,
     inventoryCode: filters.inventoryCode.trim() || undefined,
     inventoryName: filters.inventoryName.trim() || undefined,
+    transferRecipient: filters.transferRecipient.trim() || undefined,
+    issueRecipient: filters.issueRecipient.trim() || undefined,
     status: filters.status || undefined,
     search: filters.search.trim() || undefined,
   };
@@ -196,9 +224,8 @@ function formatSignedQuantity(value: string) {
   return formatQuantity(value);
 }
 
-function operationTone(row: AccountingMovementRow): 'success' | 'info' | 'warning' {
+function operationTone(row: AccountingMovementRow): 'success' | 'info' {
   if (row.operationType === 'IMPORT') return 'success';
-  if (row.operationType === 'CANCELLATION') return 'warning';
   return 'info';
 }
 

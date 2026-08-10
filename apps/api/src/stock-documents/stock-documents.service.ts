@@ -29,6 +29,7 @@ import {
   CreateIssueDto,
   CreateMvoTransferDto,
   CreateStockDocumentDto,
+  CreateTransferIssueDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
 } from './dto/stock-document.dto';
@@ -51,6 +52,12 @@ const documentInclude = {
       accountingOwnerResponsiblePerson: true,
       sourceCustodianResponsiblePerson: true,
       sourceCustodyBalance: true,
+      issueLines: {
+        select: {
+          quantity: true,
+          document: { select: { status: true } },
+        },
+      },
     },
     orderBy: { createdAt: 'asc' as const },
   },
@@ -67,6 +74,44 @@ const documentInclude = {
       createdAt: true,
     },
     orderBy: { createdAt: 'asc' as const },
+  },
+  sourceTransfer: {
+    select: {
+      id: true,
+      displayNumber: true,
+      documentDate: true,
+      status: true,
+      sourceResponsiblePerson: true,
+      destinationResponsiblePerson: true,
+    },
+  },
+  issues: {
+    include: {
+      sourceResponsiblePerson: true,
+      destinationResponsiblePerson: true,
+      createdByUser: { select: { id: true, username: true, role: true } },
+      postedByUser: { select: { id: true, username: true, role: true } },
+      cancelledByUser: { select: { id: true, username: true, role: true } },
+      lines: {
+        include: { inventoryItem: true },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      attachments: {
+        select: {
+          id: true,
+          documentId: true,
+          originalFileName: true,
+          mimeType: true,
+          sizeBytes: true,
+          sha256: true,
+          uploadedByUserId: true,
+          uploadedByUser: { select: { id: true, username: true, role: true } },
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+    },
+    orderBy: [{ documentDate: 'desc' as const }, { createdAt: 'desc' as const }],
   },
 } satisfies Prisma.StockDocumentInclude;
 
@@ -100,20 +145,17 @@ export class StockDocumentsService {
     const where: Prisma.StockDocumentWhereInput = {
       type: query.type,
       status: query.status,
-      sourceResponsiblePersonId: query.sourceResponsiblePersonId,
-      destinationResponsiblePersonId: query.destinationResponsiblePersonId,
+      sourceResponsiblePersonId: mvoId ?? query.sourceResponsiblePersonId,
+      destinationResponsiblePersonId:
+        actor.role === UserRole.MVO
+          ? undefined
+          : query.destinationResponsiblePersonId,
       documentDate: {
         gte: query.documentDateFrom
           ? new Date(query.documentDateFrom)
           : undefined,
         lte: query.documentDateTo ? new Date(query.documentDateTo) : undefined,
       },
-      OR: mvoId
-        ? [
-            { createdByUserId: actor.id },
-            { sourceResponsiblePersonId: mvoId },
-          ]
-        : undefined,
     };
     const [items, total] = await Promise.all([
       this.prisma.stockDocument.findMany({
@@ -298,7 +340,23 @@ export class StockDocumentsService {
   }
 
   async createAndPostIssue(
-    dto: CreateIssueDto,
+    _dto: CreateIssueDto,
+    _files: Express.Multer.File[],
+    _actor: CurrentUser,
+    _context: AuditContext,
+  ): Promise<{ status: StockDocumentStatus; displayNumber: number }> {
+    void _dto;
+    void _files;
+    void _actor;
+    void _context;
+    throw new BadRequestException(
+      'Нову видачу можна оформити лише з власної проведеної передачі',
+    );
+  }
+
+  async createAndPostTransferIssue(
+    transferId: string,
+    dto: CreateTransferIssueDto,
     files: Express.Multer.File[],
     actor: CurrentUser,
     context: AuditContext,
@@ -306,7 +364,15 @@ export class StockDocumentsService {
     this.assertCanWrite(actor);
     if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
       throw new ForbiddenException(
-        'Видачу може створити лише користувач із пов’язаною карткою МВО',
+        'Видачу може створити лише МВО-відправник проведеної передачі',
+      );
+    }
+    if (!dto.recipientName?.trim()) {
+      throw new BadRequestException('Для видачі обов’язково вкажіть одержувача');
+    }
+    if (!Array.isArray(dto.lines) || dto.lines.length === 0) {
+      throw new BadRequestException(
+        'Документ повинен містити щонайменше одну позицію',
       );
     }
     if (!files.length) {
@@ -315,22 +381,10 @@ export class StockDocumentsService {
       );
     }
 
-    const sourceResponsiblePersonId = actor.responsiblePersonId;
+    const normalizedLines = this.normalizeTransferIssueLines(dto.lines);
     const documentId = randomUUID();
-    const normalized = this.validateDto(
-      {
-        ...dto,
-        type: StockDocumentType.ISSUE,
-        sourceResponsiblePersonId,
-      },
-      actor,
-      { requireIssueBasis: false },
-    );
     const storedAttachments: StoredAttachment[] = [];
 
-    let postedDocument: Prisma.StockDocumentGetPayload<{
-      include: typeof documentInclude;
-    }>;
     try {
       for (const file of files) {
         storedAttachments.push(await this.attachmentStorage.store(file));
@@ -339,70 +393,147 @@ export class StockDocumentsService {
         storedAttachments.map((attachment) => attachment.storagePath),
       );
 
-      postedDocument = await this.prisma.$transaction(async (tx) => {
-        await this.assertActiveMvoSender(tx, sourceResponsiblePersonId);
-        const now = new Date();
-        const document = await tx.stockDocument.create({
-          data: {
-            id: documentId,
-            documentNumber: `MOV-${randomUUID().slice(0, 8).toUpperCase()}`,
-            documentDate: new Date(dto.documentDate),
-            type: StockDocumentType.ISSUE,
-            accountingModel: StockAccountingModel.DIRECT_BALANCE,
-            status: StockDocumentStatus.POSTED,
-            sourceResponsiblePersonId,
-            destinationResponsiblePersonId: null,
-            recipientName: normalized.recipientName,
-            recipientUnit: null,
-            basis: null,
-            note: dto.note?.trim() || null,
-            createdByUserId: actor.id,
-            postedByUserId: actor.id,
-            postedAt: now,
-            lines: { create: normalized.lines },
-            attachments: {
-              create: storedAttachments.map((attachment) => ({
-                ...attachment,
-                uploadedByUserId: actor.id,
-              })),
-            },
-          },
-          include: {
-            lines: true,
-            attachments: { select: { id: true, storagePath: true } },
-          },
-        });
+      await this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`
+            SELECT "id"
+            FROM "StockDocument"
+            WHERE "id" = ${transferId}::uuid
+            FOR UPDATE
+          `;
+          const transfer = await tx.stockDocument.findUnique({
+            where: { id: transferId },
+            include: { lines: true },
+          });
+          if (!transfer) {
+            throw new NotFoundException('Передачу не знайдено');
+          }
+          if (
+            transfer.type !== StockDocumentType.MVO_TRANSFER ||
+            transfer.status !== StockDocumentStatus.POSTED
+          ) {
+            throw new ConflictException(
+              'Видачу можна оформити лише з проведеної передачі',
+            );
+          }
+          if (transfer.sourceResponsiblePersonId !== actor.responsiblePersonId) {
+            throw new ForbiddenException(
+              'Видачу може оформити лише МВО-відправник цієї передачі',
+            );
+          }
+          await this.assertActiveMvoSender(
+            tx,
+            transfer.sourceResponsiblePersonId,
+          );
 
-        for (const line of document.lines) {
-          await this.postLine(tx, document, line);
-        }
-        await this.auditInTx(
-          tx,
-          actor,
-          documentId,
-          'CREATE',
-          StockDocumentStatus.POSTED,
-          true,
-          context,
-        );
-        await this.auditInTx(
-          tx,
-          actor,
-          documentId,
-          'POST',
-          StockDocumentStatus.POSTED,
-          true,
-          context,
-        );
-        const persisted = await tx.stockDocument.findUnique({
-          where: { id: documentId },
-          include: documentInclude,
-        });
-        if (!persisted) {
-          throw new NotFoundException('Документ руху майна не знайдено');
-        }
-        return persisted;
-      });
+          const transferLines = new Map(
+            transfer.lines.map((line) => [line.id, line]),
+          );
+          const sourceLineIds = normalizedLines.map(
+            (line) => line.sourceTransferLineId,
+          );
+          const issued = await tx.stockDocumentLine.groupBy({
+            by: ['sourceTransferLineId'],
+            where: {
+              sourceTransferLineId: { in: sourceLineIds },
+              document: {
+                type: StockDocumentType.ISSUE,
+                status: StockDocumentStatus.POSTED,
+              },
+            },
+            _sum: { quantity: true },
+          });
+          const issuedByLine = new Map(
+            issued.map((entry) => [
+              entry.sourceTransferLineId,
+              entry._sum.quantity ?? new Prisma.Decimal(0),
+            ]),
+          );
+
+          const issueLines = normalizedLines.map((requested) => {
+            const sourceLine = transferLines.get(requested.sourceTransferLineId);
+            if (!sourceLine) {
+              throw new BadRequestException(
+                'Вибрана позиція не належить цій передачі',
+              );
+            }
+            const available = sourceLine.quantity.minus(
+              issuedByLine.get(sourceLine.id) ?? new Prisma.Decimal(0),
+            );
+            if (requested.quantity.gt(available)) {
+              throw new ConflictException(
+                'Недостатня кількість, доступна для оформлення видачі',
+              );
+            }
+            return {
+              inventoryItemId: sourceLine.inventoryItemId,
+              sourceTransferLineId: sourceLine.id,
+              sourceBalanceId: null,
+              sourceKind: null,
+              accountingOwnerResponsiblePersonId: null,
+              sourceCustodianResponsiblePersonId: null,
+              sourceCustodyBalanceId: null,
+              quantityBefore: null,
+              quantityAfter: null,
+              quantity: requested.quantity,
+              note: requested.note,
+            };
+          });
+
+          const now = new Date();
+          const issue = await tx.stockDocument.create({
+            data: {
+              id: documentId,
+              documentNumber: `MOV-${randomUUID().slice(0, 8).toUpperCase()}`,
+              documentDate: new Date(dto.documentDate),
+              type: StockDocumentType.ISSUE,
+              accountingModel: StockAccountingModel.DIRECT_BALANCE,
+              status: StockDocumentStatus.POSTED,
+              sourceTransferId: transfer.id,
+              sourceResponsiblePersonId: transfer.sourceResponsiblePersonId,
+              destinationResponsiblePersonId: null,
+              recipientName: dto.recipientName.trim(),
+              recipientUnit: dto.recipientUnit?.trim() || null,
+              basis: dto.basis?.trim() || null,
+              note: dto.note?.trim() || null,
+              createdByUserId: actor.id,
+              postedByUserId: actor.id,
+              postedAt: now,
+              lines: { create: issueLines },
+              attachments: {
+                create: storedAttachments.map((attachment) => ({
+                  ...attachment,
+                  uploadedByUserId: actor.id,
+                })),
+              },
+            },
+            include: { lines: true },
+          });
+
+          for (const line of issue.lines) {
+            await this.createDocumentaryIssueTransaction(tx, issue, line);
+          }
+          await this.auditInTx(
+            tx,
+            actor,
+            documentId,
+            'CREATE',
+            StockDocumentStatus.POSTED,
+            true,
+            context,
+          );
+          await this.auditInTx(
+            tx,
+            actor,
+            documentId,
+            'POST',
+            StockDocumentStatus.POSTED,
+            true,
+            context,
+          );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       let cleanupError: unknown;
       for (const attachment of [...storedAttachments].reverse()) {
@@ -426,7 +557,7 @@ export class StockDocumentsService {
       throw cleanupError ?? error;
     }
 
-    return this.serialize(postedDocument);
+    return this.findOne(documentId, actor);
   }
 
   async update(
@@ -437,8 +568,11 @@ export class StockDocumentsService {
   ) {
     this.assertCanWrite(actor);
     const current = await this.findRaw(id);
-    this.assertMutableDocument(current);
+    this.assertDraftWorkflowDocument(current);
     this.assertNewDocumentType(dto.type);
+    if (dto.type !== current.type) {
+      throw new BadRequestException('Тип документа не можна змінювати');
+    }
     this.assertDraft(current.status);
     this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
     const normalized = this.validateDto(dto, actor);
@@ -481,7 +615,7 @@ export class StockDocumentsService {
   async remove(id: string, actor: CurrentUser, context: AuditContext) {
     this.assertCanWrite(actor);
     const document = await this.findRaw(id);
-    this.assertMutableDocument(document);
+    this.assertDraftWorkflowDocument(document);
     this.assertDraft(document.status);
     this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
     const attachments = await this.prisma.stockDocumentAttachment.findMany({
@@ -531,13 +665,14 @@ export class StockDocumentsService {
             accountingModel: true,
             status: true,
             sourceResponsiblePersonId: true,
+            sourceTransferId: true,
           },
         });
         if (!current) {
           throw new NotFoundException('Документ руху майна не знайдено');
         }
         this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-        this.assertMutableDocument(current);
+        this.assertDraftWorkflowDocument(current);
         if (current.status === StockDocumentStatus.POSTED) return false;
         this.assertDraft(current.status);
 
@@ -580,32 +715,6 @@ export class StockDocumentsService {
             'Документ повинен містити хоча б один рядок',
           );
         }
-        if (document.type === StockDocumentType.ISSUE) {
-          if (document.accountingModel !== StockAccountingModel.DIRECT_BALANCE) {
-            throw new BadRequestException(
-              'Legacy-чернетка видачі не містить надійного джерела залишку',
-            );
-          }
-          if (!document.recipientName?.trim()) {
-            throw new BadRequestException(
-              'Для проведення видачі обов’язково вкажіть одержувача',
-            );
-          }
-          if (!document.basis?.trim()) {
-            throw new BadRequestException(
-              'Для проведення видачі обов’язково вкажіть мету або підставу',
-            );
-          }
-          if (!document.attachments.length) {
-            throw new BadRequestException(
-              'Для проведення видачі додайте хоча б одне фото або скан накладної',
-            );
-          }
-          await this.attachmentStorage.assertStoredFilesExist(
-            document.attachments.map((attachment) => attachment.storagePath),
-          );
-        }
-
         for (const line of document.lines) {
           await this.postLine(tx, document, line);
         }
@@ -640,6 +749,12 @@ export class StockDocumentsService {
     this.assertCanWrite(actor);
     try {
       const cancelled = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          SELECT "id"
+          FROM "StockDocument"
+          WHERE "id" = ${id}::uuid
+          FOR UPDATE
+        `;
         const current = await tx.stockDocument.findUnique({
           where: { id },
           select: {
@@ -648,6 +763,7 @@ export class StockDocumentsService {
             accountingExportState: true,
             status: true,
             sourceResponsiblePersonId: true,
+            sourceTransferId: true,
           },
         });
         if (!current) {
@@ -660,6 +776,20 @@ export class StockDocumentsService {
           throw new BadRequestException(
             'Скасувати можна лише проведений документ',
           );
+        }
+        if (current.type === StockDocumentType.MVO_TRANSFER) {
+          const activeIssues = await tx.stockDocument.count({
+            where: {
+              sourceTransferId: id,
+              type: StockDocumentType.ISSUE,
+              status: StockDocumentStatus.POSTED,
+            },
+          });
+          if (activeIssues > 0) {
+            throw new ConflictException(
+              'Передачу неможливо скасувати, оскільки з переданого майна вже оформлено видачу.',
+            );
+          }
         }
         this.assertCancellationExportAllowed(current);
 
@@ -682,6 +812,7 @@ export class StockDocumentsService {
               accountingExportState: true,
               status: true,
               sourceResponsiblePersonId: true,
+              sourceTransferId: true,
             },
           });
           if (!concurrent) {
@@ -762,18 +893,6 @@ export class StockDocumentsService {
       );
       return;
     }
-    if (
-      document.type === StockDocumentType.ISSUE &&
-      document.accountingModel === StockAccountingModel.DIRECT_BALANCE
-    ) {
-      await this.postDirectBalanceLine(
-        tx,
-        document,
-        line,
-        StockTransactionType.ISSUE_OUT,
-      );
-      return;
-    }
     throw new BadRequestException(
       'Документ старої моделі доступний лише для перегляду',
     );
@@ -815,6 +934,54 @@ export class StockDocumentsService {
     });
   }
 
+  private async createDocumentaryIssueTransaction(
+    tx: Prisma.TransactionClient,
+    document: {
+      id: string;
+      documentNumber: string;
+      documentDate: Date;
+      sourceResponsiblePersonId: string;
+      basis: string | null;
+      note: string | null;
+    },
+    line: { id: string; inventoryItemId: string; quantity: Prisma.Decimal },
+  ) {
+    const balance = await tx.stockBalance.findUnique({
+      where: {
+        responsiblePersonId_inventoryItemId: {
+          responsiblePersonId: document.sourceResponsiblePersonId,
+          inventoryItemId: line.inventoryItemId,
+        },
+      },
+      select: { quantity: true },
+    });
+    const unchangedBalance = balance?.quantity ?? new Prisma.Decimal(0);
+    await tx.stockDocumentLine.update({
+      where: { id: line.id },
+      data: {
+        quantityBefore: unchangedBalance,
+        quantityAfter: unchangedBalance,
+      },
+    });
+    await tx.stockTransaction.create({
+      data: {
+        type: StockTransactionType.ISSUE_OUT,
+        responsiblePersonId: document.sourceResponsiblePersonId,
+        inventoryItemId: line.inventoryItemId,
+        quantity: line.quantity,
+        balanceBefore: unchangedBalance,
+        balanceAfter: unchangedBalance,
+        occurredAt: document.documentDate,
+        sourceDocument: document.documentNumber,
+        comment: document.basis ?? document.note,
+        documentId: document.id,
+        documentLineId: line.id,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
+        bucketKind: null,
+      },
+    });
+  }
+
   private async reverseLine(
     tx: Prisma.TransactionClient,
     document: CancellationDocument,
@@ -833,21 +1000,53 @@ export class StockDocumentsService {
     }
     if (
       document.type === StockDocumentType.ISSUE &&
-      document.accountingModel === StockAccountingModel.DIRECT_BALANCE
+      document.sourceTransferId
     ) {
-      await this.reverseDirectBalanceLine(
-        tx,
-        document,
-        line,
-        StockTransactionType.ISSUE_OUT,
-        StockTransactionType.ISSUE_REVERSAL,
-        'Скасування видачі',
-      );
+      await this.reverseDocumentaryIssueLine(tx, document, line);
       return;
     }
     throw new BadRequestException(
       'Документ старої моделі доступний лише для перегляду',
     );
+  }
+
+  private async reverseDocumentaryIssueLine(
+    tx: Prisma.TransactionClient,
+    document: CancellationDocument,
+    line: CancellationLine,
+  ) {
+    const original = this.transactionOfType(
+      line,
+      StockTransactionType.ISSUE_OUT,
+    );
+    const balance = await tx.stockBalance.findUnique({
+      where: {
+        responsiblePersonId_inventoryItemId: {
+          responsiblePersonId: document.sourceResponsiblePersonId,
+          inventoryItemId: line.inventoryItemId,
+        },
+      },
+      select: { quantity: true },
+    });
+    const unchangedBalance = balance?.quantity ?? new Prisma.Decimal(0);
+    await tx.stockTransaction.create({
+      data: {
+        type: StockTransactionType.ISSUE_REVERSAL,
+        responsiblePersonId: document.sourceResponsiblePersonId,
+        inventoryItemId: line.inventoryItemId,
+        quantity: line.quantity,
+        balanceBefore: unchangedBalance,
+        balanceAfter: unchangedBalance,
+        occurredAt: new Date(),
+        sourceDocument: document.documentNumber,
+        comment: 'Скасування видачі з передачі',
+        documentId: document.id,
+        documentLineId: line.id,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
+        bucketKind: null,
+        reversalOfTransactionId: original.id,
+      },
+    });
   }
 
   private async reverseDirectBalanceLine(
@@ -1083,6 +1282,43 @@ export class StockDocumentsService {
     };
   }
 
+  private normalizeTransferIssueLines(
+    lines: CreateTransferIssueDto['lines'],
+  ) {
+    const seen = new Set<string>();
+    return lines.map((line) => {
+      if (seen.has(line.sourceTransferLineId)) {
+        throw new BadRequestException(
+          'Один рядок передачі не можна додавати до видачі двічі',
+        );
+      }
+      seen.add(line.sourceTransferLineId);
+      let quantity: Prisma.Decimal;
+      try {
+        quantity = new Prisma.Decimal(line.quantity);
+      } catch {
+        throw new BadRequestException(
+          'Кількість у кожному рядку має бути коректним числом',
+        );
+      }
+      if (
+        !quantity.isFinite() ||
+        quantity.lte(0) ||
+        quantity.decimalPlaces() > 4 ||
+        quantity.gt(new Prisma.Decimal('99999999999999.9999'))
+      ) {
+        throw new BadRequestException(
+          'Кількість у кожному рядку має бути додатною і містити не більше 4 знаків після коми',
+        );
+      }
+      return {
+        sourceTransferLineId: line.sourceTransferLineId,
+        quantity,
+        note: line.note?.trim() || null,
+      };
+    });
+  }
+
   private async stageAttachmentFiles(storagePaths: string[]) {
     const staged: StagedAttachmentFile[] = [];
     try {
@@ -1125,14 +1361,12 @@ export class StockDocumentsService {
   private assertReadAccess(
     actor: CurrentUser,
     document: {
-      createdByUserId: string;
       sourceResponsiblePersonId: string;
     },
   ) {
     const responsiblePersonId = actor.responsiblePersonId;
     if (
       actor.role === UserRole.MVO &&
-      actor.id !== document.createdByUserId &&
       responsiblePersonId !== document.sourceResponsiblePersonId
     ) {
       throw new NotFoundException('Документ руху майна не знайдено');
@@ -1158,11 +1392,33 @@ export class StockDocumentsService {
   private assertMutableDocument(document: {
     type: StockDocumentType;
     accountingModel: StockAccountingModel | null;
+    sourceTransferId?: string | null;
   }) {
     this.assertNewDocumentType(document.type);
     if (document.accountingModel !== StockAccountingModel.DIRECT_BALANCE) {
       throw new BadRequestException(
         'Документ старої моделі доступний лише для перегляду',
+      );
+    }
+    if (
+      document.type === StockDocumentType.ISSUE &&
+      !document.sourceTransferId
+    ) {
+      throw new BadRequestException(
+        'Видача старої моделі доступна лише для перегляду',
+      );
+    }
+  }
+
+  private assertDraftWorkflowDocument(document: {
+    type: StockDocumentType;
+    accountingModel: StockAccountingModel | null;
+    sourceTransferId?: string | null;
+  }) {
+    this.assertMutableDocument(document);
+    if (document.type === StockDocumentType.ISSUE) {
+      throw new BadRequestException(
+        'Видача з передачі створюється і проводиться однією операцією без чернетки',
       );
     }
   }
@@ -1180,13 +1436,53 @@ export class StockDocumentsService {
       include: typeof documentInclude;
     }>,
   ) {
-    return {
-      ...document,
-      lines: document.lines.map((line) => ({
+    const serializedLines = document.lines.map((line) => {
+      const issuedQuantity = (line.issueLines ?? [])
+        .filter(
+          (issueLine) =>
+            issueLine.document.status === StockDocumentStatus.POSTED,
+        )
+        .reduce(
+          (sum, issueLine) => sum.plus(issueLine.quantity),
+          new Prisma.Decimal(0),
+        );
+      return {
         ...line,
         quantity: line.quantity.toString(),
         quantityBefore: line.quantityBefore?.toString() ?? null,
         quantityAfter: line.quantityAfter?.toString() ?? null,
+        issuedQuantity:
+          document.type === StockDocumentType.MVO_TRANSFER
+            ? issuedQuantity.toString()
+            : null,
+        availableToIssue:
+          document.type === StockDocumentType.MVO_TRANSFER
+            ? Prisma.Decimal.max(
+                line.quantity.minus(issuedQuantity),
+                new Prisma.Decimal(0),
+              ).toString()
+            : null,
+        issueLines: undefined,
+      };
+    });
+    return {
+      ...document,
+      lines: serializedLines,
+      issues: (document.issues ?? []).map((issue) => ({
+        ...issue,
+        lines: issue.lines.map((line) => ({
+          ...line,
+          quantity: line.quantity.toString(),
+          quantityBefore: line.quantityBefore?.toString() ?? null,
+          quantityAfter: line.quantityAfter?.toString() ?? null,
+        })),
+        totalPositions: issue.lines.length,
+        totalQuantity: issue.lines
+          .reduce(
+            (sum, line) => sum.plus(line.quantity),
+            new Prisma.Decimal(0),
+          )
+          .toString(),
       })),
       totalPositions: document.lines.length,
       totalQuantity: document.lines

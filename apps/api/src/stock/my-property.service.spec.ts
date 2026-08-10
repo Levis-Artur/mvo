@@ -43,11 +43,12 @@ const transferRow = {
   id: '66666666-6666-4666-8666-666666666666',
   quantity: new Prisma.Decimal('2.2500'),
   inventoryItem: item,
+  issueLines: [{ quantity: new Prisma.Decimal('0.7500') }],
   document: {
     id: '77777777-7777-4777-8777-777777777777',
     displayNumber: 7,
     documentDate: new Date('2026-07-20T11:00:00.000Z'),
-    type: StockDocumentType.ASSIGNMENT,
+    type: StockDocumentType.MVO_TRANSFER,
     status: StockDocumentStatus.POSTED,
     destinationResponsiblePerson: {
       id: otherId,
@@ -55,6 +56,7 @@ const transferRow = {
       firstName: 'Одержувач',
       middleName: null,
       personnelNumber: '003',
+      externalAccountingCode: '0057',
     },
   },
 };
@@ -146,6 +148,8 @@ describe('MyPropertyService', () => {
           displayNumber: 7,
           status: StockDocumentStatus.POSTED,
         }),
+        issuedQuantity: '0.75',
+        availableToIssue: '1.5',
       }),
     );
     expect(prisma.stockDocumentLine.findMany).toHaveBeenCalledWith(
@@ -153,16 +157,9 @@ describe('MyPropertyService', () => {
         where: expect.objectContaining({
           document: expect.objectContaining({
             sourceResponsiblePersonId: mvoId,
-            type: {
-              in: [
-                StockDocumentType.TRANSFER,
-                StockDocumentType.ASSIGNMENT,
-                StockDocumentType.MVO_TRANSFER,
-              ],
-            },
+            type: StockDocumentType.MVO_TRANSFER,
             status: {
               in: [
-                StockDocumentStatus.DRAFT,
                 StockDocumentStatus.POSTED,
                 StockDocumentStatus.CANCELLED,
               ],

@@ -93,7 +93,9 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('{createAndPostTransfer');
     expect(form).toContain('Підтвердити передачу');
     expect(form).toContain('Передаємо…');
-    expect(form).toContain("const createAndPostIssue = issue && !document;");
+    expect(form).toContain(
+      'const createAndPostIssue = issue && !document && Boolean(sourceTransfer);',
+    );
     expect(form).toContain('Підтвердити видачу');
     expect(form).toContain('Видаємо…');
     expect(form).toContain(
@@ -136,7 +138,7 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('<StockDocumentLines');
     expect(form).toContain("{type === 'ISSUE' ? (");
     expect(form).toContain('<StockDocumentAttachments');
-    expect(lines).toContain("transfer ? 'Доступно' : 'Кількість на складі'");
+    expect(lines).toContain("transfer ? 'Доступно' : 'Залишилось оформити'");
     expect(lines).toContain(
       "transfer ? 'Кількість' : 'Кількість до видачі'",
     );

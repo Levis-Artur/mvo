@@ -18,6 +18,7 @@ type TransactionRecord = {
   quantity: Prisma.Decimal;
   balanceBefore: Prisma.Decimal;
   balanceAfter: Prisma.Decimal;
+  occurredAt: Date;
   importBatchId?: string | null;
   documentId?: string | null;
   reversalOfTransactionId?: string | null;
@@ -105,6 +106,29 @@ function createDirectBalanceHarness() {
       balances.get(key(personId, itemId)) ?? new Prisma.Decimal(0),
     saveAttachment: (documentId: string, storedFileName: string) =>
       attachments.push({ documentId, storedFileName }),
+    recordDocumentaryTransaction: (
+      type: StockTransactionType,
+      documentId: string,
+      quantity: string,
+      occurredAt: Date,
+      reversalOfTransactionId?: string,
+    ) => {
+      const unchangedBalance =
+        balances.get(key(personA, itemId)) ?? new Prisma.Decimal(0);
+      const record: TransactionRecord = {
+        id: `transaction-${transactions.length + 1}`,
+        type,
+        responsiblePersonId: personA,
+        quantity: new Prisma.Decimal(quantity),
+        balanceBefore: unchangedBalance,
+        balanceAfter: unchangedBalance,
+        occurredAt,
+        documentId,
+        reversalOfTransactionId,
+      };
+      transactions.push(record);
+      return record;
+    },
   };
 }
 
@@ -160,24 +184,37 @@ describe('direct-balance accounting end-to-end flow', () => {
       ledger.transactions.find((entry) => entry.importBatchId === 'import-b'),
     ).toBeDefined();
 
-    // Scenario 3: ISSUE removes one direct unit and keeps attachment metadata.
-    await ledger.service.createDecreasingTransactionInTx(ledger.tx, {
-      type: StockTransactionType.ISSUE_OUT,
-      responsiblePersonId: personA,
-      inventoryItemId: itemId,
-      quantity: '1',
-      occurredAt: new Date('2026-07-24T10:00:00.000Z'),
-      documentId: 'issue-a',
-      accountingModel: StockAccountingModel.DIRECT_BALANCE,
-      bucketKind: StockSourceKind.DIRECT,
-    });
+    // Scenario 3: child ISSUE records a documentary event and attachment,
+    // but the direct balance was already reduced by the parent transfer.
+    const issue = ledger.recordDocumentaryTransaction(
+      StockTransactionType.ISSUE_OUT,
+      'issue-a',
+      '1',
+      new Date('2026-07-24T10:00:00.000Z'),
+    );
     ledger.saveAttachment('issue-a', 'invoice-uuid.pdf');
-    expect(ledger.quantity(personA).toString()).toBe('7');
+    expect(issue.balanceBefore.toString()).toBe('8');
+    expect(issue.balanceAfter.toString()).toBe('8');
+    expect(ledger.quantity(personA).toString()).toBe('8');
     expect(ledger.attachments).toEqual([
       { documentId: 'issue-a', storedFileName: 'invoice-uuid.pdf' },
     ]);
 
-    // Scenario 4: cancelling the transfer restores only A (+2), never B.
+    // Scenario 4: cancelling child ISSUE restores transfer availability only;
+    // it does not refund StockBalance.
+    const issueReversal = ledger.recordDocumentaryTransaction(
+      StockTransactionType.ISSUE_REVERSAL,
+      'issue-a',
+      '1',
+      new Date('2026-07-25T09:00:00.000Z'),
+      issue.id,
+    );
+    expect(issueReversal.balanceBefore.toString()).toBe('8');
+    expect(issueReversal.balanceAfter.toString()).toBe('8');
+    expect(ledger.quantity(personA).toString()).toBe('8');
+
+    // Once child issues are cancelled, cancelling the transfer restores only A
+    // (+2), never B.
     await ledger.service.createIncreasingTransactionInTx(ledger.tx, {
       type: StockTransactionType.MVO_TRANSFER_REVERSAL,
       responsiblePersonId: personA,
@@ -189,7 +226,7 @@ describe('direct-balance accounting end-to-end flow', () => {
       bucketKind: StockSourceKind.DIRECT,
       reversalOfTransactionId: transfer.id,
     });
-    expect(ledger.quantity(personA).toString()).toBe('9');
+    expect(ledger.quantity(personA).toString()).toBe('10');
     expect(ledger.quantity(personB).toString()).toBe('5');
 
     // Scenario 5: export is a pure read/serialization operation.
@@ -225,6 +262,7 @@ describe('direct-balance accounting end-to-end flow', () => {
       StockTransactionType.MVO_TRANSFER_OUT,
       StockTransactionType.IMPORT_RECEIPT,
       StockTransactionType.ISSUE_OUT,
+      StockTransactionType.ISSUE_REVERSAL,
       StockTransactionType.MVO_TRANSFER_REVERSAL,
     ]);
     expect(ledger.transactions.every((entry) => entry.quantity.gt(0))).toBe(true);

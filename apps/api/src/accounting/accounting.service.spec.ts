@@ -33,6 +33,7 @@ function person(id: string, number: string, lastName: string) {
   return {
     id,
     personnelNumber: number,
+    externalAccountingCode: number.padStart(4, '0'),
     lastName,
     firstName: 'Тест',
     middleName: null,
@@ -47,6 +48,10 @@ function line(
   index = 0,
   inventoryItemId = '55555555-5555-4555-8555-555555555555',
 ) {
+  const issueLines: Array<{
+    quantity: Prisma.Decimal;
+    document: { status: StockDocumentStatus };
+  }> = [];
   return {
     id: `44444444-4444-4444-8444-${String(index).padStart(12, '0')}`,
     documentId,
@@ -59,6 +64,7 @@ function line(
       name: `Клавіатура ${index}`,
       unitOfMeasure: 'шт',
     },
+    issueLines,
   };
 }
 
@@ -102,16 +108,6 @@ function snapshotRow(displayNumber: number | null = 7) {
     documentStatus: StockDocumentStatus.POSTED,
     postedAt: new Date('2026-07-21T12:00:00.000Z'),
     rowOrder: 0,
-  };
-}
-
-function listRow() {
-  return {
-    ...line(),
-    document: {
-      ...exportDocument(),
-      exportedAt: null,
-    },
   };
 }
 
@@ -188,8 +184,10 @@ function harness(documents = [exportDocument()]) {
     securityEvent: { create: jest.fn() },
   };
   const prisma = {
-    stockDocumentLine: {
-      findMany: jest.fn().mockResolvedValue([listRow()]),
+    stockDocument: {
+      findMany: jest.fn().mockResolvedValue(
+        documents.map((document) => ({ ...document, exportedAt: null })),
+      ),
       count: jest.fn().mockResolvedValue(1),
     },
     accountingTransferExportBatch: {
@@ -213,25 +211,43 @@ function harness(documents = [exportDocument()]) {
 }
 
 describe('AccountingService', () => {
-  it('lists only MVO_TRANSFER rows and exposes the human display number', async () => {
-    const h = harness();
+  it('lists one aggregate row per MVO_TRANSFER and excludes cancelled ISSUE quantities', async () => {
+    const transferLine = {
+      ...line(),
+      quantity: new Prisma.Decimal(10),
+      issueLines: [
+        {
+          quantity: new Prisma.Decimal(6),
+          document: { status: StockDocumentStatus.POSTED },
+        },
+        {
+          quantity: new Prisma.Decimal(3),
+          document: { status: StockDocumentStatus.CANCELLED },
+        },
+      ],
+    };
+    const h = harness([exportDocument([transferLine])]);
     const result = await h.service.listTransfers({
       page: 1,
       limit: 20,
       documentNumber: '№ 7',
     });
-    expect(h.prisma.stockDocumentLine.findMany).toHaveBeenCalledWith(
+    expect(h.prisma.stockDocument.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          document: expect.objectContaining({
-            type: StockDocumentType.MVO_TRANSFER,
-            displayNumber: 7,
-          }),
+          type: StockDocumentType.MVO_TRANSFER,
+          displayNumber: 7,
         }),
       }),
     );
     expect(result.items[0]).toEqual(
-      expect.objectContaining({ displayNumber: 7, quantity: '1' }),
+      expect.objectContaining({
+        displayNumber: 7,
+        totalPositions: 1,
+        totalQuantity: '10',
+        issuedQuantity: '6',
+        availableToIssue: '4',
+      }),
     );
     expect(result.items[0]).not.toHaveProperty('documentNumber');
   });

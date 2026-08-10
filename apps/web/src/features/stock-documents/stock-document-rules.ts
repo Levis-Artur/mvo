@@ -56,11 +56,13 @@ function personSearchText(person: TransferTarget) {
 
 export function documentLineError(
   line: StockDocumentInput['lines'][number] &
-    Partial<Pick<DocumentFormLine, 'sourceBalanceId'>>,
+    Partial<Pick<DocumentFormLine, 'sourceBalanceId' | 'sourceTransferLineId'>>,
   sources: AvailableStockSource[],
 ) {
   const source = sources.find((item) =>
     item.inventoryItem.id === line.inventoryItemId &&
+    (!line.sourceTransferLineId ||
+      item.sourceTransferLineId === line.sourceTransferLineId) &&
     (!line.sourceBalanceId || item.balanceId === line.sourceBalanceId),
   );
   const quantity = Number(line.quantity);
@@ -104,8 +106,15 @@ export function validateDocumentInput(
     ) {
       return 'Для нового документа можна вибирати лише власний поточний залишок';
     }
-    if (!line.sourceBalanceId) return 'Виберіть залишок для кожного рядка';
-    const sourceKey = line.sourceBalanceId;
+    const sourceKey =
+      input.type === 'ISSUE'
+        ? line.sourceTransferLineId
+        : line.sourceBalanceId;
+    if (!sourceKey) {
+      return input.type === 'ISSUE'
+        ? 'Виберіть рядок проведеної передачі'
+        : 'Виберіть залишок для кожного рядка';
+    }
     if (sourceKeys.has(sourceKey)) return 'Одне джерело майна не можна додавати двічі';
     sourceKeys.add(sourceKey);
     const error = documentLineError(line, sources);
@@ -174,7 +183,11 @@ export function successfulDocumentActionMessage(
   action: 'post' | 'cancel' | 'remove',
 ) {
   if (action === 'remove') return 'Чернетку видалено.';
-  if (action === 'cancel') return 'Документ скасовано. Попередній стан майна відновлено.';
+  if (action === 'cancel') {
+    return document.type === 'ISSUE' && document.sourceTransferId
+      ? 'Видачу скасовано. Доступну для оформлення кількість передачі відновлено.'
+      : 'Документ скасовано. Попередній стан майна відновлено.';
+  }
   const firstItem = document.lines[0]?.inventoryItem.name ?? 'майно';
   const extra = document.lines.length > 1 ? ` та ще ${document.lines.length - 1}` : '';
   const quantity = document.totalQuantity;
@@ -214,21 +227,24 @@ export function documentPostingBlocker(
 
 export function lifecycleActions(
   document: Pick<StockDocument, 'status' | 'sourceResponsiblePersonId' | 'type'> &
-    Partial<Pick<StockDocument, 'accountingExportState' | 'lines'>>,
+    Partial<Pick<StockDocument, 'accountingExportState' | 'lines' | 'sourceTransferId'>>,
   user: Pick<AuthUser, 'role' | 'responsiblePersonId'>,
 ) {
-  const directDocument =
-    (document.type === 'ISSUE' || document.type === 'MVO_TRANSFER') &&
+  const transferDocument =
+    document.type === 'MVO_TRANSFER' &&
     !document.lines?.some((line) => !line.sourceBalanceId);
-  const writable = directDocument && canChangeStockDocuments(user) && (
+  const childIssue =
+    document.type === 'ISSUE' && Boolean(document.sourceTransferId);
+  const writable = (transferDocument || childIssue) && canChangeStockDocuments(user) && (
     user.role !== 'MVO' || document.sourceResponsiblePersonId === user.responsiblePersonId
   );
   return {
-    edit: writable && document.status === 'DRAFT',
-    post: writable && document.status === 'DRAFT',
-    remove: writable && document.status === 'DRAFT',
+    edit: writable && transferDocument && document.status === 'DRAFT',
+    post: writable && transferDocument && document.status === 'DRAFT',
+    remove: writable && transferDocument && document.status === 'DRAFT',
     cancel:
       writable &&
+      (transferDocument || childIssue) &&
       document.status === 'POSTED' &&
       !(
         document.type === 'MVO_TRANSFER' &&

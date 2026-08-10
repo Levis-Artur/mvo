@@ -253,8 +253,11 @@ export type StockDocumentLine = {
   sourceCustodianResponsiblePersonId: string | null;
   sourceCustodyBalanceId: string | null;
   sourceBalanceId: string | null;
+  sourceTransferLineId?: string | null;
   quantityBefore: string | null;
   quantityAfter: string | null;
+  issuedQuantity?: string | null;
+  availableToIssue?: string | null;
   inventoryItem: InventoryItem;
 };
 
@@ -266,6 +269,7 @@ export type StockDocument = {
   type: StockDocumentType;
   status: StockDocumentStatus;
   sourceResponsiblePersonId: string;
+  sourceTransferId?: string | null;
   destinationResponsiblePersonId: string | null;
   recipientName: string | null;
   recipientUnit: string | null;
@@ -283,6 +287,14 @@ export type StockDocument = {
   postedByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
   cancelledByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
   lines: StockDocumentLine[];
+  sourceTransfer?: (Pick<
+    StockDocument,
+    'id' | 'displayNumber' | 'documentDate' | 'status'
+  > & {
+    sourceResponsiblePerson: ResponsiblePerson;
+    destinationResponsiblePerson: ResponsiblePerson | null;
+  }) | null;
+  issues?: StockDocument[];
   attachments: StockDocumentAttachment[];
   totalPositions: number;
   totalQuantity: string;
@@ -302,6 +314,7 @@ export type StockDocumentInput = {
     inventoryItemId: string;
     quantity: string;
     sourceBalanceId?: string;
+    sourceTransferLineId?: string;
     note?: string;
   }[];
 };
@@ -313,16 +326,23 @@ export type CreateMvoTransferInput = {
   lines: StockDocumentInput['lines'];
 };
 
-export type CreateIssueInput = {
+export type CreateTransferIssueInput = {
   documentDate: string;
   recipientName: string;
+  recipientUnit?: string;
+  basis?: string;
   note?: string;
-  lines: StockDocumentInput['lines'];
+  lines: {
+    sourceTransferLineId: string;
+    quantity: string;
+    note?: string;
+  }[];
 };
 
 export type AvailableStockSource = {
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
   balanceId: string;
+  sourceTransferLineId?: string;
   availableQuantity: string;
   unit: string | null;
   canTransfer: boolean;
@@ -353,6 +373,8 @@ export type TransferredMyPropertyItem = {
   id: string;
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
   quantity: string;
+  issuedQuantity: string;
+  availableToIssue: string;
   document: Pick<
     StockDocument,
     'id' | 'displayNumber' | 'documentDate' | 'type' | 'status'
@@ -588,8 +610,10 @@ export type AccountingTransferRow = {
   destinationResponsiblePerson: (PersonReference & {
     management: Pick<Management, 'id' | 'name'>;
   }) | null;
-  inventoryItem: InventoryItem;
-  quantity: string;
+  totalPositions: number;
+  totalQuantity: string;
+  issuedQuantity: string;
+  availableToIssue: string;
 };
 
 export type AccountingOverview = {
@@ -632,17 +656,19 @@ export type AccountingOverview = {
 export type AccountingMovementType =
   | 'IMPORT'
   | 'MVO_TRANSFER'
-  | 'ISSUE'
-  | 'CANCELLATION';
+  | 'ISSUE';
 
 export type AccountingMovementFilters = {
   dateFrom?: string;
   dateTo?: string;
   operationType?: AccountingMovementType;
   responsiblePersonId?: string;
+  destinationResponsiblePersonId?: string;
   mvoCode?: string;
   inventoryCode?: string;
   inventoryName?: string;
+  transferRecipient?: string;
+  issueRecipient?: string;
   status?: 'POSTED' | 'CANCELLED' | 'COMPLETED';
   search?: string;
 };
@@ -660,6 +686,7 @@ export type AccountingMovementRow = {
   operationType: AccountingMovementType;
   operationLabel: string;
   documentLabel: string;
+  documentId: string | null;
   responsiblePerson: AccountingMovementPerson;
   inventoryItem: Pick<
     InventoryItem,
@@ -667,6 +694,14 @@ export type AccountingMovementRow = {
   >;
   quantity: string;
   direction: string;
+  transferredTo: AccountingMovementPerson | null;
+  issuedTo: string | null;
+  relatedDocument: {
+    id: string;
+    displayNumber: number;
+    label: string;
+  } | null;
+  hasAttachment: boolean;
   status: StockDocumentStatus | ImportStatus;
   statusLabel: string;
 };
@@ -674,12 +709,22 @@ export type AccountingMovementRow = {
 export type AccountingMovementDetails = {
   kind: 'IMPORT' | 'STOCK_DOCUMENT';
   sourceId: string;
+  documentType: StockDocumentType | null;
   operationType: AccountingMovementType;
   documentLabel: string;
   documentDate: string;
   status: StockDocumentStatus | ImportStatus;
   author: { id: string; username: string } | null;
   responsiblePerson: AccountingMovementPerson;
+  destinationResponsiblePerson: AccountingMovementPerson | null;
+  sourceTransfer: {
+    id: string;
+    displayNumber: number;
+    documentDate: string;
+    status: StockDocumentStatus;
+    sourceResponsiblePerson: AccountingMovementPerson;
+    destinationResponsiblePerson: AccountingMovementPerson | null;
+  } | null;
   counterparty: Pick<
     AccountingMovementPerson,
     'fullName' | 'externalAccountingCode'
@@ -694,15 +739,27 @@ export type AccountingMovementDetails = {
     >;
     responsiblePerson: AccountingMovementPerson;
     quantity: string;
+    issuedQuantity: string | null;
+    availableToIssue: string | null;
     note: string | null;
   }[];
-  attachments: {
+  attachments: StockDocumentAttachment[];
+  issues: {
     id: string;
-    documentId: string;
-    originalFileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    createdAt: string;
+    displayNumber: number;
+    documentDate: string;
+    status: StockDocumentStatus;
+    recipientName: string | null;
+    author: { id: string; username: string };
+    quantity: string;
+    lines: {
+      inventoryItem: Pick<
+        InventoryItem,
+        'id' | 'externalCode' | 'name' | 'unitOfMeasure'
+      >;
+      quantity: string;
+    }[];
+    attachments: StockDocumentAttachment[];
   }[];
 };
 

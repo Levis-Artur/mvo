@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnsupportedMediaTypeException,
+} from '@nestjs/common';
 import { StockDocumentStatus, StockDocumentType, UserRole } from '@prisma/client';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -117,6 +121,8 @@ describe('StockDocumentAttachmentsService authorization', () => {
       createdByUserId: owner.id,
       sourceResponsiblePersonId: sourceId,
       destinationResponsiblePersonId: null,
+      sourceTransferId: 'transfer-id',
+      sourceTransfer: { sourceResponsiblePersonId: sourceId },
       lines: [{ accountingOwnerResponsiblePersonId: sourceId }],
     };
     const attachment = {
@@ -171,6 +177,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
       ),
       prisma,
       storage,
+      document,
     };
   }
 
@@ -197,6 +204,84 @@ describe('StockDocumentAttachmentsService authorization', () => {
     );
   });
 
+  it.each([UserRole.OWNER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.DPP_ADMIN])(
+    'allows %s to preview an ISSUE attachment through global read permission',
+    async (role) => {
+      const { service } = createService(StockDocumentStatus.POSTED);
+      const result = await service.preview(
+        'document-id',
+        'attachment-id',
+        { ...owner, role },
+        { requestId: 'preview-request' },
+      );
+
+      expect(result.metadata).toEqual(
+        expect.objectContaining({
+          originalFileName: 'invoice.pdf',
+          mimeType: 'application/pdf',
+        }),
+      );
+      expect(result.metadata).not.toHaveProperty('storagePath');
+    },
+  );
+
+  it('allows only the source MVO to preview a child ISSUE attachment', async () => {
+    const { service } = createService(StockDocumentStatus.POSTED);
+    await expect(
+      service.preview(
+        'document-id',
+        'attachment-id',
+        {
+          ...owner,
+          role: UserRole.MVO,
+          responsiblePersonId: sourceId,
+        },
+        {},
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('allows the source MVO to preview a legacy standalone ISSUE attachment', async () => {
+    const { service, document, storage } = createService(
+      StockDocumentStatus.POSTED,
+    );
+    const unlinkedDocument = document as unknown as {
+      sourceTransferId: string | null;
+      sourceTransfer: { sourceResponsiblePersonId: string } | null;
+    };
+    unlinkedDocument.sourceTransferId = null;
+    unlinkedDocument.sourceTransfer = null;
+
+    await expect(
+      service.preview(
+        'document-id',
+        'attachment-id',
+        {
+          ...owner,
+          role: UserRole.MVO,
+          responsiblePersonId: sourceId,
+        },
+        {},
+      ),
+    ).resolves.toBeDefined();
+    expect(storage.createDownloadStream).toHaveBeenCalled();
+  });
+
+  it('keeps legacy standalone ISSUE attachments read-only', async () => {
+    const { service, document, storage } = createService();
+    const unlinkedDocument = document as unknown as {
+      sourceTransferId: string | null;
+      sourceTransfer: { sourceResponsiblePersonId: string } | null;
+    };
+    unlinkedDocument.sourceTransferId = null;
+    unlinkedDocument.sourceTransfer = null;
+
+    await expect(
+      service.upload('document-id', uploadedFile(), owner, {}),
+    ).rejects.toThrow('доступні лише для перегляду');
+    expect(storage.store).not.toHaveBeenCalled();
+  });
+
   it('hides download from an unrelated MVO', async () => {
     const { service, storage } = createService();
     await expect(
@@ -208,6 +293,97 @@ describe('StockDocumentAttachmentsService authorization', () => {
       }, {}),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+
+  it('does not allow an unrelated MVO to preview a child ISSUE attachment', async () => {
+    const { service, storage } = createService(StockDocumentStatus.POSTED);
+    await expect(
+      service.preview(
+        'document-id',
+        'attachment-id',
+        {
+          ...owner,
+          id: '44444444-4444-4444-8444-444444444444',
+          role: UserRole.MVO,
+          responsiblePersonId: '55555555-5555-4555-8555-555555555555',
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+
+  it('does not grant attachment access to the transfer recipient MVO', async () => {
+    const { service, storage, document } = createService();
+    const recipientId = '33333333-3333-4333-8333-333333333333';
+    (
+      document as unknown as {
+        destinationResponsiblePersonId: string | null;
+      }
+    ).destinationResponsiblePersonId = recipientId;
+
+    await expect(
+      service.preview(
+        'document-id',
+        'attachment-id',
+        {
+          ...owner,
+          id: '44444444-4444-4444-8444-444444444444',
+          role: UserRole.MVO,
+          responsiblePersonId: recipientId,
+        },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+
+  it('requires attachmentId to belong to documentId and returns 404 otherwise', async () => {
+    const { service, prisma, storage } = createService();
+    prisma.stockDocumentAttachment.findFirst.mockResolvedValueOnce(null);
+
+    await expect(
+      service.preview('other-document', 'attachment-id', owner, {}),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.stockDocumentAttachment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'attachment-id', documentId: 'other-document' },
+      }),
+    );
+    expect(storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsafe or unsupported MIME for inline rendering', async () => {
+    const { service, prisma } = createService();
+    prisma.stockDocumentAttachment.findFirst.mockImplementationOnce(
+      async () => ({
+        id: 'attachment-id',
+        documentId: 'document-id',
+        originalFileName: 'invoice.svg',
+        storedFileName: 'stored.svg',
+        mimeType: 'image/svg+xml',
+        sizeBytes: 100,
+        sha256: 'hash',
+        storagePath: 'stored.svg',
+        uploadedByUserId: owner.id,
+        createdAt: new Date(),
+        document: {
+          id: 'document-id',
+          type: StockDocumentType.ISSUE,
+          status: StockDocumentStatus.POSTED,
+          createdByUserId: owner.id,
+          sourceResponsiblePersonId: sourceId,
+          destinationResponsiblePersonId: null,
+          sourceTransferId: 'transfer-id',
+          sourceTransfer: { sourceResponsiblePersonId: sourceId },
+          lines: [],
+        },
+      }),
+    );
+
+    await expect(
+      service.preview('document-id', 'attachment-id', owner, {}),
+    ).rejects.toBeInstanceOf(UnsupportedMediaTypeException);
   });
 
   it('does not delete an attachment after the ISSUE is POSTED', async () => {

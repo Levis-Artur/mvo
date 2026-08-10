@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -40,8 +41,17 @@ const attachmentDocumentSelect = {
   createdByUserId: true,
   sourceResponsiblePersonId: true,
   destinationResponsiblePersonId: true,
+  sourceTransferId: true,
+  sourceTransfer: { select: { sourceResponsiblePersonId: true } },
   lines: { select: { accountingOwnerResponsiblePersonId: true } },
 } satisfies Prisma.StockDocumentSelect;
+
+const INLINE_PREVIEW_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+]);
 
 @Injectable()
 export class StockDocumentAttachmentsService {
@@ -116,19 +126,64 @@ export class StockDocumentAttachmentsService {
     actor: CurrentUser,
     context: AuditContext,
   ) {
+    return this.openAttachment(
+      documentId,
+      attachmentId,
+      actor,
+      context,
+      'ATTACHMENT_DOWNLOAD',
+    );
+  }
+
+  async preview(
+    documentId: string,
+    attachmentId: string,
+    actor: CurrentUser,
+    context: AuditContext,
+  ) {
+    return this.openAttachment(
+      documentId,
+      attachmentId,
+      actor,
+      context,
+      'ATTACHMENT_PREVIEW',
+      true,
+    );
+  }
+
+  private async openAttachment(
+    documentId: string,
+    attachmentId: string,
+    actor: CurrentUser,
+    context: AuditContext,
+    action: 'ATTACHMENT_DOWNLOAD' | 'ATTACHMENT_PREVIEW',
+    requireIssue = false,
+  ) {
     const attachment = await this.prisma.stockDocumentAttachment.findFirst({
       where: { id: attachmentId, documentId },
       include: { document: { select: attachmentDocumentSelect } },
     });
     if (!attachment) throw new NotFoundException('Вкладення не знайдено');
-    this.assertReadAccess(actor, attachment.document);
+    if (requireIssue && attachment.document.type !== StockDocumentType.ISSUE) {
+      throw new NotFoundException('Підтверджуючий документ не знайдено');
+    }
+    if (requireIssue) {
+      this.assertPreviewAccess(actor, attachment.document);
+    } else {
+      this.assertReadAccess(actor, attachment.document);
+    }
+    if (requireIssue && !INLINE_PREVIEW_MIME_TYPES.has(attachment.mimeType)) {
+      throw new UnsupportedMediaTypeException(
+        'Попередній перегляд для цього типу файла недоступний',
+      );
+    }
     await this.storage.assertStoredFilesExist([attachment.storagePath]);
     await this.audit(
       this.prisma,
       actor,
       documentId,
       attachmentId,
-      'ATTACHMENT_DOWNLOAD',
+      action,
       context,
     );
     return {
@@ -227,6 +282,7 @@ export class StockDocumentAttachmentsService {
   private assertDraftIssue(document: {
     type: StockDocumentType;
     status: StockDocumentStatus;
+    sourceTransferId: string | null;
   }) {
     if (
       document.type !== StockDocumentType.ISSUE ||
@@ -234,6 +290,11 @@ export class StockDocumentAttachmentsService {
     ) {
       throw new BadRequestException(
         'Вкладення можна змінювати лише у чернетці видачі',
+      );
+    }
+    if (!document.sourceTransferId) {
+      throw new BadRequestException(
+        'Видача старої моделі та її вкладення доступні лише для перегляду',
       );
     }
   }
@@ -260,23 +321,29 @@ export class StockDocumentAttachmentsService {
   private assertReadAccess(
     actor: CurrentUser,
     document: {
-      createdByUserId: string;
       sourceResponsiblePersonId: string;
-      destinationResponsiblePersonId: string | null;
-      lines: { accountingOwnerResponsiblePersonId: string | null }[];
     },
   ) {
     if (actor.role !== UserRole.MVO) return;
-    const responsiblePersonId = actor.responsiblePersonId;
-    if (
-      actor.id === document.createdByUserId ||
-      responsiblePersonId === document.sourceResponsiblePersonId ||
-      responsiblePersonId === document.destinationResponsiblePersonId ||
-      document.lines.some(
-        (line) =>
-          line.accountingOwnerResponsiblePersonId === responsiblePersonId,
-      )
-    ) {
+    if (actor.responsiblePersonId === document.sourceResponsiblePersonId) {
+      return;
+    }
+    throw new NotFoundException('Документ руху майна не знайдено');
+  }
+
+  private assertPreviewAccess(
+    actor: CurrentUser,
+    document: {
+      sourceResponsiblePersonId: string;
+      sourceTransferId: string | null;
+      sourceTransfer: { sourceResponsiblePersonId: string } | null;
+    },
+  ) {
+    if (actor.role !== UserRole.MVO) return;
+    const permittedResponsiblePersonId = document.sourceTransferId
+      ? document.sourceTransfer?.sourceResponsiblePersonId
+      : document.sourceResponsiblePersonId;
+    if (actor.responsiblePersonId === permittedResponsiblePersonId) {
       return;
     }
     throw new NotFoundException('Документ руху майна не знайдено');

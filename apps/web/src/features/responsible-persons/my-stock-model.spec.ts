@@ -106,21 +106,29 @@ describe('my-stock frontend model', () => {
     expect(view).toContain("section === 'TRANSFERRED'");
   });
 
-  it('renders direct stock and transfer-document history as read-only tables', () => {
+  it('keeps direct stock read-only and renders outgoing transfer-line progress', () => {
     const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
     const css = readFileSync(
       join(__dirname, '../../styles/components.css'),
       'utf8',
     );
 
-    expect(view).not.toContain("{ label: 'Дії'");
     expect(view).not.toContain('sourceBalanceId');
     expect(view).not.toContain('accountingOwner');
     expect(view).not.toContain('currentCustodian');
     expect(view).toContain("{ label: 'Код', className: 'my-stock-table__code' }");
-    expect(view).toContain("{ label: 'Дата', className: 'my-stock-table__date' }");
-    expect(view).toContain("{ label: 'Номер', className: 'my-stock-table__document' }");
+    expect(view).toContain("{ label: 'Дата передачі', className: 'my-stock-table__date' }");
+    expect(view).toContain("{ label: '№ передачі', className: 'my-stock-table__document' }");
     expect(view).toContain("{ label: 'Кому передано', className: 'my-stock-table__person' }");
+    expect(view).toContain("label: 'Передано'");
+    expect(view).toContain("label: 'Видано'");
+    expect(view).toContain("label: 'Залишилось оформити видачу'");
+    expect(view).toContain("label: 'Дія'");
+    expect(view).toContain('item.issuedQuantity');
+    expect(view).toContain('item.availableToIssue');
+    expect(view).toContain('<MyTransferredPropertyCard');
+    expect(view).toContain('<TransferIssueModal');
+    expect(view).toContain('Видано повністю');
     expect(view).toContain('<StockDocumentStatusBadge');
     expect(view).toContain(
       "responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}",

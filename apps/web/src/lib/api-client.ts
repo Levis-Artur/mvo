@@ -1,6 +1,6 @@
 import type {
   CreateManagementDto,
-  CreateIssueInput,
+  CreateTransferIssueInput,
   CreateMvoTransferInput,
   CreateInventoryItemDto,
   CreateResponsiblePersonDto,
@@ -219,6 +219,10 @@ export type DownloadedFile = {
   filename: string;
 };
 
+export type PreviewedFile = DownloadedFile & {
+  mimeType: string;
+};
+
 async function downloadRequest(
   path: string,
   query?: Record<string, QueryValue>,
@@ -232,6 +236,23 @@ async function downloadRequest(
   return {
     blob: await response.blob(),
     filename: responseFilename(response.headers.get('content-disposition')) ?? 'download.csv',
+  };
+}
+
+async function previewRequest(path: string): Promise<PreviewedFile> {
+  const response = await fetch(buildUrl(path), {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw await createApiError(response, 'Не вдалося відкрити документ');
+  }
+  const blob = await response.blob();
+  return {
+    blob,
+    filename:
+      responseFilename(response.headers.get('content-disposition')) ??
+      'document',
+    mimeType: response.headers.get('content-type') ?? blob.type,
   };
 }
 
@@ -448,6 +469,10 @@ export const apiClient = {
     request<AccountingMovementDetails>(
       `/accounting/movements/${encodeURIComponent(id)}`,
     ),
+  accountingDocumentDetails: (id: string) =>
+    request<AccountingMovementDetails>(
+      `/accounting/documents/${encodeURIComponent(id)}`,
+    ),
   exportAccountingMovements: (query: AccountingMovementFilters) =>
     downloadRequest('/accounting/movements/export.csv', query),
   exportAccountingMvoTransfers: (query: AccountingTransferExportFilters) =>
@@ -469,14 +494,23 @@ export const apiClient = {
       '/stock-documents/mvo-transfer',
       mutation('POST', body),
     ),
-  createAndPostIssue: (body: CreateIssueInput, files: File[]) => {
+  createTransferIssue: (
+    transferId: string,
+    body: CreateTransferIssueInput,
+    files: File[],
+  ) => {
     const formData = new FormData();
     formData.set('documentDate', body.documentDate);
     formData.set('recipientName', body.recipientName);
+    if (body.recipientUnit) formData.set('recipientUnit', body.recipientUnit);
+    if (body.basis) formData.set('basis', body.basis);
     if (body.note) formData.set('note', body.note);
     formData.set('lines', JSON.stringify(body.lines));
     for (const file of files) formData.append('files', file);
-    return uploadRequest<StockDocument>('/stock-documents/issue', formData);
+    return uploadRequest<StockDocument>(
+      `/stock-documents/transfers/${encodeURIComponent(transferId)}/issues`,
+      formData,
+    );
   },
   updateStockDocument: (id: string, body: StockDocumentInput) =>
     request<StockDocument>(`/stock-documents/${id}`, mutation('PATCH', body)),
@@ -509,6 +543,13 @@ export const apiClient = {
     ),
   stockDocumentAttachmentDownloadUrl: (documentId: string, attachmentId: string) =>
     buildUrl(`/stock-documents/${documentId}/attachments/${attachmentId}/download`),
+  previewStockDocumentAttachment: (
+    documentId: string,
+    attachmentId: string,
+  ) =>
+    previewRequest(
+      `/stock-documents/${encodeURIComponent(documentId)}/attachments/${encodeURIComponent(attachmentId)}/preview`,
+    ),
   manualReceipt: (body: {
     responsiblePersonId: string;
     inventoryItemId: string;

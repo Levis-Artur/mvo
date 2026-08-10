@@ -1,15 +1,17 @@
 import type {
-  CreateIssueInput,
+  CreateTransferIssueInput,
   StockDocument,
   StockDocumentInput,
 } from '@/lib/types';
 
 export type CreateAndPostIssue = (
-  input: CreateIssueInput,
+  transferId: string,
+  input: CreateTransferIssueInput,
   files: File[],
 ) => Promise<StockDocument>;
 
 export async function submitNewIssue(
+  transferId: string,
   input: StockDocumentInput,
   files: File[],
   createAndPost: CreateAndPostIssue,
@@ -27,11 +29,23 @@ export async function submitNewIssue(
   }
 
   return createAndPost(
+    transferId,
     {
       documentDate: input.documentDate,
       recipientName: input.recipientName.trim(),
+      recipientUnit: input.recipientUnit,
+      basis: input.basis,
       note: input.note,
-      lines: input.lines,
+      lines: input.lines.map((line) => {
+        if (!line.sourceTransferLineId) {
+          throw new Error('Вибрана позиція не пов’язана з передачею');
+        }
+        return {
+          sourceTransferLineId: line.sourceTransferLineId,
+          quantity: line.quantity,
+          note: line.note,
+        };
+      }),
     },
     files,
   );

@@ -90,9 +90,23 @@ function documentMovement(
       type,
       status,
       recipientName: type === StockDocumentType.ISSUE ? 'Склад отримувача' : null,
+      sourceTransferId:
+        type === StockDocumentType.ISSUE
+          ? '77777777-7777-4777-8777-777777777777'
+          : null,
       sourceResponsiblePerson: person,
       destinationResponsiblePerson:
         type === StockDocumentType.MVO_TRANSFER ? destination : null,
+      sourceTransfer:
+        type === StockDocumentType.ISSUE
+          ? {
+              id: '77777777-7777-4777-8777-777777777777',
+              displayNumber: 6,
+              destinationResponsiblePerson: destination,
+            }
+          : null,
+      attachments:
+        type === StockDocumentType.ISSUE ? [{ id: 'attachment-id' }] : [],
     },
   });
 }
@@ -130,10 +144,8 @@ describe('AccountingMovementsService', () => {
   });
 
   it.each([
-    [StockDocumentType.MVO_TRANSFER, StockTransactionType.MVO_TRANSFER_OUT, 'MVO_TRANSFER', 'Передача', '-2'],
-    [StockDocumentType.ISSUE, StockTransactionType.ISSUE_OUT, 'ISSUE', 'Видача', '-2'],
-    [StockDocumentType.MVO_TRANSFER, StockTransactionType.MVO_TRANSFER_REVERSAL, 'CANCELLATION', 'Скасування передачі', '+2'],
-    [StockDocumentType.ISSUE, StockTransactionType.ISSUE_REVERSAL, 'CANCELLATION', 'Скасування видачі', '+2'],
+    [StockDocumentType.MVO_TRANSFER, StockTransactionType.MVO_TRANSFER_OUT, 'MVO_TRANSFER', 'Передача МВО', '-2'],
+    [StockDocumentType.ISSUE, StockTransactionType.ISSUE_OUT, 'ISSUE', 'Видача з передачі', '2'],
   ])('serializes %s/%s as %s', async (documentType, transactionType, operationType, operationLabel, quantity) => {
     const h = harness([documentMovement(documentType, transactionType)]);
     const result = await h.service.list({ page: 1, limit: 25 });
@@ -144,6 +156,20 @@ describe('AccountingMovementsService', () => {
       quantity,
       documentLabel: '№ 7',
     }));
+    if (operationType === 'ISSUE') {
+      expect(result.items[0]).toEqual(
+        expect.objectContaining({
+          transferredTo: expect.objectContaining({
+            externalAccountingCode: '0061',
+          }),
+          issuedTo: 'Склад отримувача',
+          relatedDocument: expect.objectContaining({
+            label: 'Передача № 6',
+          }),
+          hasAttachment: true,
+        }),
+      );
+    }
   });
 
   it('uses inclusive dateTo, server-side filters, newest-first sorting and pagination', async () => {
@@ -155,9 +181,12 @@ describe('AccountingMovementsService', () => {
       dateTo: '2026-08-07',
       operationType: 'MVO_TRANSFER',
       responsiblePersonId: person.id,
+      destinationResponsiblePersonId: destination.id,
       mvoCode: '0057',
       inventoryCode: 'KB',
       inventoryName: 'клав',
+      transferRecipient: '0061',
+      issueRecipient: 'Склад',
       status: 'POSTED',
       search: '№ 7',
     });
@@ -174,6 +203,8 @@ describe('AccountingMovementsService', () => {
     expect(JSON.stringify(call.where)).toContain('0057');
     expect(JSON.stringify(call.where)).toContain('MVO_TRANSFER_OUT');
     expect(JSON.stringify(call.where)).toContain('"displayNumber":7');
+    expect(JSON.stringify(call.where)).toContain('0061');
+    expect(JSON.stringify(call.where)).toContain('Склад');
   });
 
   it('exports every filtered row with UTF-8 BOM and does not mutate data', async () => {
@@ -182,6 +213,7 @@ describe('AccountingMovementsService', () => {
 
     expect(result.csv.startsWith('\uFEFF')).toBe(true);
     expect(result.csv).toContain('"Надходження"');
+    expect(result.csv).toContain('"Є підтверджуючий документ"');
     expect(result.csv).toContain('"0057"');
     expect(result.csv).toContain('\r\n');
     expect(h.prisma.stockTransaction.findMany).toHaveBeenCalledWith(
@@ -192,6 +224,112 @@ describe('AccountingMovementsService', () => {
       'stockDocument',
       'importBatch',
       'securityEvent',
+    ]);
+  });
+
+  it('returns the transfer to child ISSUE chain and counts only POSTED issues', async () => {
+    const h = harness([]);
+    h.prisma.stockDocument.findUnique.mockResolvedValue({
+      id: '66666666-6666-4666-8666-666666666666',
+      displayNumber: 7,
+      documentDate: new Date('2026-08-07T00:00:00.000Z'),
+      type: StockDocumentType.MVO_TRANSFER,
+      status: StockDocumentStatus.POSTED,
+      sourceTransferId: null,
+      recipientName: null,
+      recipientUnit: null,
+      basis: null,
+      note: null,
+      sourceResponsiblePerson: person,
+      destinationResponsiblePerson: destination,
+      sourceTransfer: null,
+      createdByUser: { id: 'user-id', username: 'mvo-a' },
+      lines: [
+        {
+          inventoryItem,
+          quantity: new Prisma.Decimal(10),
+          note: null,
+          issueLines: [
+            {
+              quantity: new Prisma.Decimal(6),
+              document: {
+                id: 'posted-issue',
+                status: StockDocumentStatus.POSTED,
+              },
+            },
+            {
+              quantity: new Prisma.Decimal(2),
+              document: {
+                id: 'cancelled-issue',
+                status: StockDocumentStatus.CANCELLED,
+              },
+            },
+          ],
+        },
+      ],
+      attachments: [],
+      issues: [
+        {
+          id: 'posted-issue',
+          displayNumber: 8,
+          documentDate: new Date('2026-08-08T00:00:00.000Z'),
+          status: StockDocumentStatus.POSTED,
+          recipientName: 'Одержувач',
+          createdByUser: { id: 'user-id', username: 'mvo-a' },
+          lines: [
+            {
+              inventoryItem,
+              quantity: new Prisma.Decimal(6),
+            },
+          ],
+          attachments: [
+            {
+              id: 'attachment-id',
+              documentId: 'posted-issue',
+              originalFileName: 'накладна.pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 100,
+              sha256: 'hash',
+              uploadedByUserId: 'user-id',
+              createdAt: new Date('2026-08-08T00:00:00.000Z'),
+            },
+          ],
+        },
+        {
+          id: 'cancelled-issue',
+          displayNumber: 9,
+          documentDate: new Date('2026-08-09T00:00:00.000Z'),
+          status: StockDocumentStatus.CANCELLED,
+          recipientName: 'Інший одержувач',
+          createdByUser: { id: 'user-id', username: 'mvo-a' },
+          lines: [
+            {
+              inventoryItem,
+              quantity: new Prisma.Decimal(2),
+            },
+          ],
+          attachments: [],
+        },
+      ],
+    });
+
+    const details = await h.service.detailsByDocumentId(
+      '66666666-6666-4666-8666-666666666666',
+    );
+
+    expect(details.lines[0]).toEqual(
+      expect.objectContaining({
+        quantity: '10',
+        issuedQuantity: '6',
+        availableToIssue: '4',
+      }),
+    );
+    expect(details.issues).toEqual([
+      expect.objectContaining({ id: 'posted-issue', quantity: '6' }),
+      expect.objectContaining({
+        id: 'cancelled-issue',
+        status: StockDocumentStatus.CANCELLED,
+      }),
     ]);
   });
 });

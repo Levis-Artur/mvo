@@ -412,6 +412,7 @@ model StockDocument {
   cancelledAt                    DateTime?
   exportedByUserId               String?             @db.Uuid
   exportedAt                     DateTime?
+  sourceTransferId               String?             @db.Uuid
   createdAt                      DateTime            @default(now())
   updatedAt                      DateTime            @updatedAt
   sourceResponsiblePerson        ResponsiblePerson   @relation("StockDocumentSource", fields: [sourceResponsiblePersonId], references: [id], onDelete: Restrict)
@@ -424,6 +425,8 @@ model StockDocument {
   transactions                   StockTransaction[]
   attachments                    StockDocumentAttachment[]
   accountingExportBatches        AccountingTransferExportBatchDocument[]
+  sourceTransfer                 StockDocument?       @relation("TransferIssues", fields: [sourceTransferId], references: [id], onDelete: Restrict)
+  issues                         StockDocument[]       @relation("TransferIssues")
 
   @@index([type])
   @@index([status])
@@ -435,6 +438,7 @@ model StockDocument {
   @@index([accountingExportState])
   @@index([exportedByUserId])
   @@index([exportedAt])
+  @@index([sourceTransferId])
 }
 
 model StockDocumentLine {
@@ -446,6 +450,7 @@ model StockDocumentLine {
   sourceCustodianResponsiblePersonId String? @db.Uuid
   sourceCustodyBalanceId String?      @db.Uuid
   sourceBalanceId String?             @db.Uuid
+  sourceTransferLineId String?         @db.Uuid
   quantityBefore Decimal?             @db.Decimal(18, 4)
   quantityAfter  Decimal?             @db.Decimal(18, 4)
   quantity        Decimal            @db.Decimal(18, 4)
@@ -457,6 +462,8 @@ model StockDocumentLine {
   sourceCustodianResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineSourceCustodian", fields: [sourceCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
   sourceCustodyBalance CustodyBalance? @relation(fields: [sourceCustodyBalanceId], references: [id], onDelete: Restrict)
   sourceBalance StockBalance?          @relation("StockDocumentLineSourceBalance", fields: [sourceBalanceId], references: [id], onDelete: Restrict)
+  sourceTransferLine StockDocumentLine? @relation("TransferIssueLines", fields: [sourceTransferLineId], references: [id], onDelete: Restrict)
+  issueLines       StockDocumentLine[]  @relation("TransferIssueLines")
   transactions    StockTransaction[]
 
   @@index([documentId])
@@ -465,6 +472,7 @@ model StockDocumentLine {
   @@index([sourceCustodianResponsiblePersonId])
   @@index([sourceCustodyBalanceId])
   @@index([sourceBalanceId])
+  @@index([sourceTransferLineId])
 }
 
 model StockDocumentAttachment {

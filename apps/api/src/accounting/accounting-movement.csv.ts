@@ -4,24 +4,34 @@ export type AccountingMovementCsvRow = {
   operationLabel: string;
   mvoCode: string;
   mvoName: string;
+  transferredToCode: string;
+  transferredToName: string;
   inventoryCode: string;
   inventoryName: string;
+  unitOfMeasure: string;
   quantity: string;
-  direction: string;
+  issuedTo: string;
+  relatedTransfer: string;
   statusLabel: string;
+  hasAttachment: string;
 };
 
 const HEADERS = [
   'Дата',
+  'Тип операції',
   'Документ',
-  'Операція',
   'Код МВО',
   'МВО',
+  'Кому передано — код МВО',
+  'Кому передано — ПІБ',
   'Код номенклатури',
-  'Назва',
+  'Номенклатура',
+  'Одиниця',
   'Кількість',
-  'Напрямок / Одержувач',
+  'Кому видано',
+  'Пов’язана передача',
   'Статус',
+  'Є підтверджуючий документ',
 ] as const;
 
 export function buildAccountingMovementCsv(
@@ -31,15 +41,20 @@ export function buildAccountingMovementCsv(
     .map((row) =>
       csvLine([
         formatDateTime(row.occurredAt),
-        row.documentLabel,
         row.operationLabel,
+        row.documentLabel,
         row.mvoCode,
         row.mvoName,
+        row.transferredToCode,
+        row.transferredToName,
         row.inventoryCode,
         row.inventoryName,
+        row.unitOfMeasure,
         row.quantity,
-        row.direction,
+        row.issuedTo,
+        row.relatedTransfer,
         row.statusLabel,
+        row.hasAttachment,
       ]),
     )
     .join('')}`;

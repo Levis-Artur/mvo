@@ -34,6 +34,10 @@ export function Modal({ title, children, footer, onClose, size = 'medium', destr
     (initialFocus ?? dialog)?.focus();
     function keyDown(event: KeyboardEvent) {
       if (event.defaultPrevented) return;
+      const dialogs = document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      if (dialogs.item(dialogs.length - 1) !== dialog) return;
       if (event.key === 'Escape' && closeOnEscapeRef.current) { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== 'Tab' || !dialog) return;
       const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)];

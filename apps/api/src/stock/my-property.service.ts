@@ -44,6 +44,15 @@ const transferHistorySelect = {
   id: true,
   quantity: true,
   inventoryItem: { select: inventoryItemSelect },
+  issueLines: {
+    where: {
+      document: {
+        type: StockDocumentType.ISSUE,
+        status: StockDocumentStatus.POSTED,
+      },
+    },
+    select: { quantity: true },
+  },
   document: {
     select: {
       id: true,
@@ -69,13 +78,7 @@ type TransferHistoryItem = ReturnType<
 type PropertyItem = DirectPropertyItem | TransferHistoryItem;
 
 const EXPORT_BATCH_SIZE = 500;
-const historicalTransferTypes = [
-  StockDocumentType.TRANSFER,
-  StockDocumentType.ASSIGNMENT,
-  StockDocumentType.MVO_TRANSFER,
-];
-const historicalTransferStatuses = [
-  StockDocumentStatus.DRAFT,
+const outgoingTransferStatuses = [
   StockDocumentStatus.POSTED,
   StockDocumentStatus.CANCELLED,
 ];
@@ -216,8 +219,8 @@ export class MyPropertyService {
     return {
       document: {
         sourceResponsiblePersonId: responsiblePersonId,
-        type: { in: historicalTransferTypes },
-        status: { in: historicalTransferStatuses },
+        type: StockDocumentType.MVO_TRANSFER,
+        status: { in: outgoingTransferStatuses },
       },
       AND: terms.map((term) => {
         const displayNumber = /^\d+$/.test(term) ? Number(term) : undefined;
@@ -333,11 +336,20 @@ export class MyPropertyService {
 
   serializeTransferHistory(row: TransferHistoryRow) {
     const recipient = row.document.destinationResponsiblePerson;
+    const issuedQuantity = row.issueLines.reduce(
+      (total, issueLine) => total.plus(issueLine.quantity),
+      new Prisma.Decimal(0),
+    );
+    const availableToIssue = row.quantity.minus(issuedQuantity);
     return {
       section: MyPropertySection.TRANSFERRED as const,
       id: row.id,
       inventoryItem: row.inventoryItem,
       quantity: row.quantity.toString(),
+      issuedQuantity: issuedQuantity.toString(),
+      availableToIssue: availableToIssue.isNegative()
+        ? '0'
+        : availableToIssue.toString(),
       document: {
         id: row.document.id,
         displayNumber: row.document.displayNumber,

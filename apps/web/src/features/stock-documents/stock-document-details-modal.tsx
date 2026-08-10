@@ -8,13 +8,16 @@ import {
   lifecycleActions,
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
-import { formatFileSize } from './stock-document-attachments-model';
-import { stockDocumentsService } from './stock-documents.service';
+import { StockDocumentAttachmentList } from './stock-document-attachment-list';
 
-export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onClose }: {
+export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onIssue, onViewIssue, onOpenSourceTransfer, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
   readOnly?: boolean;
-  onEdit: () => void; onPost: () => void; onCancel: () => void; onDelete: () => void; onClose: () => void;
+  onEdit: () => void; onPost: () => void; onCancel: () => void; onDelete: () => void;
+  onIssue: (transferLineId?: string) => void;
+  onViewIssue?: (issueId: string) => void;
+  onOpenSourceTransfer?: (transferId: string) => void;
+  onClose: () => void;
 }) {
   const actions = readOnly
     ? { edit: false, post: false, cancel: false, remove: false }
@@ -23,6 +26,13 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   const recipient = document.destinationResponsiblePerson
     ? fullName(document.destinationResponsiblePerson)
     : document.recipientName ?? '—';
+  const canCreateIssue =
+    !readOnly &&
+    user.role === 'MVO' &&
+    document.type === 'MVO_TRANSFER' &&
+    document.status === 'POSTED' &&
+    document.sourceResponsiblePersonId === user.responsiblePersonId &&
+    document.lines.some((line) => Number(line.availableToIssue ?? '0') > 0);
   return <Modal
     closeOnEscape={!loading}
     footer={<>
@@ -30,11 +40,12 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
       {actions.post ? <Button disabled={loading} type="button" onClick={onPost}>Провести</Button> : null}
       {actions.cancel ? <Button disabled={loading} variant="danger" type="button" onClick={onCancel}>Скасувати документ</Button> : null}
       {actions.remove ? <Button disabled={loading} variant="danger" type="button" onClick={onDelete}>Видалити чернетку</Button> : null}
+      {canCreateIssue ? <Button disabled={loading} type="button" onClick={() => onIssue()}>Оформити видачу</Button> : null}
       <Button disabled={loading} variant="outline" type="button" onClick={onClose}>Закрити</Button>
     </>}
     onClose={onClose}
     size="large"
-    title={`Документ: ${documentNumberLabel(document.displayNumber)}`}
+    title={`${document.type === 'ISSUE' ? 'Видача' : document.type === 'MVO_TRANSFER' ? 'Передача' : 'Документ'} ${documentNumberLabel(document.displayNumber)}`}
   >
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
@@ -47,6 +58,10 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           <Detail label="Статус"><StockDocumentStatusBadge status={document.status} /></Detail>
           <Detail label="Відправник">{fullName(document.sourceResponsiblePerson)}</Detail>
           <Detail label="Одержувач">{recipient}</Detail>
+          {document.sourceTransfer ? <Detail label="Передача-підстава">
+            {onOpenSourceTransfer ? <Button type="button" variant="link" onClick={() => onOpenSourceTransfer(document.sourceTransfer!.id)}>{documentNumberLabel(document.sourceTransfer.displayNumber)}</Button> : documentNumberLabel(document.sourceTransfer.displayNumber)}
+          </Detail> : null}
+          {document.sourceTransfer?.destinationResponsiblePerson ? <Detail label="Кому передано за передачею">{fullName(document.sourceTransfer.destinationResponsiblePerson)}</Detail> : null}
           {document.recipientUnit ? <Detail label="Підрозділ одержувача">{document.recipientUnit}</Detail> : null}
           <Detail label="Автор">{document.createdByUser.username}</Detail>
           <Detail label="Проведено">{document.postedAt ? `${formatDateTime(document.postedAt)} · ${document.postedByUser?.username ?? '—'}` : '—'}</Detail>
@@ -57,7 +72,12 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
       </Card>
       <DataTable
         ariaLabel="Рядки документа"
-        columns={user.role === 'MVO' ? [
+        columns={document.type === 'MVO_TRANSFER' ? [
+          { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
+          { label: 'Передано', numeric: true }, { label: 'Видано', numeric: true },
+          { label: 'Залишилось оформити', numeric: true }, { label: 'Примітка' },
+          { label: 'Дія', actions: true },
+        ] : user.role === 'MVO' ? [
           { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ] : [
@@ -65,21 +85,47 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ]}
         responsiveMode="cards-wide"
-        rows={document.lines.map((line) => user.role === 'MVO' ? [
+        rows={document.lines.map((line) => document.type === 'MVO_TRANSFER' ? [
+          line.inventoryItem.externalCode, line.inventoryItem.name,
+          line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity),
+          formatQuantity(line.issuedQuantity ?? '0'),
+          formatQuantity(line.availableToIssue ?? line.quantity), line.note ?? '—',
+          canCreateIssue && Number(line.availableToIssue ?? '0') > 0 ? <Button key="issue" size="compact" type="button" onClick={() => onIssue(line.id)}>Видати</Button> : Number(line.availableToIssue ?? '0') <= 0 && document.status === 'POSTED' ? <StatusBadge key="complete" tone="neutral">Видано повністю</StatusBadge> : null,
+        ] : user.role === 'MVO' ? [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ] : [
           line.inventoryItem.externalCode, line.inventoryItem.name,
-          document.type === 'MVO_TRANSFER'
-            ? <StatusBadge key="source" tone="success">Залишок МВО</StatusBadge>
+          document.type === 'ISSUE' && document.sourceTransferId
+            ? <StatusBadge key="source" tone="info">З передачі</StatusBadge>
             : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ])}
       />
-      {document.attachments.length ? <Card title="Вкладення">
-        <div className="grid gap-2">
-          {document.attachments.map((attachment) => <a className="break-all font-semibold text-[var(--color-primary)] underline" href={stockDocumentsService.attachmentDownloadUrl(document.id, attachment.id)} key={attachment.id}>{attachment.originalFileName} · {formatFileSize(attachment.sizeBytes)}</a>)}
-        </div>
+      {document.type === 'MVO_TRANSFER' && (document.issues?.length ?? 0) > 0 ? (
+        <Card title="Оформлені видачі">
+          <DataTable
+            ariaLabel="Видачі з цієї передачі"
+            columns={[
+              { label: 'Дата' }, { label: 'Документ' }, { label: 'Кому видано' },
+              { label: 'Позицій', numeric: true }, { label: 'Статус' },
+              { label: 'Документ/файл' }, { label: 'Дія', actions: true },
+            ]}
+            responsiveMode="cards-wide"
+            rows={(document.issues ?? []).map((issue) => [
+              formatDateTime(issue.documentDate),
+              documentNumberLabel(issue.displayNumber),
+              issue.recipientName ?? '—',
+              String(issue.totalPositions),
+              <StockDocumentStatusBadge key="status" status={issue.status} />,
+              issue.attachments.length ? <StatusBadge key="attachment" tone="info">Є документ</StatusBadge> : '—',
+              onViewIssue ? <Button key="view" size="compact" type="button" variant="outline" onClick={() => onViewIssue(issue.id)}>Переглянути видачу</Button> : null,
+            ])}
+          />
+        </Card>
+      ) : null}
+      {document.attachments.length ? <Card title={document.type === 'ISSUE' ? 'Підтверджуючий документ' : 'Вкладення'}>
+        <StockDocumentAttachmentList attachments={document.attachments} />
       </Card> : null}
       <div className="flex justify-end gap-6 font-semibold">
         <span>Позицій: {document.totalPositions}</span>

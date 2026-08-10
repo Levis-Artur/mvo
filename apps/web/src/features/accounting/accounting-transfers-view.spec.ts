@@ -34,9 +34,9 @@ describe('AccountingTransfersView', () => {
 
   it('renders all required filters, register columns and export history', () => {
     for (const label of [
-      'Відправник', 'Одержувач', 'Показати документи, що містять номенклатуру', 'Статус', 'Номер документа',
-      'Номер документа', 'МВО-відправник', 'МВО-одержувач', 'Кількість',
-      'Дата проведення', 'Історія експортів',
+      'Відправник', 'Одержувач', 'Показати документи, що містять номенклатуру', 'Статус',
+      'Документ', 'МВО A', 'Код МВО A', 'МВО B', 'Код МВО B',
+      'Позицій', 'Загальна кількість', 'Оформлено видач', 'Залишилось оформити', 'Історія експортів',
     ]) expect(view).toContain(label);
     expect(view).toContain('dateFrom={draft.dateFrom}');
     expect(view).toContain('dateTo={draft.dateTo}');
@@ -59,11 +59,11 @@ describe('AccountingTransfersView', () => {
     expect(client).toContain("'/accounting/mvo-transfers'");
     expect(client).toContain("'/accounting/mvo-transfers/export.csv'");
     expect(client).toContain("'/accounting/mvo-transfer-exports'");
+    expect(client).toContain('`/accounting/documents/${encodeURIComponent(id)}`');
     expect(view).toContain('limit: Math.min(limit, 100)');
   });
 
   it('does not render UUIDs and explains that export does not link imports', () => {
-    expect(view).not.toContain('row.documentId');
     expect(view).not.toContain('row.documentNumber');
     expect(view).not.toContain('batch.sha256');
     expect(view).toContain('documentNumberLabel(row.displayNumber)');

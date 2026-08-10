@@ -169,7 +169,7 @@ describe('StockService', () => {
       availableQuantity: '2',
       unit: 'шт',
       canTransfer: true,
-      canIssue: true,
+      canIssue: false,
     }]);
     expect(prisma).not.toHaveProperty('custodyBalance');
   });
@@ -223,6 +223,33 @@ describe('StockService', () => {
         where: expect.objectContaining({ quantity: { gt: 0 } }),
       }),
     );
+  });
+
+  it('scopes MVO accounting-card documents to outgoing records only', async () => {
+    const personId = '11111111-1111-4111-8111-111111111111';
+    const prisma = {
+      stockBalance: { findMany: jest.fn().mockResolvedValue([]) },
+      custodyBalance: { findMany: jest.fn().mockResolvedValue([]) },
+      stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = new StockService(prisma as never);
+
+    await service.responsiblePersonAccountingCard(personId, {
+      id: 'user-id',
+      username: 'mvo',
+      role: UserRole.MVO,
+      isActive: true,
+      mustChangePassword: false,
+      responsiblePersonId: personId,
+    });
+
+    expect(prisma.stockDocument.findMany).toHaveBeenCalledTimes(2);
+    for (const call of prisma.stockDocument.findMany.mock.calls) {
+      expect(call[0].where).toMatchObject({
+        sourceResponsiblePersonId: personId,
+        OR: undefined,
+      });
+    }
   });
 
   it('returns direct StockBalance quantities without custody aggregation', async () => {

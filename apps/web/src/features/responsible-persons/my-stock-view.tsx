@@ -12,21 +12,28 @@ import {
   Input,
   Pagination,
   Select,
+  StatusBadge,
   Toast,
   type DataTableColumn,
 } from '@/components/ui';
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import { documentNumberLabel } from '@/features/stock-documents/stock-document-rules';
 import { StockDocumentStatusBadge } from '@/features/stock-documents/stock-document-status-badge';
+import { StockDocumentDetailsModal } from '@/features/stock-documents/stock-document-details-modal';
+import { stockDocumentsService } from '@/features/stock-documents/stock-documents.service';
+import { TransferIssueModal } from '@/features/stock-documents/transfer-issue-modal';
 import type {
   MyPropertyItem,
   MyPropertyResponse,
   MyPropertySection,
   MyPropertySortBy,
   SortOrder,
+  StockDocument,
+  TransferredMyPropertyItem,
 } from '@/lib/types';
 import { MyStockExportModal } from './my-stock-export-modal';
 import { MyInventoryItemCard } from './my-inventory-item-card';
+import { MyTransferredPropertyCard } from './my-transferred-property-card';
 import {
   DEFAULT_MY_PROPERTY_SORT,
   downloadFileInBrowser,
@@ -62,7 +69,16 @@ export function MyStockView() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState('');
+  const [toastTone, setToastTone] = useState<'success' | 'error'>('error');
   const [selectedInventoryItemId, setSelectedInventoryItemId] = useState('');
+  const [selectedTransferLine, setSelectedTransferLine] = useState<{
+    transfer: StockDocument;
+    lineId: string;
+  } | null>(null);
+  const [issueTransfer, setIssueTransfer] = useState<StockDocument | null>(null);
+  const [initialIssueLineId, setInitialIssueLineId] = useState('');
+  const [detailDocument, setDetailDocument] = useState<StockDocument | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState('');
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -112,9 +128,11 @@ export function MyStockView() {
     }
     window.addEventListener(TOOLBAR_EVENT, refresh);
     window.addEventListener('mvo:refresh-accounting-cards', refresh);
+    window.addEventListener('mvo:refresh-transferred-property', refresh);
     return () => {
       window.removeEventListener(TOOLBAR_EVENT, refresh);
       window.removeEventListener('mvo:refresh-accounting-cards', refresh);
+      window.removeEventListener('mvo:refresh-transferred-property', refresh);
     };
   }, [load]);
 
@@ -130,11 +148,61 @@ export function MyStockView() {
       downloadFileInBrowser(file);
       setExportOpen(false);
     } catch (reason) {
+      setToastTone('error');
       setToast(
         `Не вдалося експортувати CSV: ${getMvoErrorMessage(reason)}`,
       );
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function loadTransfer(item: TransferredMyPropertyItem) {
+    setActionLoadingId(item.id);
+    setToast('');
+    try {
+      return await stockDocumentsService.findOne(item.document.id);
+    } catch (reason) {
+      setToastTone('error');
+      setToast(getMvoErrorMessage(reason));
+      return null;
+    } finally {
+      setActionLoadingId('');
+    }
+  }
+
+  async function openTransferredItem(item: TransferredMyPropertyItem) {
+    const transfer = await loadTransfer(item);
+    if (transfer) setSelectedTransferLine({ transfer, lineId: item.id });
+  }
+
+  async function openIssue(item: TransferredMyPropertyItem) {
+    const transfer = await loadTransfer(item);
+    if (!transfer) return;
+    setIssueTransfer(transfer);
+    setInitialIssueLineId(item.id);
+  }
+
+  async function refreshSelectedTransfer() {
+    if (!selectedTransferLine) return;
+    const transfer = await stockDocumentsService.findOne(
+      selectedTransferLine.transfer.id,
+    );
+    setSelectedTransferLine((current) =>
+      current ? { ...current, transfer } : current,
+    );
+  }
+
+  async function openIssueDetails(issueId: string) {
+    setActionLoadingId(issueId);
+    setToast('');
+    try {
+      setDetailDocument(await stockDocumentsService.findOne(issueId));
+    } catch (reason) {
+      setToastTone('error');
+      setToast(getMvoErrorMessage(reason));
+    } finally {
+      setActionLoadingId('');
     }
   }
 
@@ -144,6 +212,59 @@ export function MyStockView() {
         inventoryItemId={selectedInventoryItemId}
         onBack={() => setSelectedInventoryItemId('')}
       />
+    );
+  }
+
+  if (selectedTransferLine && user) {
+    return (
+      <>
+        <MyTransferredPropertyCard
+          transfer={selectedTransferLine.transfer}
+          transferLineId={selectedTransferLine.lineId}
+          user={user}
+          onBack={() => setSelectedTransferLine(null)}
+          onIssue={() => {
+            setIssueTransfer(selectedTransferLine.transfer);
+            setInitialIssueLineId(selectedTransferLine.lineId);
+          }}
+          onViewIssue={(issueId) => void openIssueDetails(issueId)}
+        />
+        {issueTransfer ? (
+          <TransferIssueModal
+            initialTransferLineId={initialIssueLineId}
+            transfer={issueTransfer}
+            user={user}
+            onClose={() => setIssueTransfer(null)}
+            onSuccess={async () => {
+              setIssueTransfer(null);
+              await Promise.all([load(), refreshSelectedTransfer()]);
+              setToastTone('success');
+              setToast('Видачу оформлено.');
+            }}
+          />
+        ) : null}
+        {detailDocument ? (
+          <StockDocumentDetailsModal
+            readOnly
+            document={detailDocument}
+            error=""
+            loading={actionLoadingId === detailDocument.id}
+            user={user}
+            onCancel={() => undefined}
+            onClose={() => setDetailDocument(null)}
+            onDelete={() => undefined}
+            onEdit={() => undefined}
+            onIssue={() => undefined}
+            onOpenSourceTransfer={() =>
+              setDetailDocument(selectedTransferLine.transfer)
+            }
+            onPost={() => undefined}
+          />
+        ) : null}
+        {toast ? (
+          <Toast message={toast} tone={toastTone} onClose={() => setToast('')} />
+        ) : null}
+      </>
     );
   }
 
@@ -278,7 +399,13 @@ export function MyStockView() {
         loading={loading}
         responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}
         rows={(data?.items ?? []).map((item) =>
-          myStockRow(item, setSelectedInventoryItemId),
+          myStockRow(
+            item,
+            setSelectedInventoryItemId,
+            (transferred) => void openTransferredItem(transferred),
+            (transferred) => void openIssue(transferred),
+            actionLoadingId,
+          ),
         )}
         tableClassName={`my-stock-table my-stock-table--${section.toLocaleLowerCase()}`}
       />
@@ -305,8 +432,22 @@ export function MyStockView() {
           onExport={(scope) => void exportCsv(scope)}
         />
       ) : null}
+      {issueTransfer && user ? (
+        <TransferIssueModal
+          initialTransferLineId={initialIssueLineId}
+          transfer={issueTransfer}
+          user={user}
+          onClose={() => setIssueTransfer(null)}
+          onSuccess={async () => {
+            setIssueTransfer(null);
+            await load();
+            setToastTone('success');
+            setToast('Видачу оформлено.');
+          }}
+        />
+      ) : null}
       {toast ? (
-        <Toast message={toast} tone="error" onClose={() => setToast('')} />
+        <Toast message={toast} tone={toastTone} onClose={() => setToast('')} />
       ) : null}
     </section>
   );
@@ -315,16 +456,29 @@ export function MyStockView() {
 function myStockColumns(section: MyPropertySection): DataTableColumn[] {
   if (section === 'TRANSFERRED') {
     return [
-      { label: 'Дата', className: 'my-stock-table__date' },
-      { label: 'Номер', className: 'my-stock-table__document' },
-      { label: 'Номенклатура', className: 'my-stock-table__name' },
+      { label: 'Код', className: 'my-stock-table__code' },
+      { label: 'Назва', className: 'my-stock-table__name' },
+      { label: 'Одиниця', className: 'my-stock-table__unit' },
+      { label: 'Кому передано', className: 'my-stock-table__person' },
+      { label: '№ передачі', className: 'my-stock-table__document' },
+      { label: 'Дата передачі', className: 'my-stock-table__date' },
       {
-        label: 'Кількість',
+        label: 'Передано',
         className: 'my-stock-table__quantity',
         numeric: true,
       },
-      { label: 'Кому передано', className: 'my-stock-table__person' },
+      {
+        label: 'Видано',
+        className: 'my-stock-table__quantity',
+        numeric: true,
+      },
+      {
+        label: 'Залишилось оформити видачу',
+        className: 'my-stock-table__quantity',
+        numeric: true,
+      },
       { label: 'Статус', className: 'my-stock-table__status' },
+      { label: 'Дія', className: 'my-stock-table__actions', actions: true },
     ];
   }
   return [
@@ -348,28 +502,62 @@ function myStockEmptyMessage(section: MyPropertySection) {
 function myStockRow(
   item: MyPropertyItem,
   onOpenInventoryItem: (id: string) => void,
+  onOpenTransferredItem: (item: TransferredMyPropertyItem) => void,
+  onIssue: (item: TransferredMyPropertyItem) => void,
+  actionLoadingId: string,
 ) {
   if (item.section === 'TRANSFERRED') {
     const itemTitle = `${item.inventoryItem.externalCode} — ${item.inventoryItem.name}`;
+    const available = Number(item.availableToIssue);
+    const canIssue = item.document.status === 'POSTED' && available > 0;
     return [
-      new Date(item.document.documentDate).toLocaleDateString('uk-UA'),
-      documentNumberLabel(item.document.displayNumber),
       <Button
-        aria-label={`Відкрити картку: ${itemTitle}`}
+        aria-label={`Відкрити передану позицію ${item.inventoryItem.externalCode}`}
+        className="my-stock-item-link"
+        key="code"
+        title={item.inventoryItem.externalCode}
+        type="button"
+        variant="link"
+        onClick={() => onOpenTransferredItem(item)}
+      >
+        {item.inventoryItem.externalCode}
+      </Button>,
+      <Button
+        aria-label={`Відкрити передану позицію: ${itemTitle}`}
         className="my-stock-item-link my-stock-table__name-text"
         key="name"
         title={itemTitle}
         type="button"
         variant="link"
-        onClick={() => onOpenInventoryItem(item.inventoryItem.id)}
+        onClick={() => onOpenTransferredItem(item)}
       >
-        {itemTitle}
+        {item.inventoryItem.name}
       </Button>,
-      formatQuantity(item.quantity),
+      item.inventoryItem.unitOfMeasure ?? '—',
       item.recipient
-        ? `${item.recipient.externalAccountingCode ?? 'Не вказано'} — ${item.recipient.fullName}`
+        ? `${item.recipient.externalAccountingCode ?? item.recipient.personnelNumber} — ${item.recipient.fullName}`
         : 'Одержувача не вказано',
+      documentNumberLabel(item.document.displayNumber),
+      new Date(item.document.documentDate).toLocaleDateString('uk-UA'),
+      formatQuantity(item.quantity),
+      formatQuantity(item.issuedQuantity),
+      formatQuantity(item.availableToIssue),
       <StockDocumentStatusBadge key="status" status={item.document.status} />,
+      canIssue ? (
+        <Button
+          disabled={actionLoadingId === item.id}
+          key="issue"
+          size="compact"
+          type="button"
+          onClick={() => onIssue(item)}
+        >
+          {actionLoadingId === item.id ? 'Відкриваємо…' : 'Видати'}
+        </Button>
+      ) : available <= 0 && item.document.status === 'POSTED' ? (
+        <StatusBadge key="complete" tone="neutral">
+          Видано повністю
+        </StatusBadge>
+      ) : null,
     ];
   }
   return [

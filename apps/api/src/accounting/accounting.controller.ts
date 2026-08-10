@@ -64,6 +64,11 @@ export class AccountingController {
     return this.movementsService.details(id);
   }
 
+  @Get('documents/:id')
+  documentDetails(@Param('id') id: string) {
+    return this.movementsService.detailsByDocumentId(id);
+  }
+
   @Get('mvo-transfers')
   list(@Query() query: ListAccountingTransfersQueryDto) {
     return this.service.listTransfers(query);

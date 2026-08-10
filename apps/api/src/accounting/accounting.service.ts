@@ -34,15 +34,21 @@ type RequestContext = {
   userAgent?: string;
 };
 
-const transferRowInclude = {
-  inventoryItem: true,
-  document: {
-    include: {
-      sourceResponsiblePerson: { include: { management: true } },
-      destinationResponsiblePerson: { include: { management: true } },
+const transferListInclude = {
+  sourceResponsiblePerson: { include: { management: true } },
+  destinationResponsiblePerson: { include: { management: true } },
+  lines: {
+    select: {
+      quantity: true,
+      issueLines: {
+        select: {
+          quantity: true,
+          document: { select: { status: true } },
+        },
+      },
     },
   },
-} satisfies Prisma.StockDocumentLineInclude;
+} satisfies Prisma.StockDocumentInclude;
 
 const exportDocumentInclude = {
   sourceResponsiblePerson: { include: { management: true } },
@@ -53,8 +59,8 @@ const exportDocumentInclude = {
   },
 } satisfies Prisma.StockDocumentInclude;
 
-type TransferRow = Prisma.StockDocumentLineGetPayload<{
-  include: typeof transferRowInclude;
+type TransferListDocument = Prisma.StockDocumentGetPayload<{
+  include: typeof transferListInclude;
 }>;
 type ExportDocument = Prisma.StockDocumentGetPayload<{
   include: typeof exportDocumentInclude;
@@ -80,21 +86,22 @@ export class AccountingService {
     const limit = query.limit ?? 20;
     const where = this.transferWhere(query);
     const [items, total] = await Promise.all([
-      this.prisma.stockDocumentLine.findMany({
+      this.prisma.stockDocument.findMany({
         where,
-        include: transferRowInclude,
+        include: transferListInclude,
         orderBy: [
-          { document: { documentDate: 'desc' } },
-          { document: { displayNumber: 'desc' } },
-          { createdAt: 'asc' },
+          { documentDate: 'desc' },
+          { displayNumber: 'desc' },
         ],
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.stockDocumentLine.count({ where }),
+      this.prisma.stockDocument.count({ where }),
     ]);
     return {
-      items: items.map((row) => this.serializeTransferRow(row)),
+      items: items.map((document) =>
+        this.serializeTransferDocument(document),
+      ),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -348,18 +355,18 @@ export class AccountingService {
 
   private transferWhere(
     filters: ListAccountingTransfersQueryDto,
-  ): Prisma.StockDocumentLineWhereInput {
+  ): Prisma.StockDocumentWhereInput {
     return {
-      inventoryItemId: filters.inventoryItemId,
-      document: {
-        type: StockDocumentType.MVO_TRANSFER,
-        status: filters.status,
-        accountingExportState: filters.exportState,
-        sourceResponsiblePersonId: filters.sourceResponsiblePersonId,
-        destinationResponsiblePersonId: filters.destinationResponsiblePersonId,
-        displayNumber: this.parseDisplayNumber(filters.documentNumber),
-        documentDate: this.dateRange(filters),
-      },
+      type: StockDocumentType.MVO_TRANSFER,
+      status: filters.status,
+      accountingExportState: filters.exportState,
+      sourceResponsiblePersonId: filters.sourceResponsiblePersonId,
+      destinationResponsiblePersonId: filters.destinationResponsiblePersonId,
+      displayNumber: this.parseDisplayNumber(filters.documentNumber),
+      documentDate: this.dateRange(filters),
+      lines: filters.inventoryItemId
+        ? { some: { inventoryItemId: filters.inventoryItemId } }
+        : undefined,
     };
   }
 
@@ -403,20 +410,44 @@ export class AccountingService {
     return displayNumber;
   }
 
-  private serializeTransferRow(row: TransferRow) {
-    const destination = row.document.destinationResponsiblePerson;
+  private serializeTransferDocument(document: TransferListDocument) {
+    const destination = document.destinationResponsiblePerson;
+    const totalQuantity = document.lines.reduce(
+      (sum, line) => sum.plus(line.quantity),
+      new Prisma.Decimal(0),
+    );
+    const issuedQuantity = document.lines.reduce(
+      (documentSum, line) =>
+        documentSum.plus(
+          line.issueLines
+            .filter(
+              (issueLine) =>
+                issueLine.document.status === StockDocumentStatus.POSTED,
+            )
+            .reduce(
+              (lineSum, issueLine) => lineSum.plus(issueLine.quantity),
+              new Prisma.Decimal(0),
+            ),
+        ),
+      new Prisma.Decimal(0),
+    );
     return {
-      documentId: row.documentId,
-      displayNumber: row.document.displayNumber,
-      documentDate: row.document.documentDate.toISOString(),
-      status: row.document.status,
-      exportState: row.document.accountingExportState,
-      exportedAt: row.document.exportedAt?.toISOString() ?? null,
-      postedAt: row.document.postedAt?.toISOString() ?? null,
-      sourceResponsiblePerson: this.person(row.document.sourceResponsiblePerson),
+      documentId: document.id,
+      displayNumber: document.displayNumber,
+      documentDate: document.documentDate.toISOString(),
+      status: document.status,
+      exportState: document.accountingExportState,
+      exportedAt: document.exportedAt?.toISOString() ?? null,
+      postedAt: document.postedAt?.toISOString() ?? null,
+      sourceResponsiblePerson: this.person(document.sourceResponsiblePerson),
       destinationResponsiblePerson: destination ? this.person(destination) : null,
-      inventoryItem: row.inventoryItem,
-      quantity: row.quantity.toString(),
+      totalPositions: document.lines.length,
+      totalQuantity: totalQuantity.toString(),
+      issuedQuantity: issuedQuantity.toString(),
+      availableToIssue: Prisma.Decimal.max(
+        totalQuantity.minus(issuedQuantity),
+        new Prisma.Decimal(0),
+      ).toString(),
     };
   }
 
@@ -463,7 +494,9 @@ export class AccountingService {
     }
   }
 
-  private person(person: TransferRow['document']['sourceResponsiblePerson']) {
+  private person(
+    person: TransferListDocument['sourceResponsiblePerson'],
+  ) {
     return {
       id: person.id,
       personnelNumber: person.personnelNumber,

@@ -5,7 +5,7 @@ export const stockDocumentsService = {
   findOne: apiClient.stockDocument,
   create: apiClient.createStockDocument,
   createAndPostMvoTransfer: apiClient.createAndPostMvoTransfer,
-  createAndPostIssue: apiClient.createAndPostIssue,
+  createTransferIssue: apiClient.createTransferIssue,
   update: apiClient.updateStockDocument,
   remove: apiClient.deleteStockDocument,
   post: apiClient.postStockDocument,
@@ -20,4 +20,5 @@ export const stockDocumentsService = {
   uploadAttachment: apiClient.uploadStockDocumentAttachment,
   removeAttachment: apiClient.deleteStockDocumentAttachment,
   attachmentDownloadUrl: apiClient.stockDocumentAttachmentDownloadUrl,
+  previewAttachment: apiClient.previewStockDocumentAttachment,
 };

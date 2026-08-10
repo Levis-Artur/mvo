@@ -47,12 +47,14 @@ const source = (id: string, quantity: string): AvailableStockSource => ({
   inventoryItem: { id, externalCode: id, name: id, unitOfMeasure: 'шт' },
   availableQuantity: quantity,
   balanceId: `balance-${id}`,
+  sourceTransferLineId: `transfer-line-${id}`,
   unit: 'шт',
   canTransfer: true,
   canIssue: true,
 });
 const line = () => ({
   inventoryItemId: 'item-1', quantity: '2', sourceBalanceId: 'balance-item-1',
+  sourceTransferLineId: 'transfer-line-item-1',
 });
 const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => ({
   type: 'ISSUE', documentDate: '2026-07-16T00:00:00.000Z',
@@ -130,15 +132,33 @@ describe('stock document frontend rules', () => {
     }, mvoUser).cancel).toBe(true);
   });
 
-  it('дозволяє редагувати нову видачу та MVO_TRANSFER лише з sourceBalanceId', () => {
+  it('залишає standalone ISSUE read-only та дозволяє скасувати child ISSUE', () => {
     expect(lifecycleActions({
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
-    }, mvoUser).edit).toBe(true);
+    }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+    expect(lifecycleActions({
+      type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
+      sourceTransferId: 'transfer-1',
+    }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+    expect(lifecycleActions({
+      type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: 'person-1',
+      sourceTransferId: 'transfer-1',
+    }, mvoUser).cancel).toBe(true);
     expect(lifecycleActions({
       type: 'MVO_TRANSFER', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
     }, mvoUser).edit).toBe(true);
+  });
+
+  it('пояснює скасування child ISSUE без заяви про відновлення StockBalance', () => {
+    const message = successfulDocumentActionMessage({
+      type: 'ISSUE',
+      sourceTransferId: 'transfer-1',
+    } as StockDocument, 'cancel');
+
+    expect(message).toBe('Видачу скасовано. Доступну для оформлення кількість передачі відновлено.');
+    expect(message).not.toContain('стан майна відновлено');
   });
 
   it('показує точний action error і розрізняє типи документів', () => {

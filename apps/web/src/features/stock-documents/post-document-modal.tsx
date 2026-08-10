@@ -30,7 +30,6 @@ export function PostDocumentModal({ document, loading, error, onConfirm, onClose
       </Card>
       {postingBlocker ? <ErrorState message={postingBlocker} /> : null}
       {document.type === 'MVO_TRANSFER' ? <div className="ui-alert" data-tone="info" role="status">Після проведення кількість буде списана із залишку відправника. Одержувачу майно автоматично не оприбутковується.</div> : null}
-      {document.type === 'ISSUE' ? <div className="ui-alert" data-tone="warning" role="status">Після проведення документа вказана кількість буде списана з обліку.</div> : null}
       <div className="ui-alert" data-tone="warning" role="status">
         <strong>Після проведення документ не можна редагувати</strong>
         <span>Перевірте одержувача, позиції та кількість. За потреби проведений документ можна буде скасувати окремою дією.</span>
