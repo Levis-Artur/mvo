@@ -1,10 +1,17 @@
 import { UserRole } from '@prisma/client';
+import { AdminController } from '../admin/admin.controller';
+import { ManagementsController } from '../managements/managements.controller';
+import { ResponsiblePersonsController } from '../responsible-persons/responsible-persons.controller';
+import { ServicesController } from '../services/services.controller';
+import { StockDocumentsController } from '../stock-documents/stock-documents.controller';
+import { UnitsController } from '../units/units.controller';
+import { UsersController } from '../users/users.controller';
+import { ROLES_KEY } from './roles.decorator';
 import {
   ACCOUNTING_ANALYTICS_READ_ROLES,
   ACCOUNTING_TRANSFER_EXPORT_ROLES,
   ACCOUNTING_TRANSFER_READ_ROLES,
   hasCapability,
-  IMPORT_MAINTENANCE_ROLES,
   IMPORT_READ_ROLES,
   IMPORT_WRITE_ROLES,
   INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES,
@@ -20,7 +27,6 @@ describe('ACCOUNTANT access policy', () => {
   it('allows only the production import workflow and the simple accounting entry point', () => {
     expect(IMPORT_READ_ROLES).toContain(UserRole.ACCOUNTANT);
     expect(IMPORT_WRITE_ROLES).toContain(UserRole.ACCOUNTANT);
-    expect(IMPORT_MAINTENANCE_ROLES).not.toContain(UserRole.ACCOUNTANT);
     expect(hasCapability(UserRole.ACCOUNTANT, 'IMPORT_READ')).toBe(true);
     expect(hasCapability(UserRole.ACCOUNTANT, 'IMPORT_WRITE')).toBe(true);
     expect(hasCapability(UserRole.ACCOUNTANT, 'ACCOUNTING_WORKSPACE_READ')).toBe(true);
@@ -79,5 +85,22 @@ describe('ACCOUNTANT access policy', () => {
       false,
     );
     expect(hasCapability(UserRole.MVO, 'ACCOUNTING_WORKSPACE_READ')).toBe(false);
+  });
+
+  it('does not open administrative or arbitrary stock-document APIs', () => {
+    const roles = (target: object) =>
+      Reflect.getMetadata(ROLES_KEY, target) as UserRole[] | undefined;
+
+    expect(roles(AdminController)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(UsersController)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ResponsiblePersonsController.prototype.create)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ResponsiblePersonsController.prototype.update)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ManagementsController.prototype.create)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ManagementsController.prototype.update)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ServicesController.prototype.create)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(ServicesController.prototype.update)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(UnitsController.prototype.create)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(UnitsController.prototype.update)).not.toContain(UserRole.ACCOUNTANT);
+    expect(roles(StockDocumentsController)).not.toContain(UserRole.ACCOUNTANT);
   });
 });

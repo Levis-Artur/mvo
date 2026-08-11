@@ -34,7 +34,8 @@ const issue = {
     username: 'mvo-a',
     role: UserRole.MVO,
   },
-  lines: [{ quantity: new Prisma.Decimal('2.5') }],
+  lines: [{ quantity: new Prisma.Decimal('2.5'), realizationLines: [] }],
+  issueRealizations: [],
   attachments: [{ id: 'attachment-id' }],
 };
 
@@ -68,6 +69,11 @@ describe('IssueHistoryService', () => {
       expect.objectContaining({
         displayNumber: 12,
         totalQuantity: '2.5',
+        issuedQuantity: '2.5',
+        realizedQuantity: '0',
+        availableToRealize: '2.5',
+        realizationCount: 0,
+        isFullyRealized: false,
         numberOfLines: 1,
         hasAttachment: true,
         recipientName: 'Отримувач',
@@ -110,6 +116,7 @@ describe('IssueHistoryService', () => {
       lines: [
         {
           quantity: new Prisma.Decimal(2),
+          realizationLines: [{ quantity: new Prisma.Decimal(1) }],
           inventoryItem: {
             externalCode: '=KB-1',
             name: 'Клавіатура',
@@ -118,6 +125,7 @@ describe('IssueHistoryService', () => {
         },
         {
           quantity: new Prisma.Decimal(3),
+          realizationLines: [],
           inventoryItem: {
             externalCode: 'MS-1',
             name: 'Миша',
@@ -136,6 +144,9 @@ describe('IssueHistoryService', () => {
     );
 
     expect(result.csv.startsWith('\uFEFF')).toBe(true);
+    expect(result.csv).toContain('"Видано"');
+    expect(result.csv).toContain('"Реалізовано"');
+    expect(result.csv).toContain('"Залишилося реалізувати"');
     expect(result.csv).toContain('"№ 12"');
     expect(result.csv).toContain("\"'=KB-1\"");
     expect(result.csv).toContain('"Отримувач"');
@@ -157,5 +168,34 @@ describe('IssueHistoryService', () => {
     );
     expect(h.prisma).not.toHaveProperty('stockBalance');
   });
-});
 
+  it('reports a fully realized ISSUE from active realization lines only', async () => {
+    const h = harness([
+      {
+        ...issue,
+        lines: [
+          {
+            quantity: new Prisma.Decimal('2.5'),
+            realizationLines: [{ quantity: new Prisma.Decimal('2.5') }],
+          },
+        ],
+        issueRealizations: [{ id: 'realization-1' }],
+      },
+    ]);
+
+    const result = await h.service.list(
+      { page: 1, limit: 25 },
+      actor(UserRole.MVO, sourceId),
+    );
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        issuedQuantity: '2.5',
+        realizedQuantity: '2.5',
+        availableToRealize: '0',
+        realizationCount: 1,
+        isFullyRealized: true,
+      }),
+    );
+  });
+});

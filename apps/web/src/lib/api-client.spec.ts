@@ -141,6 +141,78 @@ describe('destructive administration URLs', () => {
   });
 });
 
+describe('import workflow API URLs', () => {
+  beforeEach(() => {
+    jest.spyOn(global, 'fetch').mockImplementation(async () =>
+      new Response(JSON.stringify({ items: [], pagination: {} }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('uses every canonical production import endpoint', async () => {
+    await apiClient.imports({ page: 1, limit: 20 });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports?page=1&limit=20',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+
+    await apiClient.getImportBatch('batch/id');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch/id',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+
+    await apiClient.getImportRows('batch-id', { page: 1, limit: 20 });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch-id/rows?page=1&limit=20',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+
+    await apiClient.updateImportMappings('batch-id', { mappings: [] });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch-id/mappings',
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+
+    await apiClient.validateImport('batch-id');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch-id/validate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.commitImport('batch-id');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch-id/commit',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.cancelImport('batch-id');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/batch-id/cancel',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('uploads CSV through the canonical endpoint', async () => {
+    await apiClient.uploadImport(
+      new File(['csv'], 'balances.csv', { type: 'text/csv' }),
+      'INITIAL_BALANCE',
+    );
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/imports/upload',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(FormData),
+      }),
+    );
+  });
+});
+
 describe('owner/custody API URLs', () => {
   beforeEach(() => {
     jest.spyOn(global, 'fetch').mockImplementation(async () =>

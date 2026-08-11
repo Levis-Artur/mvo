@@ -8,6 +8,7 @@ import { can } from '@/lib/authz';
 import type { AuthUser, ImportBatch } from '@/lib/types';
 import { ImportUploadModal } from './import-upload-modal';
 import { AccountingImportsHome } from './accounting-imports-home';
+import { ImportDetailView } from './import-detail-view';
 
 const mockUploadImport = jest.fn();
 const mockValidateImport = jest.fn();
@@ -139,6 +140,51 @@ describe('Accounting import workspace', () => {
     expect(can(user('ACCOUNTANT'), 'write', 'imports')).toBe(true);
     expect(can(user('MVO'), 'read', 'imports')).toBe(false);
     expect(can(user('MVO'), 'write', 'imports')).toBe(false);
+  });
+
+  it('keeps validate, commit and cancel available in the ACCOUNTANT workflow', async () => {
+    const onValidate = jest.fn();
+    const onCommit = jest.fn();
+    const onCancel = jest.fn();
+    const interaction = userEvent.setup();
+
+    render(
+      <ImportDetailView
+        accountingWorkspace
+        actionLoading={false}
+        batch={{ ...batch, status: 'VALIDATED' }}
+        canCommit
+        canWrite
+        detailLoading={false}
+        error=""
+        filters={{ search: '', status: '', page: 1, limit: 20 }}
+        isOwner={false}
+        mappings={{}}
+        missingCounterparties={[]}
+        pagination={{ page: 1, limit: 20, total: 0, totalPages: 0 }}
+        persons={[]}
+        rows={[]}
+        rowsLoading={false}
+        setFilters={jest.fn()}
+        setMappings={jest.fn()}
+        onApplyFilters={jest.fn()}
+        onBack={jest.fn()}
+        onCancel={onCancel}
+        onCommit={onCommit}
+        onDelete={jest.fn()}
+        onRollback={jest.fn()}
+        onSaveMappings={jest.fn()}
+        onValidate={onValidate}
+      />,
+    );
+
+    await interaction.click(screen.getByRole('button', { name: 'Перевірити повторно' }));
+    await interaction.click(screen.getByRole('button', { name: 'Провести імпорт' }));
+    await interaction.click(screen.getByRole('button', { name: 'Скасувати' }));
+
+    expect(onValidate).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it('uses responsive cards for mobile import history without a page-level horizontal scroller', () => {

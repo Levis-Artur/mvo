@@ -107,11 +107,6 @@ export const IMPORT_WRITE_ROLES = [
   UserRole.ACCOUNTANT,
 ];
 
-export const IMPORT_MAINTENANCE_ROLES = [
-  UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-];
-
 export const STOCK_DOCUMENT_READ_ROLES = [
   ...REFERENCE_DATA_READ_ROLES,
   UserRole.MVO,

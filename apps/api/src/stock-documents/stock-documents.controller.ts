@@ -38,6 +38,11 @@ import { StockDocumentsService } from './stock-documents.service';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
 import { ListIssueHistoryQueryDto } from './dto/issue-history-query.dto';
 import { IssueHistoryService } from './issue-history.service';
+import {
+  CreateIssueRealizationDto,
+  ListIssueRealizationsQueryDto,
+} from './dto/issue-realization.dto';
+import { IssueRealizationsService } from './issue-realizations.service';
 
 @Controller('stock-documents')
 @Roles(...STOCK_DOCUMENT_READ_ROLES)
@@ -46,6 +51,7 @@ export class StockDocumentsController {
     private readonly service: StockDocumentsService,
     private readonly attachmentsService: StockDocumentAttachmentsService,
     private readonly issueHistoryService: IssueHistoryService,
+    private readonly issueRealizationsService: IssueRealizationsService,
   ) {}
 
   @Get()
@@ -124,6 +130,120 @@ export class StockDocumentsController {
       actor,
       getRequestContext(request),
     );
+  }
+
+  @Post(':id/realizations')
+  @Roles(UserRole.MVO)
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: { fileSize: attachmentFileSizeLimitBytes() },
+    }),
+  )
+  createIssueRealization(
+    @Param('id') id: string,
+    @Body() dto: CreateIssueRealizationDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.issueRealizationsService.create(
+      id,
+      dto,
+      files ?? [],
+      actor,
+      getRequestContext(request),
+    );
+  }
+
+  @Get(':id/realizations')
+  @Roles(UserRole.OWNER, UserRole.MVO)
+  issueRealizations(
+    @Param('id') id: string,
+    @Query() query: ListIssueRealizationsQueryDto,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.issueRealizationsService.list(id, query, actor);
+  }
+
+  @Get(':id/realizations/:realizationId')
+  @Roles(UserRole.OWNER, UserRole.MVO)
+  issueRealization(
+    @Param('id') id: string,
+    @Param('realizationId') realizationId: string,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.issueRealizationsService.findOne(id, realizationId, actor);
+  }
+
+  @Post(':id/realizations/:realizationId/cancel')
+  @Roles(UserRole.MVO)
+  cancelIssueRealization(
+    @Param('id') id: string,
+    @Param('realizationId') realizationId: string,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.issueRealizationsService.cancel(
+      id,
+      realizationId,
+      actor,
+      getRequestContext(request),
+    );
+  }
+
+  @Get(':id/realizations/:realizationId/attachments/:attachmentId/download')
+  @Roles(UserRole.OWNER, UserRole.MVO)
+  async downloadIssueRealizationAttachment(
+    @Param('id') id: string,
+    @Param('realizationId') realizationId: string,
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const download = await this.issueRealizationsService.attachment(
+      id,
+      realizationId,
+      attachmentId,
+      actor,
+      getRequestContext(request),
+      'DOWNLOAD',
+    );
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(download.stream, {
+      type: download.metadata.mimeType,
+      length: download.metadata.sizeBytes,
+      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(download.metadata.originalFileName)}`,
+    });
+  }
+
+  @Get(':id/realizations/:realizationId/attachments/:attachmentId/preview')
+  @Roles(UserRole.OWNER, UserRole.MVO)
+  async previewIssueRealizationAttachment(
+    @Param('id') id: string,
+    @Param('realizationId') realizationId: string,
+    @Param('attachmentId') attachmentId: string,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const preview = await this.issueRealizationsService.attachment(
+      id,
+      realizationId,
+      attachmentId,
+      actor,
+      getRequestContext(request),
+      'PREVIEW',
+    );
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(preview.stream, {
+      type: preview.metadata.mimeType,
+      length: preview.metadata.sizeBytes,
+      disposition: `inline; filename*=UTF-8''${encodeURIComponent(preview.metadata.originalFileName)}`,
+    });
   }
 
   @Post(':id/attachments')

@@ -258,7 +258,56 @@ export type StockDocumentLine = {
   quantityAfter: string | null;
   issuedQuantity?: string | null;
   availableToIssue?: string | null;
+  realizedQuantity?: string | null;
+  availableToRealize?: string | null;
   inventoryItem: InventoryItem;
+};
+
+export type IssueRealizationStatus = 'POSTED' | 'CANCELLED';
+
+export type IssueRealizationAttachment = {
+  id: string;
+  realizationId: string;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedByUserId: string;
+  createdAt: string;
+};
+
+export type IssueRealization = {
+  id: string;
+  issueId: string;
+  displayNumber: number;
+  realizationDate: string;
+  recipientText: string | null;
+  note: string | null;
+  status: IssueRealizationStatus;
+  createdByUserId: string;
+  cancelledByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt: string | null;
+  createdByUser: Pick<AuthUser, 'id' | 'username' | 'role'>;
+  cancelledByUser: Pick<AuthUser, 'id' | 'username' | 'role'> | null;
+  lines: {
+    id: string;
+    issueLineId: string;
+    quantity: string;
+    inventoryItem: InventoryItem;
+  }[];
+  attachments: IssueRealizationAttachment[];
+  totalQuantity: string;
+  hasAttachment: boolean;
+  createdBy: Pick<AuthUser, 'id' | 'username' | 'role'>;
+};
+
+export type CreateIssueRealizationInput = {
+  realizationDate: string;
+  recipientText?: string;
+  note?: string;
+  lines: { issueLineId: string; quantity: string }[];
 };
 
 export type StockDocument = {
@@ -295,7 +344,13 @@ export type StockDocument = {
     destinationResponsiblePerson: ResponsiblePerson | null;
   }) | null;
   issues?: StockDocument[];
+  realizations?: IssueRealization[];
   attachments: StockDocumentAttachment[];
+  issuedQuantity?: string | null;
+  realizedQuantity?: string | null;
+  availableToRealize?: string | null;
+  realizationCount?: number;
+  isFullyRealized?: boolean;
   totalPositions: number;
   totalQuantity: string;
 };
@@ -602,6 +657,11 @@ export type IssueHistoryItem = {
   status: StockDocumentStatus;
   numberOfLines: number;
   totalQuantity: string;
+  issuedQuantity: string;
+  realizedQuantity: string;
+  availableToRealize: string;
+  realizationCount: number;
+  isFullyRealized: boolean;
   hasAttachment: boolean;
   createdBy: Pick<AuthUser, 'id' | 'username' | 'role'>;
   createdAt: string;

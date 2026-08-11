@@ -1,9 +1,9 @@
 import { ApiError } from '../../lib/api-client';
-import { getMvoErrorMessage } from './formatters';
+import { getErrorMessage, getMvoErrorMessage } from './formatters';
 
 describe('MVO error presentation', () => {
   it.each([
-    [new ApiError('Forbidden', 403, 'FORBIDDEN'), 'Ви не маєте доступу до цієї операції.'],
+    [new ApiError('Forbidden', 403, 'FORBIDDEN'), 'У вас немає права виконати цю дію.'],
     [new ApiError('limit must not be greater than 100', 400), 'Не вдалося завантажити дані. Натисніть «Оновити».'],
     [new ApiError('source balance not found', 404), 'Ця позиція вже була змінена. Оновіть список і повторіть спробу.'],
     [new ApiError('ASSIGNED bucket unavailable', 409), 'Ця позиція вже була змінена. Оновіть список і повторіть спробу.'],
@@ -16,5 +16,11 @@ describe('MVO error presentation', () => {
 
   it('зберігає зрозуміле українське повідомлення сервера', () => {
     expect(getMvoErrorMessage(new ApiError('Вкажіть одержувача', 400))).toBe('Вкажіть одержувача');
+  });
+
+  it('не показує raw 403 у загальному import error flow', () => {
+    expect(getErrorMessage(new ApiError('Forbidden', 403, 'FORBIDDEN'))).toBe(
+      'У вас немає права виконати цю дію.',
+    );
   });
 });

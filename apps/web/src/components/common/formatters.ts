@@ -43,6 +43,9 @@ export function normalizePersonForm(form: CreateResponsiblePersonDto): CreateRes
 }
 
 export function getErrorMessage(reason: unknown) {
+  if (reason instanceof ApiError && reason.status === 403) {
+    return 'У вас немає права виконати цю дію.';
+  }
   if (reason instanceof ApiError) return reason.message;
   if (reason instanceof Error && /[А-Яа-яІіЇїЄє]/.test(reason.message)) {
     return reason.message;
@@ -55,7 +58,7 @@ export function getMvoErrorMessage(reason: unknown) {
   const normalized = message.toLocaleLowerCase('uk-UA');
 
   if ((reason instanceof ApiError && reason.status === 403) || /forbidden|доступ заборонено/.test(normalized)) {
-    return 'Ви не маєте доступу до цієї операції.';
+    return 'У вас немає права виконати цю дію.';
   }
   if (/limit must not be greater than 100|limit.*100/.test(normalized)) {
     return 'Не вдалося завантажити дані. Натисніть «Оновити».';

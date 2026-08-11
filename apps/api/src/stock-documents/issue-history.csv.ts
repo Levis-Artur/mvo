@@ -6,7 +6,9 @@ const HEADERS = [
   'Код номенклатури',
   'Номенклатура',
   'Одиниця',
-  'Кількість',
+  'Видано',
+  'Реалізовано',
+  'Залишилося реалізувати',
   'Кому видано',
   'Коментар',
   'Статус',
@@ -24,7 +26,9 @@ export type IssueCsvRow = {
   inventoryCode: string;
   inventoryName: string;
   unit: string | null;
-  quantity: { toString(): string } | string;
+  issuedQuantity: { toString(): string } | string;
+  realizedQuantity: { toString(): string } | string;
+  availableToRealize: { toString(): string } | string;
   recipientName: string;
   note: string | null;
   status: string;
@@ -44,7 +48,9 @@ export function buildIssueHistoryCsv(rows: readonly IssueCsvRow[]) {
         row.inventoryCode,
         row.inventoryName,
         row.unit ?? '',
-        row.quantity.toString(),
+        row.issuedQuantity.toString(),
+        row.realizedQuantity.toString(),
+        row.availableToRealize.toString(),
         row.recipientName,
         row.note ?? '',
         statusLabel(row.status),
@@ -76,4 +82,3 @@ function statusLabel(status: string) {
   if (status === 'CANCELLED') return 'Скасовано';
   return 'Чернетка';
 }
-

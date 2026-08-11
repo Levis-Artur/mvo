@@ -12,9 +12,16 @@ import { stockDocumentsService } from './stock-documents.service';
 
 export function AttachmentPreviewModal({
   attachment,
+  downloadUrl: providedDownloadUrl,
+  previewLoader,
   onClose,
 }: {
-  attachment: StockDocumentAttachment;
+  attachment: Pick<
+    StockDocumentAttachment,
+    'id' | 'originalFileName' | 'mimeType' | 'sizeBytes'
+  > & { documentId?: string };
+  downloadUrl?: string;
+  previewLoader?: () => ReturnType<typeof stockDocumentsService.previewAttachment>;
   onClose: () => void;
 }) {
   const [objectUrl, setObjectUrl] = useState('');
@@ -30,8 +37,15 @@ export function AttachmentPreviewModal({
     setLoading(true);
     setError('');
     setPdfFailed(false);
-    void stockDocumentsService
-      .previewAttachment(attachment.documentId, attachment.id)
+    const request = previewLoader
+      ? previewLoader()
+      : attachment.documentId
+        ? stockDocumentsService.previewAttachment(
+            attachment.documentId,
+            attachment.id,
+          )
+        : Promise.reject(new Error('Attachment preview source is missing'));
+    void request
       .then((preview) => {
         if (!active) return;
         createdUrl = URL.createObjectURL(preview.blob);
@@ -48,14 +62,18 @@ export function AttachmentPreviewModal({
       active = false;
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [attachment.documentId, attachment.id]);
+  }, [attachment.documentId, attachment.id, previewLoader]);
 
   const image = canPreviewImage(attachment.mimeType);
   const pdf = attachment.mimeType === 'application/pdf';
-  const downloadUrl = stockDocumentsService.attachmentDownloadUrl(
-    attachment.documentId,
-    attachment.id,
-  );
+  const downloadUrl =
+    providedDownloadUrl ??
+    (attachment.documentId
+      ? stockDocumentsService.attachmentDownloadUrl(
+          attachment.documentId,
+          attachment.id,
+        )
+      : '#');
 
   function changeZoom(nextZoom: number) {
     setFitToWindow(false);

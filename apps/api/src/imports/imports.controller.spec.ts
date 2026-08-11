@@ -22,21 +22,16 @@ describe('ImportsController access', () => {
     expect(roles(ImportsController)).not.toContain(UserRole.MVO);
   });
 
-  it.each(['upload', 'validate', 'commit'] as const)(
+  it.each(['upload', 'mappings', 'validate', 'commit', 'cancel'] as const)(
     'allows ACCOUNTANT to %s an import',
-    (method) => {
-      expect(roles(ImportsController.prototype[method])).toContain(UserRole.ACCOUNTANT);
-    },
-  );
-
-  it.each(['mappings', 'cancel'] as const)(
-    'keeps %s as an OWNER/DPP maintenance action',
     (method) => {
       expect(roles(ImportsController.prototype[method])).toEqual([
         UserRole.OWNER,
         UserRole.DPP_ADMIN,
+        UserRole.ACCOUNTANT,
       ]);
-      expect(roles(ImportsController.prototype[method])).not.toContain(UserRole.ACCOUNTANT);
+      expect(roles(ImportsController.prototype[method])).not.toContain(UserRole.MVO);
+      expect(roles(ImportsController.prototype[method])).not.toContain(UserRole.AUDITOR);
     },
   );
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { formatDateTime } from '@/components/common/formatters';
 import {
   Button,
@@ -7,9 +8,11 @@ import {
   DataTable,
   ErrorState,
   Modal,
+  StatusBadge,
 } from '@/components/ui';
 import { formatQuantity } from '@/features/inventory/quantity-format';
-import type { StockDocument } from '@/lib/types';
+import type { IssueRealization, StockDocument } from '@/lib/types';
+import { IssueRealizationAttachmentList } from './issue-realization-attachment-list';
 import { documentNumberLabel } from './stock-document-rules';
 import { StockDocumentAttachmentList } from './stock-document-attachment-list';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
@@ -19,22 +22,45 @@ export function MvoIssueDetailsModal({
   loading,
   error,
   onCancel,
+  onCancelRealization,
   onClose,
+  onRealize,
 }: {
   document: StockDocument;
   loading: boolean;
   error: string;
   onCancel: () => void;
+  onCancelRealization: (realization: IssueRealization) => void;
   onClose: () => void;
+  onRealize: () => void;
 }) {
+  const [selectedRealization, setSelectedRealization] =
+    useState<IssueRealization | null>(null);
+  const realizations = document.realizations ?? [];
+  const canRealize =
+    document.status === 'POSTED' && Number(document.availableToRealize ?? 0) > 0;
+  const hasActiveRealizations = realizations.some(
+    (realization) => realization.status === 'POSTED',
+  );
   return (
-    <Modal
+    <>
+      <Modal
       closeOnEscape={!loading}
       footer={
         <>
+          {canRealize ? (
+            <Button disabled={loading} type="button" onClick={onRealize}>
+              Реалізувати
+            </Button>
+          ) : null}
           {document.status === 'POSTED' ? (
             <Button
-              disabled={loading}
+              disabled={loading || hasActiveRealizations}
+              title={
+                hasActiveRealizations
+                  ? 'Спочатку скасуйте всі проведені реалізації'
+                  : undefined
+              }
               type="button"
               variant="danger"
               onClick={onCancel}
@@ -73,7 +99,21 @@ export function MvoIssueDetailsModal({
             <Detail label="Створено">
               {formatDateTime(document.createdAt)}
             </Detail>
+            <Detail label="Видано">
+              {formatQuantity(document.issuedQuantity ?? document.totalQuantity)}
+            </Detail>
+            <Detail label="Реалізовано">
+              {formatQuantity(document.realizedQuantity ?? '0')}
+            </Detail>
+            <Detail label="Залишилось реалізувати">
+              {formatQuantity(document.availableToRealize ?? document.totalQuantity)}
+            </Detail>
           </dl>
+          {hasActiveRealizations ? (
+            <p className="form-field__hint">
+              Щоб скасувати видачу, спочатку скасуйте всі проведені реалізації.
+            </p>
+          ) : null}
         </Card>
 
         <Card title="Позиції">
@@ -82,7 +122,9 @@ export function MvoIssueDetailsModal({
             columns={[
               { label: 'Код', className: 'issue-lines__code' },
               { label: 'Назва', className: 'issue-lines__name' },
-              { label: 'Кількість', numeric: true, className: 'issue-lines__quantity' },
+              { label: 'Видано', numeric: true, className: 'issue-lines__quantity' },
+              { label: 'Реалізовано', numeric: true, className: 'issue-lines__quantity' },
+              { label: 'Залишилось', numeric: true, className: 'issue-lines__quantity' },
               { label: 'Одиниця', className: 'issue-lines__unit' },
             ]}
             responsiveMode="cards-wide"
@@ -90,10 +132,56 @@ export function MvoIssueDetailsModal({
               line.inventoryItem.externalCode,
               line.inventoryItem.name,
               formatQuantity(line.quantity),
+              formatQuantity(line.realizedQuantity ?? '0'),
+              formatQuantity(line.availableToRealize ?? line.quantity),
               line.inventoryItem.unitOfMeasure ?? '—',
             ])}
             tableClassName="issue-details__lines"
           />
+        </Card>
+
+        <Card title="Історія реалізації виданого">
+          {realizations.length ? (
+            <DataTable
+              ariaLabel="Історія реалізації виданого"
+              columns={[
+                { label: '№' },
+                { label: 'Дата' },
+                { label: 'Кількість', numeric: true },
+                { label: 'Статус' },
+                { label: 'Документ' },
+                { label: 'Дія', actions: true },
+              ]}
+              responsiveMode="cards-wide"
+              rows={realizations.map((realization) => [
+                `№ ${realization.displayNumber}`,
+                new Date(realization.realizationDate).toLocaleDateString('uk-UA'),
+                formatQuantity(realization.totalQuantity),
+                <StatusBadge
+                  key="status"
+                  tone={realization.status === 'POSTED' ? 'success' : 'neutral'}
+                >
+                  {realization.status === 'POSTED' ? 'Проведено' : 'Скасовано'}
+                </StatusBadge>,
+                realization.hasAttachment ? (
+                  <StatusBadge key="attachment" tone="info">Є документ</StatusBadge>
+                ) : '—',
+                <Button
+                  key="open"
+                  size="compact"
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedRealization(realization)}
+                >
+                  Переглянути
+                </Button>,
+              ])}
+            />
+          ) : (
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Видане майно ще не реалізовували.
+            </p>
+          )}
         </Card>
 
         <Card title="Підтверджуючий документ">
@@ -105,6 +193,106 @@ export function MvoIssueDetailsModal({
             </p>
           )}
         </Card>
+      </div>
+      </Modal>
+      {selectedRealization ? (
+        <IssueRealizationDetailsModal
+          issueDisplayNumber={document.displayNumber}
+          issueId={document.id}
+          realization={selectedRealization}
+          saving={loading}
+          onCancel={() => {
+            onCancelRealization(selectedRealization);
+            setSelectedRealization(null);
+          }}
+          onClose={() => setSelectedRealization(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function IssueRealizationDetailsModal({
+  issueId,
+  issueDisplayNumber,
+  realization,
+  saving,
+  onCancel,
+  onClose,
+}: {
+  issueId: string;
+  issueDisplayNumber: number;
+  realization: IssueRealization;
+  saving: boolean;
+  onCancel: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      closeOnEscape={!saving}
+      footer={
+        <>
+          {realization.status === 'POSTED' ? (
+            <Button disabled={saving} type="button" variant="danger" onClick={onCancel}>
+              Скасувати реалізацію
+            </Button>
+          ) : null}
+          <Button disabled={saving} type="button" variant="outline" onClick={onClose}>
+            Закрити
+          </Button>
+        </>
+      }
+      onClose={onClose}
+      size="large"
+      title={`Реалізація № ${realization.displayNumber}`}
+    >
+      <div className="issue-details">
+        <Card title="Загальні дані">
+          <dl className="issue-details__summary">
+            <Detail label="Дата">
+              {new Date(realization.realizationDate).toLocaleDateString('uk-UA')}
+            </Detail>
+            <Detail label="Видача">
+              {documentNumberLabel(issueDisplayNumber)}
+            </Detail>
+            <Detail label="Одержувач">
+              {realization.recipientText ?? 'Не вказано'}
+            </Detail>
+            <Detail label="Коментар">{realization.note ?? '—'}</Detail>
+            <Detail label="Статус">
+              <StatusBadge tone={realization.status === 'POSTED' ? 'success' : 'neutral'}>
+                {realization.status === 'POSTED' ? 'Проведено' : 'Скасовано'}
+              </StatusBadge>
+            </Detail>
+          </dl>
+        </Card>
+        <Card title="Позиції">
+          <DataTable
+            ariaLabel={`Позиції реалізації № ${realization.displayNumber}`}
+            columns={[
+              { label: 'Код' },
+              { label: 'Назва' },
+              { label: 'Кількість', numeric: true },
+              { label: 'Одиниця' },
+            ]}
+            responsiveMode="cards-wide"
+            rows={realization.lines.map((line) => [
+              line.inventoryItem.externalCode,
+              line.inventoryItem.name,
+              formatQuantity(line.quantity),
+              line.inventoryItem.unitOfMeasure ?? '—',
+            ])}
+          />
+        </Card>
+        {realization.attachments.length ? (
+          <Card title="Підтверджуючі документи">
+            <IssueRealizationAttachmentList
+              attachments={realization.attachments}
+              issueId={issueId}
+              realizationId={realization.id}
+            />
+          </Card>
+        ) : null}
       </div>
     </Modal>
   );

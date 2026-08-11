@@ -31,6 +31,8 @@ import type {
   IssueHistoryFilters,
   IssueHistoryItem,
   IssueHistoryQuery,
+  IssueRealization,
+  CreateIssueRealizationInput,
   Management,
   MyInventoryItemTransferHistory,
   MyPropertyExportSection,
@@ -536,6 +538,49 @@ export const apiClient = {
     request<StockDocument>(`/stock-documents/${id}/cancel`, {
       method: 'POST',
     }),
+  issueRealizations: (issueId: string, query: { page?: number; limit?: number }) =>
+    request<PaginatedResponse<IssueRealization>>(
+      `/stock-documents/${encodeURIComponent(issueId)}/realizations`,
+      {},
+      query,
+    ),
+  createIssueRealization: (
+    issueId: string,
+    body: CreateIssueRealizationInput,
+    files: File[],
+  ) => {
+    const formData = new FormData();
+    formData.set('realizationDate', body.realizationDate);
+    if (body.recipientText) formData.set('recipientText', body.recipientText);
+    if (body.note) formData.set('note', body.note);
+    formData.set('lines', JSON.stringify(body.lines));
+    for (const file of files) formData.append('files', file);
+    return uploadRequest<IssueRealization>(
+      `/stock-documents/${encodeURIComponent(issueId)}/realizations`,
+      formData,
+    );
+  },
+  cancelIssueRealization: (issueId: string, realizationId: string) =>
+    request<IssueRealization>(
+      `/stock-documents/${encodeURIComponent(issueId)}/realizations/${encodeURIComponent(realizationId)}/cancel`,
+      { method: 'POST' },
+    ),
+  issueRealizationAttachmentDownloadUrl: (
+    issueId: string,
+    realizationId: string,
+    attachmentId: string,
+  ) =>
+    buildUrl(
+      `/stock-documents/${encodeURIComponent(issueId)}/realizations/${encodeURIComponent(realizationId)}/attachments/${encodeURIComponent(attachmentId)}/download`,
+    ),
+  previewIssueRealizationAttachment: (
+    issueId: string,
+    realizationId: string,
+    attachmentId: string,
+  ) =>
+    previewRequest(
+      `/stock-documents/${encodeURIComponent(issueId)}/realizations/${encodeURIComponent(realizationId)}/attachments/${encodeURIComponent(attachmentId)}/preview`,
+    ),
   stockDocumentAttachments: (id: string) =>
     request<StockDocumentAttachment[]>(`/stock-documents/${id}/attachments`),
   uploadStockDocumentAttachment: (id: string, file: File) => {

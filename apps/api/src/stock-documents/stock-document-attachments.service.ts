@@ -252,18 +252,25 @@ export class StockDocumentAttachmentsService {
   }
 
   async findOrphans() {
-    const [metadata, storedFileNames] = await Promise.all([
+    const [documentMetadata, realizationMetadata, storedFileNames] = await Promise.all([
       this.prisma.stockDocumentAttachment.findMany({
+        select: { id: true, storedFileName: true },
+      }),
+      this.prisma.issueRealizationAttachment.findMany({
         select: { id: true, storedFileName: true },
       }),
       this.storage.listStoredFileNames(),
     ]);
+    const metadata = [
+      ...documentMetadata.map((item) => ({ ...item, kind: 'DOCUMENT' as const })),
+      ...realizationMetadata.map((item) => ({ ...item, kind: 'REALIZATION' as const })),
+    ];
     const metadataNames = new Set(metadata.map((item) => item.storedFileName));
     const storedNames = new Set(storedFileNames);
     return {
       metadataWithoutFile: metadata
         .filter((item) => !storedNames.has(item.storedFileName))
-        .map((item) => ({ attachmentId: item.id })),
+        .map((item) => ({ attachmentId: item.id, kind: item.kind })),
       filesWithoutMetadata: storedFileNames
         .filter((name) => !metadataNames.has(name))
         .map((storedFileName) => ({ storedFileName })),

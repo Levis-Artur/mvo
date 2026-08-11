@@ -20,6 +20,8 @@ import {
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import type {
   AvailableStockSource,
+  CreateIssueRealizationInput,
+  IssueRealization,
   IssueHistoryFilters,
   IssueHistoryItem,
   Pagination as PaginationState,
@@ -35,6 +37,7 @@ import { StockDocumentForm } from './stock-document-form';
 import { documentNumberLabel } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
 import { stockDocumentsService } from './stock-documents.service';
+import { IssueRealizationFormModal } from './issue-realization-form-modal';
 
 type IssueFilterState = {
   search: string;
@@ -77,6 +80,9 @@ export function MvoIssuesView() {
   const [sourcesError, setSourcesError] = useState('');
   const [actionError, setActionError] = useState('');
   const [selected, setSelected] = useState<StockDocument | null>(null);
+  const [realizingIssue, setRealizingIssue] = useState<StockDocument | null>(null);
+  const [realizationSaving, setRealizationSaving] = useState(false);
+  const [realizationError, setRealizationError] = useState('');
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -181,6 +187,64 @@ export function MvoIssuesView() {
       setActionError(getMvoErrorMessage(reason));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function openRealization(issueId: string) {
+    setRealizationError('');
+    try {
+      setRealizingIssue(await stockDocumentsService.findOne(issueId));
+    } catch (reason) {
+      setToastTone('error');
+      setToast(getMvoErrorMessage(reason));
+    }
+  }
+
+  async function submitRealization(
+    input: CreateIssueRealizationInput,
+    files: File[],
+  ) {
+    if (!realizingIssue || realizationSaving) return;
+    setRealizationSaving(true);
+    setRealizationError('');
+    try {
+      await stockDocumentsService.createIssueRealization(
+        realizingIssue.id,
+        input,
+        files,
+      );
+      const issueId = realizingIssue.id;
+      setRealizingIssue(null);
+      setToastTone('success');
+      setToast('Реалізацію успішно оформлено.');
+      await load();
+      if (selected?.id === issueId) {
+        setSelected(await stockDocumentsService.findOne(issueId));
+      }
+    } catch (reason) {
+      setRealizationError(getMvoErrorMessage(reason));
+    } finally {
+      setRealizationSaving(false);
+    }
+  }
+
+  async function cancelRealization(realization: IssueRealization) {
+    if (!selected || realizationSaving) return;
+    setRealizationSaving(true);
+    setActionError('');
+    try {
+      await stockDocumentsService.cancelIssueRealization(
+        selected.id,
+        realization.id,
+      );
+      setSelected(await stockDocumentsService.findOne(selected.id));
+      await load();
+      setToastTone('success');
+      setToast('Реалізацію скасовано. Доступну кількість оновлено.');
+    } catch (reason) {
+      setActionError(getMvoErrorMessage(reason));
+    } finally {
+      setRealizationSaving(false);
     }
   }
 
@@ -351,7 +415,11 @@ export function MvoIssuesView() {
         <LoadingState label="Завантаження історії видач…" />
       ) : items.length ? (
         <>
-          <IssueHistoryTable items={items} onOpen={(id) => void openDetails(id)} />
+          <IssueHistoryTable
+            items={items}
+            onOpen={(id) => void openDetails(id)}
+            onRealize={(id) => void openRealization(id)}
+          />
           <Pagination
             limit={pagination.limit}
             limits={[25, 50, 100]}
@@ -408,10 +476,29 @@ export function MvoIssuesView() {
             setActionError('');
             setCancelOpen(true);
           }}
+          onCancelRealization={(realization) =>
+            void cancelRealization(realization)
+          }
           onClose={() => {
             setSelected(null);
             setActionError('');
           }}
+          onRealize={() => void openRealization(selected.id)}
+        />
+      ) : null}
+
+      {realizingIssue ? (
+        <IssueRealizationFormModal
+          error={realizationError}
+          issue={realizingIssue}
+          saving={realizationSaving}
+          onClose={() => {
+            if (!realizationSaving) {
+              setRealizingIssue(null);
+              setRealizationError('');
+            }
+          }}
+          onSubmit={(input, files) => void submitRealization(input, files)}
         />
       ) : null}
 
@@ -444,9 +531,11 @@ export function MvoIssuesView() {
 export function IssueHistoryTable({
   items,
   onOpen,
+  onRealize,
 }: {
   items: IssueHistoryItem[];
   onOpen: (id: string) => void;
+  onRealize: (id: string) => void;
 }) {
   return (
     <DataTable
@@ -456,7 +545,9 @@ export function IssueHistoryTable({
         { label: 'Дата', className: 'mvo-issues-table__date' },
         { label: 'Кому видано', className: 'mvo-issues-table__recipient' },
         { label: 'Позицій', numeric: true, className: 'mvo-issues-table__positions' },
-        { label: 'Загальна кількість', numeric: true, className: 'mvo-issues-table__quantity' },
+        { label: 'Видано', numeric: true, className: 'mvo-issues-table__quantity' },
+        { label: 'Реалізовано', numeric: true, className: 'mvo-issues-table__quantity' },
+        { label: 'Залишилось', numeric: true, className: 'mvo-issues-table__quantity' },
         { label: 'Статус', className: 'mvo-issues-table__status' },
         { label: 'Документ', className: 'mvo-issues-table__attachment' },
         { label: 'Дія', actions: true, className: 'mvo-issues-table__actions' },
@@ -468,20 +559,35 @@ export function IssueHistoryTable({
         new Date(item.documentDate).toLocaleDateString('uk-UA'),
         item.recipientName ?? 'Не вказано',
         item.numberOfLines,
-        formatQuantity(item.totalQuantity),
+        formatQuantity(item.issuedQuantity),
+        formatQuantity(item.realizedQuantity),
+        formatQuantity(item.availableToRealize),
         <StockDocumentStatusBadge key="status" status={item.status} />,
         item.hasAttachment ? (
           <StatusBadge key="attachment" tone="info">Є документ</StatusBadge>
         ) : '—',
-        <Button
-          key="open"
-          size="compact"
-          type="button"
-          variant="outline"
-          onClick={() => onOpen(item.id)}
-        >
-          Відкрити
-        </Button>,
+        <div className="table-actions" key="actions">
+          <Button
+            size="compact"
+            type="button"
+            variant="outline"
+            onClick={() => onOpen(item.id)}
+          >
+            Відкрити
+          </Button>
+          {item.status === 'POSTED' && Number(item.availableToRealize) > 0 ? (
+            <Button
+              size="compact"
+              type="button"
+              onClick={() => onRealize(item.id)}
+            >
+              Реалізувати
+            </Button>
+          ) : null}
+          {item.isFullyRealized ? (
+            <StatusBadge tone="success">Реалізовано повністю</StatusBadge>
+          ) : null}
+        </div>,
       ])}
       tableClassName="mvo-issues-table"
     />

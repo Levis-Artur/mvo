@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -207,6 +208,7 @@ function harness() {
     },
     stockTransaction: { create: jest.fn() },
     stockDocumentAttachment: { deleteMany: jest.fn() },
+    issueRealization: { count: jest.fn().mockResolvedValue(0) },
     stockBalance: { findUnique: jest.fn() },
     responsiblePerson: {
       findUnique: jest.fn().mockResolvedValue(person(sourceId)),
@@ -561,6 +563,24 @@ describe('StockDocumentsService standalone ISSUE', () => {
 
     await h.service.cancel(documentId, mvo, {});
 
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('blocks ISSUE cancellation while a POSTED realization exists', async () => {
+    const h = harness();
+    h.tx.stockDocument.findUnique.mockResolvedValueOnce({
+      type: StockDocumentType.ISSUE,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      accountingExportState: AccountingExportState.NOT_EXPORTED,
+      status: StockDocumentStatus.POSTED,
+      sourceResponsiblePersonId: sourceId,
+      sourceTransferId: null,
+    });
+    h.tx.issueRealization.count.mockResolvedValue(1);
+
+    await expect(h.service.cancel(documentId, mvo, {})).rejects.toBeInstanceOf(
+      ConflictException,
+    );
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 });

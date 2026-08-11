@@ -43,6 +43,11 @@ const historyItem: IssueHistoryItem = {
   status: 'POSTED',
   numberOfLines: 1,
   totalQuantity: '2',
+  issuedQuantity: '2',
+  realizedQuantity: '1',
+  availableToRealize: '1',
+  realizationCount: 1,
+  isFullyRealized: false,
   hasAttachment: true,
   createdBy: { id: user.id, username: user.username, role: user.role },
   createdAt: '2026-08-10T10:00:00.000Z',
@@ -85,6 +90,12 @@ const issueDocument = {
     },
   ],
   attachments: [],
+  realizations: [],
+  issuedQuantity: '2',
+  realizedQuantity: '1',
+  availableToRealize: '1',
+  realizationCount: 1,
+  isFullyRealized: false,
   totalPositions: 1,
   totalQuantity: '2',
 } as StockDocument;
@@ -124,6 +135,30 @@ beforeEach(() => {
     blob: new Blob(['csv']),
     filename: 'issues.csv',
   });
+  jest.spyOn(stockDocumentsService, 'createIssueRealization').mockResolvedValue({
+    id: '88888888-8888-4888-8888-888888888888',
+    issueId: documentId,
+    displayNumber: 1,
+    realizationDate: '2026-08-11T00:00:00.000Z',
+    recipientText: null,
+    note: null,
+    status: 'POSTED',
+    createdByUserId: user.id,
+    cancelledByUserId: null,
+    createdAt: '2026-08-11T09:00:00.000Z',
+    updatedAt: '2026-08-11T09:00:00.000Z',
+    cancelledAt: null,
+    createdByUser: { id: user.id, username: user.username, role: user.role },
+    cancelledByUser: null,
+    lines: [],
+    attachments: [],
+    totalQuantity: '1',
+    hasAttachment: false,
+    createdBy: { id: user.id, username: user.username, role: user.role },
+  });
+  jest.spyOn(stockDocumentsService, 'cancelIssueRealization').mockResolvedValue(
+    {} as never,
+  );
   Object.defineProperty(URL, 'createObjectURL', {
     configurable: true,
     value: jest.fn(() => 'blob:issues'),
@@ -204,6 +239,60 @@ describe('MVO issues workspace', () => {
     expect(await screen.findByRole('heading', { name: 'Видача № 15' })).toBeTruthy();
     expect(screen.getByText('Позиції')).toBeTruthy();
     expect(screen.queryByText(/Передача №/)).toBeNull();
+  });
+
+  it('creates a partial realization without refreshing StockBalance', async () => {
+    const browser = userEvent.setup();
+    const dispatch = jest.spyOn(window, 'dispatchEvent');
+    render(<MvoIssuesView />);
+    await screen.findByText('№ 15');
+
+    await browser.click(screen.getByRole('button', { name: 'Реалізувати' }));
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Реалізація видачі № 15',
+      }),
+    ).toBeTruthy();
+    await browser.type(
+      screen.getByRole('spinbutton', { name: /Кількість —/ }),
+      '1',
+    );
+    await browser.click(screen.getByRole('button', { name: 'Підтвердити реалізацію' }));
+
+    await waitFor(() =>
+      expect(stockDocumentsService.createIssueRealization).toHaveBeenCalledWith(
+        documentId,
+        expect.objectContaining({
+          lines: [{ issueLineId: 'line-1', quantity: '1' }],
+        }),
+        [],
+      ),
+    );
+    expect(
+      dispatch.mock.calls.some(
+        ([event]) => (event as CustomEvent).type === 'mvo:refresh-stock',
+      ),
+    ).toBe(false);
+    expect(
+      await screen.findByText('Реалізацію успішно оформлено.'),
+    ).toBeTruthy();
+  });
+
+  it('shows the fully realized badge instead of the realization action', async () => {
+    jest.spyOn(stockDocumentsService, 'issueHistory').mockResolvedValue(
+      historyResponse([
+        {
+          ...historyItem,
+          realizedQuantity: '2',
+          availableToRealize: '0',
+          isFullyRealized: true,
+        },
+      ]),
+    );
+    render(<MvoIssuesView />);
+
+    expect(await screen.findByText('Реалізовано повністю')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Реалізувати' })).toBeNull();
   });
 
   it('exports active filters and renders a useful empty state', async () => {

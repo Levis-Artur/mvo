@@ -57,6 +57,12 @@ const documentInclude = {
           document: { select: { status: true } },
         },
       },
+      realizationLines: {
+        select: {
+          quantity: true,
+          realization: { select: { status: true } },
+        },
+      },
     },
     orderBy: { createdAt: 'asc' as const },
   },
@@ -111,6 +117,30 @@ const documentInclude = {
       },
     },
     orderBy: [{ documentDate: 'desc' as const }, { createdAt: 'desc' as const }],
+  },
+  issueRealizations: {
+    include: {
+      createdByUser: { select: { id: true, username: true, role: true } },
+      cancelledByUser: { select: { id: true, username: true, role: true } },
+      lines: {
+        include: { issueLine: { include: { inventoryItem: true } } },
+        orderBy: { createdAt: 'asc' as const },
+      },
+      attachments: {
+        select: {
+          id: true,
+          realizationId: true,
+          originalFileName: true,
+          mimeType: true,
+          sizeBytes: true,
+          sha256: true,
+          uploadedByUserId: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'asc' as const },
+      },
+    },
+    orderBy: [{ realizationDate: 'desc' as const }, { createdAt: 'desc' as const }],
   },
 } satisfies Prisma.StockDocumentInclude;
 
@@ -699,6 +729,19 @@ export class StockDocumentsService {
             );
           }
         }
+        if (current.type === StockDocumentType.ISSUE) {
+          const activeRealizations = await tx.issueRealization.count({
+            where: {
+              issueId: id,
+              status: 'POSTED',
+            },
+          });
+          if (activeRealizations > 0) {
+            throw new ConflictException(
+              'Видачу неможливо скасувати, доки є проведені реалізації. Спочатку скасуйте всі реалізації виданого.',
+            );
+          }
+        }
         this.assertCancellationExportAllowed(current);
 
         const claim = await tx.stockDocument.updateMany({
@@ -1273,6 +1316,15 @@ export class StockDocumentsService {
           (sum, issueLine) => sum.plus(issueLine.quantity),
           new Prisma.Decimal(0),
         );
+      const realizedQuantity = (line.realizationLines ?? [])
+        .filter(
+          (realizationLine) =>
+            realizationLine.realization.status === 'POSTED',
+        )
+        .reduce(
+          (sum, realizationLine) => sum.plus(realizationLine.quantity),
+          new Prisma.Decimal(0),
+        );
       return {
         ...line,
         quantity: line.quantity.toString(),
@@ -1289,9 +1341,57 @@ export class StockDocumentsService {
                 new Prisma.Decimal(0),
               ).toString()
             : null,
+        realizedQuantity:
+          document.type === StockDocumentType.ISSUE
+            ? realizedQuantity.toString()
+            : null,
+        availableToRealize:
+          document.type === StockDocumentType.ISSUE
+            ? Prisma.Decimal.max(
+                line.quantity.minus(realizedQuantity),
+                new Prisma.Decimal(0),
+              ).toString()
+            : null,
         issueLines: undefined,
+        realizationLines: undefined,
       };
     });
+    const activeRealizations = (document.issueRealizations ?? []).filter(
+      (realization) => realization.status === 'POSTED',
+    );
+    const realizedQuantity = activeRealizations.reduce(
+      (sum, realization) =>
+        sum.plus(
+          realization.lines.reduce(
+            (lineSum, line) => lineSum.plus(line.quantity),
+            new Prisma.Decimal(0),
+          ),
+        ),
+      new Prisma.Decimal(0),
+    );
+    const issuedQuantity = document.lines.reduce(
+      (sum, line) => sum.plus(line.quantity),
+      new Prisma.Decimal(0),
+    );
+    const realizations = (document.issueRealizations ?? []).map(
+      (realization) => ({
+        ...realization,
+        lines: realization.lines.map((line) => ({
+          id: line.id,
+          issueLineId: line.issueLineId,
+          quantity: line.quantity.toString(),
+          inventoryItem: line.issueLine.inventoryItem,
+        })),
+        totalQuantity: realization.lines
+          .reduce(
+            (sum, line) => sum.plus(line.quantity),
+            new Prisma.Decimal(0),
+          )
+          .toString(),
+        hasAttachment: realization.attachments.length > 0,
+        createdBy: realization.createdByUser,
+      }),
+    );
     return {
       ...document,
       lines: serializedLines,
@@ -1311,6 +1411,32 @@ export class StockDocumentsService {
           )
           .toString(),
       })),
+      issueRealizations: undefined,
+      realizations,
+      issuedQuantity:
+        document.type === StockDocumentType.ISSUE
+          ? issuedQuantity.toString()
+          : null,
+      realizedQuantity:
+        document.type === StockDocumentType.ISSUE
+          ? realizedQuantity.toString()
+          : null,
+      availableToRealize:
+        document.type === StockDocumentType.ISSUE
+          ? Prisma.Decimal.max(
+              issuedQuantity.minus(realizedQuantity),
+              new Prisma.Decimal(0),
+            ).toString()
+          : null,
+      realizationCount:
+        document.type === StockDocumentType.ISSUE
+          ? realizations.length
+          : 0,
+      isFullyRealized:
+        document.type === StockDocumentType.ISSUE
+          ? issuedQuantity.greaterThan(0) &&
+            realizedQuantity.greaterThanOrEqualTo(issuedQuantity)
+          : false,
       totalPositions: document.lines.length,
       totalQuantity: document.lines
         .reduce(

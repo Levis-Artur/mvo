@@ -12,6 +12,12 @@ export const stockDocumentsService = {
   remove: apiClient.deleteStockDocument,
   post: apiClient.postStockDocument,
   cancel: apiClient.cancelStockDocument,
+  issueRealizations: apiClient.issueRealizations,
+  createIssueRealization: apiClient.createIssueRealization,
+  cancelIssueRealization: apiClient.cancelIssueRealization,
+  realizationAttachmentDownloadUrl:
+    apiClient.issueRealizationAttachmentDownloadUrl,
+  previewRealizationAttachment: apiClient.previewIssueRealizationAttachment,
   persons: apiClient.responsiblePersons,
   transferTargets: apiClient.transferTargets,
   balances: apiClient.stockBalances,

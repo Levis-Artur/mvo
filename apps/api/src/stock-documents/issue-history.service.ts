@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  IssueRealizationStatus,
   Prisma,
   SecurityEventType,
   StockDocumentType,
@@ -31,7 +32,18 @@ const issueListInclude = {
     },
   },
   createdByUser: { select: { id: true, username: true, role: true } },
-  lines: { select: { quantity: true } },
+  lines: {
+    select: {
+      quantity: true,
+      realizationLines: {
+        where: { realization: { status: IssueRealizationStatus.POSTED } },
+        select: { quantity: true },
+      },
+    },
+  },
+  issueRealizations: {
+    select: { id: true, status: true },
+  },
   attachments: { select: { id: true } },
 } satisfies Prisma.StockDocumentInclude;
 
@@ -39,7 +51,13 @@ const issueExportInclude = {
   sourceResponsiblePerson: issueListInclude.sourceResponsiblePerson,
   createdByUser: issueListInclude.createdByUser,
   lines: {
-    include: { inventoryItem: true },
+    include: {
+      inventoryItem: true,
+      realizationLines: {
+        where: { realization: { status: IssueRealizationStatus.POSTED } },
+        select: { quantity: true },
+      },
+    },
     orderBy: { createdAt: 'asc' as const },
   },
   attachments: {
@@ -112,7 +130,20 @@ export class IssueHistoryService {
         inventoryCode: line.inventoryItem.externalCode,
         inventoryName: line.inventoryItem.name,
         unit: line.inventoryItem.unitOfMeasure,
-        quantity: line.quantity,
+        issuedQuantity: line.quantity,
+        realizedQuantity: line.realizationLines.reduce(
+          (sum, realizationLine) => sum.plus(realizationLine.quantity),
+          new Prisma.Decimal(0),
+        ),
+        availableToRealize: Prisma.Decimal.max(
+          line.quantity.minus(
+            line.realizationLines.reduce(
+              (sum, realizationLine) => sum.plus(realizationLine.quantity),
+              new Prisma.Decimal(0),
+            ),
+          ),
+          new Prisma.Decimal(0),
+        ),
         recipientName: document.recipientName ?? '',
         note: document.note,
         status: document.status,
@@ -267,6 +298,21 @@ export class IssueHistoryService {
   }
 
   private serialize(document: IssueListDocument) {
+    const issuedQuantity = document.lines.reduce(
+      (total, line) => total.plus(line.quantity),
+      new Prisma.Decimal(0),
+    );
+    const realizedQuantity = document.lines.reduce(
+      (total, line) =>
+        total.plus(
+          line.realizationLines.reduce(
+            (lineTotal, realizationLine) =>
+              lineTotal.plus(realizationLine.quantity),
+            new Prisma.Decimal(0),
+          ),
+        ),
+      new Prisma.Decimal(0),
+    );
     return {
       id: document.id,
       displayNumber: document.displayNumber,
@@ -276,12 +322,17 @@ export class IssueHistoryService {
       note: document.note,
       status: document.status,
       numberOfLines: document.lines.length,
-      totalQuantity: document.lines
-        .reduce(
-          (total, line) => total.plus(line.quantity),
-          new Prisma.Decimal(0),
-        )
-        .toString(),
+      totalQuantity: issuedQuantity.toString(),
+      issuedQuantity: issuedQuantity.toString(),
+      realizedQuantity: realizedQuantity.toString(),
+      availableToRealize: Prisma.Decimal.max(
+        issuedQuantity.minus(realizedQuantity),
+        new Prisma.Decimal(0),
+      ).toString(),
+      realizationCount: document.issueRealizations.length,
+      isFullyRealized:
+        issuedQuantity.greaterThan(0) &&
+        realizedQuantity.greaterThanOrEqualTo(issuedQuantity),
       hasAttachment: document.attachments.length > 0,
       createdBy: document.createdByUser,
       createdAt: document.createdAt.toISOString(),
@@ -306,4 +357,3 @@ export class IssueHistoryService {
     };
   }
 }
-

@@ -3,6 +3,7 @@ import {
   ImportRowStatus,
   ImportStatus,
   ImportType,
+  Prisma,
   UserRole,
 } from '@prisma/client';
 import { ImportsService } from './imports.service';
@@ -594,6 +595,193 @@ describe('ImportsService', () => {
         }),
       }),
     );
+  });
+
+  it('completes upload, preview, validate and commit for ACCOUNTANT and updates StockBalance through the importer', async () => {
+    const context = createService();
+    const actor = {
+      id: '11111111-1111-4111-8111-111111111111',
+      username: 'accountant',
+      role: UserRole.ACCOUNTANT,
+      isActive: true,
+      mustChangePassword: false,
+      responsiblePersonId: null,
+    };
+    let batch: Record<string, unknown> | null = null;
+    let row: Record<string, unknown> | null = null;
+    let directBalance = new Prisma.Decimal(0);
+
+    context.parser.parse.mockReturnValue({
+      fileHash: 'accountant-flow-hash',
+      encoding: 'utf-8',
+      delimiter: ';',
+      totalRows: 1,
+      rows: [{
+        rowNumber: 2,
+        status: ImportRowStatus.VALID,
+        counterpartyRaw: 'Бухгалтерський МВО_0057',
+        nomenclatureCodeRaw: 'ITEM-001',
+        itemNameRaw: 'Клавіатура',
+        unitOfMeasureRaw: 'шт.',
+        parsedQuantity: '5',
+        message: '',
+      }],
+    });
+    context.prisma.responsiblePerson.findUnique.mockResolvedValue({
+      id: 'person-0057',
+      isActive: true,
+    });
+    context.prisma.inventoryItem.findUnique.mockResolvedValue({
+      id: 'item-001',
+      externalCode: 'ITEM-001',
+      name: 'Клавіатура',
+      unitOfMeasure: 'шт.',
+    });
+    context.prisma.importBatch.findUnique.mockImplementation(({ where }) => {
+      if ('fileHash' in where) return Promise.resolve(null);
+      return Promise.resolve(batch);
+    });
+    context.prisma.importBatch.create.mockImplementation(({ data }) => {
+      const createdRow = data.rows.create[0];
+      row = { id: 'row-1', importBatchId: 'batch-1', ...createdRow };
+      batch = { id: 'batch-1', ...data };
+      return Promise.resolve(batch);
+    });
+    context.prisma.importBatch.findMany.mockImplementation(() =>
+      Promise.resolve(batch ? [batch] : []),
+    );
+    context.prisma.importBatch.count.mockImplementation(() =>
+      Promise.resolve(batch ? 1 : 0),
+    );
+    context.prisma.importBatch.update.mockImplementation(({ data }) => {
+      batch = { ...batch, ...data };
+      return Promise.resolve(batch);
+    });
+    context.prisma.importRow.findMany.mockImplementation(() =>
+      Promise.resolve(row ? [row] : []),
+    );
+    context.prisma.importRow.count.mockImplementation(() =>
+      Promise.resolve(row ? 1 : 0),
+    );
+    context.prisma.importRow.update.mockImplementation(({ data }) => {
+      row = { ...row, ...data };
+      return Promise.resolve(row);
+    });
+    context.tx.importBatch.findUnique.mockImplementation(() =>
+      Promise.resolve(batch),
+    );
+    context.tx.importBatch.update.mockImplementation(({ data }) => {
+      batch = { ...batch, ...data };
+      return Promise.resolve(batch);
+    });
+    context.tx.importRow.findMany.mockImplementation(() =>
+      Promise.resolve(row ? [row] : []),
+    );
+    context.tx.importRow.update.mockImplementation(({ data }) => {
+      row = { ...row, ...data };
+      return Promise.resolve(row);
+    });
+    context.stock.createIncreasingTransactionInTx.mockImplementation(
+      (_tx, input) => {
+        directBalance = directBalance.plus(input.quantity);
+        return Promise.resolve({ balanceAfter: directBalance });
+      },
+    );
+
+    const uploaded = await context.service.upload({
+      file: {
+        originalname: 'balances.csv',
+        buffer: Buffer.from('content'),
+        size: 7,
+      } as Express.Multer.File,
+      importType: ImportType.RECEIPT,
+      maxFileSizeBytes: 1024,
+      audit: { actor, context: { requestId: 'upload-request' } },
+    });
+    const history = await context.service.findAll({ page: 1, limit: 20 });
+    const preview = await context.service.findOne('batch-1');
+    const previewRows = await context.service.rows('batch-1', { page: 1, limit: 20 });
+    const validated = await context.service.validate('batch-1', {
+      actor,
+      context: { requestId: 'validate-request' },
+    });
+    const committed = await context.service.commit('batch-1', {
+      actor,
+      context: { requestId: 'commit-request' },
+    });
+
+    expect(uploaded).toMatchObject({ id: 'batch-1', status: ImportStatus.VALIDATED });
+    expect(history.pagination.total).toBe(1);
+    expect(preview.preview).toMatchObject({ validRows: 1, matchedPersons: 1 });
+    expect(previewRows.items).toHaveLength(1);
+    expect(validated).toMatchObject({ status: ImportStatus.VALIDATED });
+    expect(committed).toMatchObject({
+      status: ImportStatus.COMPLETED,
+      importedRows: 1,
+    });
+    expect(directBalance.toString()).toBe('5');
+    expect(context.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
+      context.tx,
+      expect.objectContaining({
+        responsiblePersonId: 'person-0057',
+        inventoryItemId: 'item-001',
+        quantity: '5',
+        accountingModel: 'DIRECT_BALANCE',
+        bucketKind: 'DIRECT',
+      }),
+    );
+    expect(context.tx.securityEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorUserId: actor.id,
+          requestId: 'commit-request',
+          success: true,
+        }),
+      }),
+    );
+    expect(
+      context.prisma.securityEvent.create.mock.calls.map(
+        ([input]) => input.data.metadata.action,
+      ),
+    ).toEqual(['UPLOAD', 'VALIDATE']);
+  });
+
+  it('allows an unfinished import to be cancelled with ACCOUNTANT audit context', async () => {
+    const { service, prisma } = createService();
+    const actor = {
+      id: '11111111-1111-4111-8111-111111111111',
+      username: 'accountant',
+      role: UserRole.ACCOUNTANT,
+      isActive: true,
+      mustChangePassword: false,
+      responsiblePersonId: null,
+    };
+    prisma.importBatch.findUnique.mockResolvedValue({
+      id: 'batch-id',
+      status: ImportStatus.VALIDATED,
+    });
+    prisma.importRow.findMany.mockResolvedValue([]);
+    prisma.importBatch.update.mockResolvedValue({
+      id: 'batch-id',
+      status: ImportStatus.CANCELLED,
+    });
+
+    await expect(service.cancel('batch-id', {
+      actor,
+      context: { requestId: 'cancel-request' },
+    })).resolves.toMatchObject({ status: ImportStatus.CANCELLED });
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'IMPORT_ACTION',
+        actorUserId: actor.id,
+        requestId: 'cancel-request',
+        success: true,
+        metadata: expect.objectContaining({
+          importBatchId: 'batch-id',
+          action: 'CANCEL',
+        }),
+      }),
+    });
   });
 
   it('stores and returns the normalized upload filename', async () => {

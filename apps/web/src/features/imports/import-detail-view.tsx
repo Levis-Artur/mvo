@@ -153,6 +153,7 @@ export function ImportDetailView({
           <div className="accounting-import-detail__actions">
             <Button disabled={actionLoading} variant="outline" type="button" onClick={onValidate}>Перевірити повторно</Button>
             <Button disabled={!canCommit || actionLoading} type="button" onClick={onCommit}>Провести імпорт</Button>
+            <Button disabled={actionLoading} variant="outline" type="button" onClick={onCancel}>Скасувати</Button>
           </div>
         ) : null}
       </section>

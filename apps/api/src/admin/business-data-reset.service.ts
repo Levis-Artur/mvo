@@ -27,6 +27,9 @@ LOCK TABLE
   "AccountingTransferExportBatchDocument",
   "AccountingTransferExportBatch",
   "StockDocumentAttachment",
+  "IssueRealizationAttachment",
+  "IssueRealizationLine",
+  "IssueRealization",
   "StockTransaction",
   "StockDocumentLine",
   "StockDocument",
@@ -40,7 +43,8 @@ IN ACCESS EXCLUSIVE MODE
 `;
 
 const RESET_STOCK_DOCUMENT_SEQUENCE_SQL = `
-ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1
+ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1;
+ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1
 `;
 
 type ResetClient = PrismaService | Prisma.TransactionClient;
@@ -148,7 +152,7 @@ export class BusinessDataResetService {
       report = await this.prisma.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(LOCK_BUSINESS_TABLES_SQL);
-          const [preservedBefore, deleteCandidates, attachments] =
+          const [preservedBefore, deleteCandidates, documentAttachments, realizationAttachments] =
             await Promise.all([
               this.preservedCounts(tx),
               this.businessCounts(tx),
@@ -156,10 +160,18 @@ export class BusinessDataResetService {
                 select: { storagePath: true },
                 orderBy: { id: 'asc' },
               }),
+              tx.issueRealizationAttachment.findMany({
+                select: { storagePath: true },
+                orderBy: { id: 'asc' },
+              }),
             ]);
 
           const storagePaths = [
-            ...new Set(attachments.map((item) => item.storagePath)),
+            ...new Set(
+              [...documentAttachments, ...realizationAttachments].map(
+                (item) => item.storagePath,
+              ),
+            ),
           ];
           for (const storagePath of storagePaths) {
             stagedFiles.push(
@@ -215,6 +227,9 @@ export class BusinessDataResetService {
     await tx.accountingTransferExportBatchDocument.deleteMany({});
     await tx.accountingTransferExportBatch.deleteMany({});
     await tx.stockDocumentAttachment.deleteMany({});
+    await tx.issueRealizationAttachment.deleteMany({});
+    await tx.issueRealizationLine.deleteMany({});
+    await tx.issueRealization.deleteMany({});
 
     await tx.stockTransaction.updateMany({
       where: { reversalOfTransactionId: { not: null } },

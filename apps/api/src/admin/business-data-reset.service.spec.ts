@@ -142,6 +142,16 @@ function harness() {
       ),
       deleteMany: deleteCount('attachments'),
     },
+    issueRealizationAttachment: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    issueRealizationLine: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    issueRealization: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     stockTransaction: {
       count: simpleCount('stockTransactions'),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
@@ -303,6 +313,9 @@ describe('BusinessDataResetService', () => {
     expect(tx.accountingTransferExportBatchDocument.deleteMany).toHaveBeenCalled();
     expect(tx.accountingTransferExportBatch.deleteMany).toHaveBeenCalled();
     expect(tx.stockDocumentAttachment.deleteMany).toHaveBeenCalled();
+    expect(tx.issueRealizationAttachment.deleteMany).toHaveBeenCalled();
+    expect(tx.issueRealizationLine.deleteMany).toHaveBeenCalled();
+    expect(tx.issueRealization.deleteMany).toHaveBeenCalled();
     expect(tx.stockTransaction.deleteMany).toHaveBeenCalled();
     expect(tx.stockDocumentLine.deleteMany).toHaveBeenCalled();
     expect(tx.stockDocument.deleteMany).toHaveBeenCalled();
