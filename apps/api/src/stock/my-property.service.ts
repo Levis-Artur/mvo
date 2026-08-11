@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  IssueRealizationStatus,
   Prisma,
   StockDocumentStatus,
   StockDocumentType,
@@ -152,12 +153,65 @@ export class MyPropertyService {
       }),
       this.prisma.stockBalance.count({ where }),
     ]);
+    const unrealizedQuantities = await this.unrealizedQuantities(
+      responsiblePersonId,
+      items.map((item) => item.inventoryItem.id),
+    );
     return this.paginated(
-      items.map((item) => this.serializeDirect(item)),
+      items.map((item) =>
+        this.serializeDirect(
+          item,
+          unrealizedQuantities.get(item.inventoryItem.id),
+        ),
+      ),
       page,
       limit,
       total,
     );
+  }
+
+  private async unrealizedQuantities(
+    responsiblePersonId: string,
+    inventoryItemIds: string[],
+  ) {
+    const totals = new Map<string, Prisma.Decimal>();
+    if (inventoryItemIds.length === 0) return totals;
+
+    const issueLines = await this.prisma.stockDocumentLine.findMany({
+      where: {
+        inventoryItemId: { in: inventoryItemIds },
+        document: {
+          type: StockDocumentType.ISSUE,
+          status: StockDocumentStatus.POSTED,
+          sourceResponsiblePersonId: responsiblePersonId,
+        },
+      },
+      select: {
+        inventoryItemId: true,
+        quantity: true,
+        realizationLines: {
+          where: {
+            realization: { status: IssueRealizationStatus.POSTED },
+          },
+          select: { quantity: true },
+        },
+      },
+    });
+
+    for (const line of issueLines) {
+      const realizedQuantity = line.realizationLines.reduce(
+        (sum, realizationLine) => sum.plus(realizationLine.quantity),
+        new Prisma.Decimal(0),
+      );
+      const unrealizedQuantity = line.quantity.minus(realizedQuantity);
+      totals.set(
+        line.inventoryItemId,
+        (totals.get(line.inventoryItemId) ?? new Prisma.Decimal(0)).plus(
+          unrealizedQuantity,
+        ),
+      );
+    }
+    return totals;
   }
 
   private async listTransferHistory(
@@ -324,12 +378,16 @@ export class MyPropertyService {
     return [primary, { id: SortOrder.ASC }];
   }
 
-  serializeDirect(row: DirectPropertyRow) {
+  serializeDirect(
+    row: DirectPropertyRow,
+    unrealizedQuantity = new Prisma.Decimal(0),
+  ) {
     return {
       section: MyPropertySection.DIRECT as const,
       id: row.id,
       inventoryItem: row.inventoryItem,
       quantity: row.quantity.toString(),
+      unrealizedQuantity: unrealizedQuantity.toString(),
       updatedAt: row.updatedAt,
     };
   }

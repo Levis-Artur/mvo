@@ -39,6 +39,11 @@ const directRow = {
   updatedAt: new Date('2026-07-20T10:00:00.000Z'),
   inventoryItem: item,
 };
+const issueLine = {
+  inventoryItemId: itemId,
+  quantity: new Prisma.Decimal('3.0000'),
+  realizationLines: [{ quantity: new Prisma.Decimal('1.2500') }],
+};
 const transferRow = {
   id: '66666666-6666-4666-8666-666666666666',
   quantity: new Prisma.Decimal('2.2500'),
@@ -68,7 +73,14 @@ function createService() {
       count: jest.fn().mockResolvedValue(1),
     },
     stockDocumentLine: {
-      findMany: jest.fn().mockResolvedValue([transferRow]),
+      findMany: jest
+        .fn()
+        .mockImplementation(
+          (args: { select?: { realizationLines?: unknown } }) =>
+            Promise.resolve(
+              args.select?.realizationLines ? [issueLine] : [transferRow],
+            ),
+        ),
       count: jest.fn().mockResolvedValue(1),
     },
     responsiblePerson: {
@@ -115,6 +127,7 @@ describe('MyPropertyService', () => {
         section: MyPropertySection.DIRECT,
         id: directRow.id,
         quantity: '4.5',
+        unrealizedQuantity: '1.75',
       }),
     );
     expect(result).not.toHaveProperty('summary');

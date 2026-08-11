@@ -419,6 +419,7 @@ export type DirectMyPropertyItem = {
   id: string;
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
   quantity: string;
+  unrealizedQuantity: string;
   updatedAt: string;
 };
 

@@ -398,7 +398,7 @@ export function MyStockView() {
 }
 
 function myStockColumns(section: MyPropertySection): DataTableColumn[] {
-  return [
+  const columns: DataTableColumn[] = [
     { label: 'Код', className: 'my-stock-table__code' },
     { label: 'Назва', className: 'my-stock-table__name' },
     { label: 'Одиниця', className: 'my-stock-table__unit' },
@@ -407,12 +407,20 @@ function myStockColumns(section: MyPropertySection): DataTableColumn[] {
       className: 'my-stock-table__quantity',
       numeric: true,
     },
-    {
-      label: '',
-      className: 'my-stock-table__mobile-action',
-      actions: true,
-    },
   ];
+  if (section === 'DIRECT') {
+    columns.push({
+      label: 'Нереалізовано',
+      className: 'my-stock-table__unrealized',
+      numeric: true,
+    });
+  }
+  columns.push({
+    label: '',
+    className: 'my-stock-table__mobile-action',
+    actions: true,
+  });
+  return columns;
 }
 
 function myStockEmptyMessage(section: MyPropertySection) {
@@ -490,6 +498,7 @@ function myStockRow(
     </Button>,
     item.inventoryItem.unitOfMeasure ?? '—',
     formatQuantity(item.quantity),
+    formatQuantity(item.unrealizedQuantity),
     <Button
       aria-label={`Відкрити картку: ${item.inventoryItem.name}`}
       key="open"

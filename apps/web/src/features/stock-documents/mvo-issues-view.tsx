@@ -566,7 +566,7 @@ export function IssueHistoryTable({
         item.hasAttachment ? (
           <StatusBadge key="attachment" tone="info">Є документ</StatusBadge>
         ) : '—',
-        <div className="table-actions" key="actions">
+        <div className="mvo-issues-table__action-list" key="actions">
           <Button
             size="compact"
             type="button"

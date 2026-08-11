@@ -103,7 +103,7 @@ describe('my-stock frontend model', () => {
     expect(view).toContain("section === 'TRANSFERRED'");
   });
 
-  it('renders a simple four-column desktop list and mobile open action', () => {
+  it('renders the direct balance with an unrealized quantity and mobile open action', () => {
     const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
     const css = readFileSync(
       join(__dirname, '../../styles/components.css'),
@@ -117,6 +117,8 @@ describe('my-stock frontend model', () => {
     expect(view).toContain("{ label: 'Назва', className: 'my-stock-table__name' }");
     expect(view).toContain("{ label: 'Одиниця', className: 'my-stock-table__unit' }");
     expect(view).toContain("section === 'TRANSFERRED' ? 'Передано' : 'Кількість на складі'");
+    expect(view).toContain("label: 'Нереалізовано'");
+    expect(view).toContain('formatQuantity(item.unrealizedQuantity)');
     expect(view).not.toContain("label: 'Кому передано'");
     expect(view).not.toContain("label: '№ передачі'");
     expect(view).not.toContain("label: 'Дата передачі'");
