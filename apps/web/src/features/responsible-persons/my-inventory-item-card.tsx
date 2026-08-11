@@ -177,7 +177,7 @@ export function MyInventoryItemCard({
     <section className="my-inventory-item-card grid min-w-0 gap-4">
       <PageHeader
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="my-inventory-item-card__actions">
             <Button type="button" variant="outline" onClick={onBack}>
               Назад
             </Button>
@@ -246,13 +246,35 @@ export function MyInventoryItemCard({
             <DataTable
               ariaLabel="Історія руху номенклатури"
               columns={[
-                { label: 'Дата і час' },
-                { label: 'Операція' },
-                { label: 'Кількість', numeric: true },
-                { label: 'МВО-відправник' },
-                { label: 'МВО-отримувач або кому видано' },
-                { label: 'Примітка або підстава' },
-                { label: 'Користувач' },
+                {
+                  label: 'Дата і час',
+                  className: 'my-inventory-item-card__date',
+                },
+                {
+                  label: 'Операція',
+                  className: 'my-inventory-item-card__operation',
+                },
+                {
+                  label: 'Кількість',
+                  numeric: true,
+                  className: 'my-inventory-item-card__quantity',
+                },
+                {
+                  label: 'МВО-відправник',
+                  className: 'my-inventory-item-card__sender',
+                },
+                {
+                  label: 'МВО-отримувач / кому видано',
+                  className: 'my-inventory-item-card__recipient',
+                },
+                {
+                  label: 'Примітка / підстава',
+                  className: 'my-inventory-item-card__note',
+                },
+                {
+                  label: 'Користувач',
+                  className: 'my-inventory-item-card__user',
+                },
               ]}
               emptyMessage="Історії руху цієї позиції ще немає."
               loading={loading}
@@ -264,10 +286,10 @@ export function MyInventoryItemCard({
                   {movement.typeLabel}
                 </StatusBadge>,
                 formatMovementQuantity(movementDisplayQuantity(movement)),
-                movement.from,
-                movement.to,
-                movement.note ?? '—',
-                movement.user ?? '—',
+                <MovementText key="sender" value={movement.from} />,
+                <MovementText key="recipient" value={movement.to} />,
+                <MovementText key="note" value={movement.note ?? '—'} />,
+                <MovementText key="user" value={movement.user ?? '—'} />,
               ])}
               tableClassName="my-inventory-item-card__table"
             />
@@ -321,4 +343,12 @@ function formatMovementQuantity(value: string) {
   return value.startsWith('+')
     ? `+${formatQuantity(value.slice(1))}`
     : formatQuantity(value);
+}
+
+function MovementText({ value }: { value: string }) {
+  return (
+    <span className="my-inventory-item-card__text" title={value}>
+      {value}
+    </span>
+  );
 }

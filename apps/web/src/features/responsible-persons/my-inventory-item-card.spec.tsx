@@ -2,6 +2,8 @@
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
   AuthUser,
   AvailableStockSource,
@@ -136,6 +138,38 @@ describe('MyInventoryItemCard', () => {
     expect(screen.getByRole('button', { name: 'Видати' })).toBeTruthy();
     expect(screen.getByText('Бухгалтерський CSV')).toBeTruthy();
     expect(screen.getByText('accountant')).toBeTruthy();
+  });
+
+  it('uses semantic column classes and an isolated horizontal scroll container', async () => {
+    render(<MyInventoryItemCard inventoryItemId={itemId} onBack={jest.fn()} />);
+
+    const table = await screen.findByRole('table', {
+      name: 'Історія руху номенклатури',
+    });
+    const scrollContainer = table.parentElement;
+    const headers = screen.getAllByRole('columnheader');
+
+    expect(table.classList.contains('my-inventory-item-card__table')).toBe(true);
+    expect(scrollContainer?.getAttribute('data-scroll-mode')).toBe('horizontal');
+    expect(headers[0].classList.contains('my-inventory-item-card__date')).toBe(true);
+    expect(headers[2].classList.contains('my-inventory-item-card__quantity')).toBe(true);
+    expect(headers[4].classList.contains('my-inventory-item-card__recipient')).toBe(true);
+    expect(headers[5].classList.contains('my-inventory-item-card__note')).toBe(true);
+  });
+
+  it('keeps readable desktop column widths and resets them for mobile cards', () => {
+    const css = readFileSync(
+      join(__dirname, '../../styles/components.css'),
+      'utf8',
+    );
+
+    expect(css).toContain(
+      '.my-inventory-item-card__table { width: max(100%, 76rem); min-width: 76rem;',
+    );
+    expect(css).toContain('.my-inventory-item-card__sender { width: 13rem; }');
+    expect(css).toContain('.my-inventory-item-card__recipient { width: 15rem; }');
+    expect(css).toContain(".my-inventory-item-card__table[data-responsive='cards-wide'] { width: 100%; min-width: 0;");
+    expect(css).not.toMatch(/my-inventory-item-card__table th:nth-child/);
   });
 
   it('opens the existing transfer form with this item and posts through the existing endpoint', async () => {

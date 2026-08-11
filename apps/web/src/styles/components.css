@@ -163,12 +163,37 @@
   .my-stock-table--direct td.my-stock-table__quantity::before { content: 'На складі'; }
 }
 .my-inventory-item-card { width: 100%; min-width: 0; }
-.my-inventory-item-card__table { width: 100%; table-layout: fixed; }
-.my-inventory-item-card__table th:nth-child(1), .my-inventory-item-card__table td:nth-child(1) { width: 120px; white-space: nowrap; }
-.my-inventory-item-card__table th:nth-child(2), .my-inventory-item-card__table td:nth-child(2) { width: 110px; white-space: nowrap; }
-.my-inventory-item-card__table th:nth-child(4), .my-inventory-item-card__table td:nth-child(4) { width: 120px; white-space: nowrap; }
-.my-inventory-item-card__table th:nth-child(5), .my-inventory-item-card__table td:nth-child(5) { width: 130px; white-space: nowrap; }
-.my-inventory-item-card__person { display: block; min-width: 0; overflow-wrap: anywhere; }
+.my-inventory-item-card__actions { display: flex; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.my-inventory-item-card > header.ui-card > div:first-child,
+.my-inventory-item-card > header.ui-card > div:first-child > div { min-width: 0; }
+.my-inventory-item-card > header.ui-card h1,
+.my-inventory-item-card > header.ui-card p { overflow-wrap: anywhere; }
+.my-inventory-item-card__table { width: max(100%, 76rem); min-width: 76rem; table-layout: fixed; }
+.my-inventory-item-card__table th,
+.my-inventory-item-card__table td { line-height: 1.4; vertical-align: top; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.my-inventory-item-card__date { width: 9rem; }
+.my-inventory-item-card__operation { width: 9rem; }
+.my-inventory-item-card__quantity { width: 6.5rem; white-space: nowrap !important; }
+.my-inventory-item-card__sender { width: 13rem; }
+.my-inventory-item-card__recipient { width: 15rem; }
+.my-inventory-item-card__note { width: 14rem; }
+.my-inventory-item-card__user { width: 10rem; }
+.my-inventory-item-card__operation .status-badge { max-width: 100%; line-height: 1.3; white-space: normal; }
+.my-inventory-item-card__text { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: normal; }
+@media (max-width: 1024px) {
+  .my-inventory-item-card > header.ui-card { align-items: stretch; flex-direction: column; }
+  .my-inventory-item-card__actions { justify-content: flex-start; }
+}
+@container (max-width: 960px) {
+  .my-inventory-item-card__table[data-responsive='cards-wide'] { width: 100%; min-width: 0; table-layout: auto; }
+  .my-inventory-item-card__table .my-inventory-item-card__date,
+  .my-inventory-item-card__table .my-inventory-item-card__operation,
+  .my-inventory-item-card__table .my-inventory-item-card__quantity,
+  .my-inventory-item-card__table .my-inventory-item-card__sender,
+  .my-inventory-item-card__table .my-inventory-item-card__recipient,
+  .my-inventory-item-card__table .my-inventory-item-card__note,
+  .my-inventory-item-card__table .my-inventory-item-card__user { width: auto; min-width: 0; white-space: normal !important; }
+}
 .my-transferred-property-card { width: 100%; min-width: 0; }
 .transfer-line-details,
 .transfer-issue-context { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
