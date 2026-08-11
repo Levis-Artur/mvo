@@ -212,6 +212,61 @@ export class InventoryItemsService {
     };
   }
 
+  async myMovementHistory(
+    id: string,
+    actor: CurrentUser,
+    query: TransferHistoryQuery,
+  ) {
+    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
+      throw new ForbiddenException(
+        'Історія власного майна доступна лише пов’язаному МВО',
+      );
+    }
+
+    const inventoryItem = await this.findOne(id);
+    const { page, limit } = this.transferHistoryPagination(query);
+    const responsiblePersonId = actor.responsiblePersonId;
+    const where = this.movementWhere(id, { responsiblePersonId });
+    const [balance, movements, total] = await Promise.all([
+      this.prisma.stockBalance.findUnique({
+        where: {
+          responsiblePersonId_inventoryItemId: {
+            responsiblePersonId,
+            inventoryItemId: id,
+          },
+        },
+        select: { quantity: true },
+      }),
+      this.prisma.stockTransaction.findMany({
+        where,
+        include: movementInclude,
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.stockTransaction.count({ where }),
+    ]);
+
+    return {
+      inventoryItem: {
+        id: inventoryItem.id,
+        code: inventoryItem.externalCode,
+        name: inventoryItem.name,
+        unit: inventoryItem.unitOfMeasure,
+      },
+      currentBalance: (balance?.quantity ?? new Prisma.Decimal(0)).toString(),
+      items: movements.map((movement) =>
+        this.serializeMovementForMvo(movement, responsiblePersonId),
+      ),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async transferHistory(id: string, query: TransferHistoryQuery) {
     const history = await this.transferHistoryData(id, query);
 
@@ -647,11 +702,44 @@ export class InventoryItemsService {
       balanceAfter: movement.balanceAfter.toString(),
       documentNumber,
       source,
+      note: document?.note ?? document?.basis ?? movement.comment ?? null,
       user: user ?? null,
       responsiblePerson: this.organizationPerson(movement.responsiblePerson),
       documentId: document?.id ?? null,
       importBatchId: movement.importBatch?.id ?? null,
     };
+  }
+
+  private serializeMovementForMvo(
+    movement: CardMovement,
+    responsiblePersonId: string,
+  ) {
+    const serialized = this.serializeMovement(movement);
+    const incomingTransfer =
+      movement.document?.type === StockDocumentType.MVO_TRANSFER &&
+      movement.document.destinationResponsiblePersonId ===
+        responsiblePersonId &&
+      movement.document.sourceResponsiblePersonId !== responsiblePersonId;
+
+    if (!incomingTransfer) return serialized;
+
+    if (movement.type === StockTransactionType.MVO_TRANSFER_OUT) {
+      return {
+        ...serialized,
+        typeLabel: 'Отримання від іншого МВО',
+        quantity: movement.quantity.toString(),
+      };
+    }
+
+    if (movement.type === StockTransactionType.MVO_TRANSFER_REVERSAL) {
+      return {
+        ...serialized,
+        typeLabel: 'Скасування отримання від іншого МВО',
+        quantity: `-${movement.quantity.toString()}`,
+      };
+    }
+
+    return serialized;
   }
 
   private movementCategory(movement: CardMovement): InventoryMovementCategory {

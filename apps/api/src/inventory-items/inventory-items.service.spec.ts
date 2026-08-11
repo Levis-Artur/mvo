@@ -3,6 +3,7 @@ import {
   StockDocumentStatus,
   StockDocumentType,
   StockTransactionType,
+  UserRole,
 } from '@prisma/client';
 import { InventoryItemsService } from './inventory-items.service';
 
@@ -60,6 +61,9 @@ function prismaMock() {
   return {
     inventoryItem: { findFirst: jest.fn().mockResolvedValue(item) },
     stockBalance: {
+      findUnique: jest.fn().mockResolvedValue({
+        quantity: new Prisma.Decimal(8),
+      }),
       findMany: jest.fn().mockResolvedValue([
         {
           id: 'balance-a',
@@ -91,6 +95,112 @@ function prismaMock() {
 }
 
 describe('InventoryItemsService accounting card', () => {
+  it('returns scoped MVO movement history with the current direct balance', async () => {
+    const prisma = prismaMock();
+    prisma.stockTransaction.findMany.mockResolvedValue([
+      {
+        ...transaction(
+          StockTransactionType.MVO_TRANSFER_OUT,
+          '10',
+          '8',
+          '2026-07-22T11:00:00.000Z',
+        ),
+        comment: null,
+        responsiblePerson: destination,
+        document: {
+          id: 'document-1',
+          type: StockDocumentType.MVO_TRANSFER,
+          displayNumber: 7,
+          documentNumber: 'MVO-7',
+          recipientName: null,
+          note: 'Передано для роботи',
+          basis: null,
+          sourceResponsiblePersonId: person.id,
+          destinationResponsiblePersonId: destination.id,
+          sourceResponsiblePerson: person,
+          destinationResponsiblePerson: destination,
+          createdByUser: { username: 'mvo-a' },
+          postedByUser: { username: 'mvo-a' },
+          cancelledByUser: null,
+        },
+      },
+    ]);
+    prisma.stockTransaction.count.mockResolvedValue(1);
+    const service = new InventoryItemsService(prisma as never);
+
+    const result = await service.myMovementHistory(
+      item.id,
+      {
+        id: 'user-b',
+        username: 'mvo-b',
+        role: UserRole.MVO,
+        isActive: true,
+        responsiblePersonId: destination.id,
+        mustChangePassword: false,
+      },
+      { page: 1, limit: 25 },
+    );
+
+    expect(result.currentBalance).toBe('8');
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        typeLabel: 'Отримання від іншого МВО',
+        quantity: '2',
+        from: expect.stringContaining('0057'),
+        to: expect.stringContaining('1155'),
+        note: 'Передано для роботи',
+      }),
+    );
+    expect(prisma.stockTransaction.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          inventoryItemId: item.id,
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: expect.arrayContaining([
+                { responsiblePersonId: destination.id },
+                {
+                  document: {
+                    destinationResponsiblePersonId: destination.id,
+                  },
+                },
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(prisma.stockBalance.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          responsiblePersonId_inventoryItemId: {
+            responsiblePersonId: destination.id,
+            inventoryItemId: item.id,
+          },
+        },
+      }),
+    );
+  });
+
+  it('rejects the MVO-scoped movement history for privileged non-MVO roles', async () => {
+    const service = new InventoryItemsService(prismaMock() as never);
+
+    await expect(
+      service.myMovementHistory(
+        item.id,
+        {
+          id: 'accountant-user',
+          username: 'accountant',
+          role: UserRole.ACCOUNTANT,
+          isActive: true,
+          responsiblePersonId: null,
+          mustChangePassword: false,
+        },
+        {},
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
   it('uses only actual StockBalance rows for current balances and totals', async () => {
     const prisma = prismaMock();
     const service = new InventoryItemsService(prisma as never);

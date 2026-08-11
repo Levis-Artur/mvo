@@ -18,6 +18,7 @@ const movement = {
   balanceAfter: '8',
   documentNumber: '№ 7',
   source: 'Документ № 7',
+  note: 'Для роботи',
   user: 'mvo-a',
   responsiblePerson: {
     id: 'person-1',

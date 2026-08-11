@@ -66,6 +66,7 @@ export function InventoryMovementsTable({
         { label: 'Стало', numeric: true },
         { label: 'Номер документа' },
         { label: 'Джерело' },
+        { label: 'Примітка або підстава' },
         { label: 'Користувач' },
       ]}
       emptyMessage="Рухів за вибраними фільтрами не знайдено."
@@ -84,6 +85,7 @@ export function InventoryMovementsTable({
         formatQuantity(movement.balanceAfter),
         movement.documentNumber,
         movement.source,
+        movement.note ?? '—',
         movement.user ?? '—',
       ])}
     />

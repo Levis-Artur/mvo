@@ -41,15 +41,18 @@ afterEach(cleanup);
 function issueForm({
   onSubmit = jest.fn(async () => undefined),
   saving = false,
+  initialInventoryItemId,
 }: {
   onSubmit?: (input: StockDocumentInput, files: File[]) => Promise<void>;
   saving?: boolean;
+  initialInventoryItemId?: string;
 } = {}) {
   return (
     <StockDocumentForm
       availableSources={[source]}
       document={null}
       error=""
+      initialInventoryItemId={initialInventoryItemId}
       initialSourceId={sourceId}
       loadingSources={false}
       loadingTargets={false}
@@ -69,6 +72,15 @@ function issueForm({
 }
 
 describe('new ISSUE form', () => {
+  it('preselects the item opened from its card and leaves quantity empty', () => {
+    render(issueForm({ initialInventoryItemId: itemId }));
+
+    expect(screen.getByText('Клавіатура')).toBeTruthy();
+    expect(
+      screen.getByRole('spinbutton', { name: 'Кількість рядка 1' }),
+    ).toHaveProperty('value', '');
+  });
+
   it('opens as a standalone issue without transfer context', () => {
     render(issueForm());
 

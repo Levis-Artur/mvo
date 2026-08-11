@@ -33,6 +33,7 @@ import {
   availableSourceOptions,
   documentLineSourceKey,
   stockSourceKey,
+  sourceToDocumentLine,
 } from './stock-source-picker-model';
 
 export function StockDocumentForm(props: StockDocumentFormProps) {
@@ -40,6 +41,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     user,
     type,
     document,
+    initialInventoryItemId,
     initialSourceId,
     persons,
     transferTargets,
@@ -74,14 +76,25 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   );
   const [basis, setBasis] = useState(document?.basis ?? '');
   const [note, setNote] = useState(document?.note ?? '');
-  const [lines, setLines] = useState<DocumentFormLine[]>(
-    document?.lines.map((line) => ({
-      inventoryItemId: line.inventoryItemId,
-      sourceBalanceId: line.sourceBalanceId ?? '',
-      quantity: line.quantity,
-      note: line.note ?? '',
-    })) ?? [],
-  );
+  const [lines, setLines] = useState<DocumentFormLine[]>(() => {
+    if (document) {
+      return document.lines.map((line) => ({
+        inventoryItemId: line.inventoryItemId,
+        sourceBalanceId: line.sourceBalanceId ?? '',
+        quantity: line.quantity,
+        note: line.note ?? '',
+      }));
+    }
+    const initialSource = initialInventoryItemId
+      ? availableSources.find(
+          (source) =>
+            source.inventoryItem.id === initialInventoryItemId &&
+            (type === 'MVO_TRANSFER' ? source.canTransfer : source.canIssue) &&
+            Number(source.availableQuantity) > 0,
+        )
+      : undefined;
+    return initialSource ? [sourceToDocumentLine(initialSource)] : [];
+  });
   const [files, setFiles] = useState<File[]>([]);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [dirty, setDirty] = useState(false);

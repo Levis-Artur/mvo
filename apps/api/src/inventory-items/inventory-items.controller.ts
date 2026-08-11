@@ -50,6 +50,16 @@ export class InventoryItemsController {
     return this.inventoryItemsService.myTransferHistory(id, actor, query);
   }
 
+  @Get(':id/my-movement-history')
+  @Roles(UserRole.MVO)
+  myMovementHistory(
+    @Param('id') id: string,
+    @Query() query: TransferHistoryQuery,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.inventoryItemsService.myMovementHistory(id, actor, query);
+  }
+
   @Get(':id/transfer-history')
   @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES)
   transferHistory(

@@ -11,6 +11,8 @@ export const responsiblePersonsService = {
   myProperty: apiClient.myProperty,
   myInventoryItemTransferHistory:
     apiClient.myInventoryItemTransferHistory,
+  myInventoryItemMovementHistory:
+    apiClient.myInventoryItemMovementHistory,
   exportMyPropertyCsv: apiClient.exportMyPropertyCsv,
   createResponsiblePerson: apiClient.createResponsiblePerson,
   updateResponsiblePerson: apiClient.updateResponsiblePerson,

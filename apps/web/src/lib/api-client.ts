@@ -34,6 +34,7 @@ import type {
   IssueRealization,
   CreateIssueRealizationInput,
   Management,
+  MyInventoryItemMovementHistory,
   MyInventoryItemTransferHistory,
   MyPropertyExportSection,
   MyPropertyQuery,
@@ -439,6 +440,15 @@ export const apiClient = {
   ) =>
     request<MyInventoryItemTransferHistory>(
       `/inventory-items/${id}/my-transfer-history`,
+      {},
+      query,
+    ),
+  myInventoryItemMovementHistory: (
+    id: string,
+    query: { page: number; limit: number },
+  ) =>
+    request<MyInventoryItemMovementHistory>(
+      `/inventory-items/${id}/my-movement-history`,
       {},
       query,
     ),

@@ -465,6 +465,18 @@ export type MyInventoryItemTransferHistory = {
   pagination: Pagination;
 };
 
+export type MyInventoryItemMovementHistory = {
+  inventoryItem: {
+    id: string;
+    code: string;
+    name: string;
+    unit: string | null;
+  };
+  currentBalance: string;
+  items: InventoryItemMovement[];
+  pagination: Pagination;
+};
+
 export type InventoryItemTransferHistory = {
   inventoryItem: {
     id: string;
@@ -577,6 +589,7 @@ export type InventoryItemMovement = {
   balanceAfter: string;
   documentNumber: string;
   source: string;
+  note: string | null;
   user: string | null;
   responsiblePerson: PersonReference & {
     management: Pick<Management, 'id' | 'name'>;

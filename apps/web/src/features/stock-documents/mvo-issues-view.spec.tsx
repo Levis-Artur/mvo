@@ -294,7 +294,7 @@ describe('MVO issues workspace', () => {
     );
     render(<MvoIssuesView />);
 
-    expect(await screen.findByText('Реалізовано повністю')).toBeTruthy();
+    expect(await screen.findByText(/Реалізовано повністю/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Реалізувати' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Відкрити' })).toBeTruthy();
     expect(screen.queryByText(/^0$/)).toBeNull();

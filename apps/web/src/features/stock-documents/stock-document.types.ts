@@ -19,6 +19,7 @@ export type StockDocumentFormProps = {
   user: AuthUser;
   type: StockDocumentType;
   document?: StockDocument | null;
+  initialInventoryItemId?: string;
   initialSourceId: string;
   persons: ResponsiblePerson[];
   transferTargets: TransferTarget[];

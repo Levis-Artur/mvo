@@ -233,6 +233,17 @@ describe('owner/custody API URLs', () => {
     );
   });
 
+  it('loads the selected item movement history from the scoped MVO endpoint', async () => {
+    await apiClient.myInventoryItemMovementHistory('item-1', {
+      page: 2,
+      limit: 25,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/inventory-items/item-1/my-movement-history?page=2&limit=25',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('sends scoped search, section, sorting and safe pagination to my-property', async () => {
     await apiClient.myProperty({
       search: 'клавіатура',

@@ -23,6 +23,9 @@ describe('stock route role metadata', () => {
       expect.arrayContaining([UserRole.MVO, UserRole.DPP_ADMIN]),
     );
     expect(roles(StockController.prototype.exportMyProperty)).not.toContain(UserRole.ACCOUNTANT);
+    expect(
+      roles(InventoryItemsController.prototype.myMovementHistory),
+    ).toEqual([UserRole.MVO]);
   });
 
   it('allows transfer-targets without opening the administrative registry', () => {
