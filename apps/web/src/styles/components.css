@@ -238,6 +238,8 @@
   .mvo-issues-table[data-responsive='cards-wide'] td:last-child { border-bottom: 0; }
   .mvo-issues-table[data-responsive='cards-wide'] td::before { min-width: 0; color: var(--color-text-secondary); content: attr(data-label); font-size: var(--text-xs); font-weight: 700; text-align: left; white-space: normal; }
   .mvo-issues-table[data-responsive='cards-wide'] td.mvo-issues-table__actions { justify-items: start; }
+  .mvo-issues-table[data-responsive='cards-wide'] td.mvo-issues-table__quantity:has(> .mvo-issues-table__fully-realized) { grid-template-columns: minmax(0, 1fr); }
+  .mvo-issues-table[data-responsive='cards-wide'] td.mvo-issues-table__quantity:has(> .mvo-issues-table__fully-realized)::before { display: none; }
   .mvo-issues-table__action-list { justify-content: flex-start; }
 }
 .issue-details { display: grid; min-width: 0; gap: var(--space-4); }

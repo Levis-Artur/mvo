@@ -54,8 +54,25 @@ const issueExportInclude = {
     include: {
       inventoryItem: true,
       realizationLines: {
-        where: { realization: { status: IssueRealizationStatus.POSTED } },
-        select: { quantity: true },
+        select: {
+          quantity: true,
+          realization: {
+            select: {
+              displayNumber: true,
+              realizationDate: true,
+              recipientText: true,
+              note: true,
+              status: true,
+              createdAt: true,
+              attachments: {
+                select: { originalFileName: true },
+                orderBy: { createdAt: 'asc' as const },
+              },
+              createdByUser: { select: { username: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' as const },
       },
     },
     orderBy: { createdAt: 'asc' as const },
@@ -122,35 +139,67 @@ export class IssueHistoryService {
       const attachmentNames = document.attachments.map(
         (attachment) => attachment.originalFileName,
       );
-      return document.lines.map((line) => ({
-        displayNumber: document.displayNumber,
-        documentDate: document.documentDate,
-        mvoCode: mvo.externalAccountingCode ?? '',
-        mvoName: mvo.fullName,
-        inventoryCode: line.inventoryItem.externalCode,
-        inventoryName: line.inventoryItem.name,
-        unit: line.inventoryItem.unitOfMeasure,
-        issuedQuantity: line.quantity,
-        realizedQuantity: line.realizationLines.reduce(
-          (sum, realizationLine) => sum.plus(realizationLine.quantity),
+      return document.lines.flatMap((line) => {
+        const realizedQuantity = line.realizationLines.reduce(
+          (sum, realizationLine) =>
+            realizationLine.realization.status ===
+            IssueRealizationStatus.POSTED
+              ? sum.plus(realizationLine.quantity)
+              : sum,
           new Prisma.Decimal(0),
-        ),
-        availableToRealize: Prisma.Decimal.max(
-          line.quantity.minus(
-            line.realizationLines.reduce(
-              (sum, realizationLine) => sum.plus(realizationLine.quantity),
-              new Prisma.Decimal(0),
-            ),
+        );
+        const issue = {
+          displayNumber: document.displayNumber,
+          documentDate: document.documentDate,
+          mvoCode: mvo.externalAccountingCode ?? '',
+          mvoName: mvo.fullName,
+          recipientName: document.recipientName ?? '',
+          inventoryCode: line.inventoryItem.externalCode,
+          inventoryName: line.inventoryItem.name,
+          unit: line.inventoryItem.unitOfMeasure,
+          issuedQuantity: line.quantity,
+          realizedQuantity,
+          availableToRealize: Prisma.Decimal.max(
+            line.quantity.minus(realizedQuantity),
+            new Prisma.Decimal(0),
           ),
-          new Prisma.Decimal(0),
-        ),
-        recipientName: document.recipientName ?? '',
-        note: document.note,
-        status: document.status,
-        attachmentNames,
-        author: document.createdByUser.username,
-        createdAt: document.createdAt,
-      }));
+          note: document.note,
+          status: document.status,
+          attachmentNames,
+          author: document.createdByUser.username,
+          createdAt: document.createdAt,
+        };
+        if (line.realizationLines.length === 0) {
+          return [{ ...issue, realization: null }];
+        }
+        return [...line.realizationLines]
+          .sort(
+            (left, right) =>
+              left.realization.realizationDate.getTime() -
+                right.realization.realizationDate.getTime() ||
+              left.realization.displayNumber -
+                right.realization.displayNumber,
+          )
+          .map((realizationLine) => ({
+            ...issue,
+            realization: {
+              displayNumber: realizationLine.realization.displayNumber,
+              realizationDate:
+                realizationLine.realization.realizationDate,
+              recipientText: realizationLine.realization.recipientText,
+              quantity: realizationLine.quantity,
+              note: realizationLine.realization.note,
+              status: realizationLine.realization.status,
+              attachmentNames:
+                realizationLine.realization.attachments.map(
+                  (attachment) => attachment.originalFileName,
+                ),
+              author:
+                realizationLine.realization.createdByUser.username,
+              createdAt: realizationLine.realization.createdAt,
+            },
+          }));
+      });
     });
     const csv = buildIssueHistoryCsv(rows);
     await this.prisma.securityEvent.create({

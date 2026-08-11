@@ -561,7 +561,13 @@ export function IssueHistoryTable({
         item.numberOfLines,
         formatQuantity(item.issuedQuantity),
         formatQuantity(item.realizedQuantity),
-        formatQuantity(item.availableToRealize),
+        item.isFullyRealized ? (
+          <span className="mvo-issues-table__fully-realized" key="fully-realized">
+            <StatusBadge tone="success">✓ Реалізовано повністю</StatusBadge>
+          </span>
+        ) : (
+          formatQuantity(item.availableToRealize)
+        ),
         <StockDocumentStatusBadge key="status" status={item.status} />,
         item.hasAttachment ? (
           <StatusBadge key="attachment" tone="info">Є документ</StatusBadge>
@@ -583,9 +589,6 @@ export function IssueHistoryTable({
             >
               Реалізувати
             </Button>
-          ) : null}
-          {item.isFullyRealized ? (
-            <StatusBadge tone="success">Реалізовано повністю</StatusBadge>
           ) : null}
         </div>,
       ])}

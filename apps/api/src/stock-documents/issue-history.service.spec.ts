@@ -110,13 +110,42 @@ describe('IssueHistoryService', () => {
     expect(call.where.sourceResponsiblePersonId).toBe(sourceId);
   });
 
-  it('exports one safe CSV row per ISSUE line without changing stock', async () => {
+  it('exports one safe CSV row per ISSUE and realization line without changing stock', async () => {
     const exportIssue = {
       ...issue,
       lines: [
         {
           quantity: new Prisma.Decimal(2),
-          realizationLines: [{ quantity: new Prisma.Decimal(1) }],
+          realizationLines: [
+            {
+              quantity: new Prisma.Decimal(1),
+              realization: {
+                displayNumber: 1,
+                realizationDate: new Date('2026-08-11T00:00:00.000Z'),
+                recipientText: 'Підрозділ 1',
+                note: 'Перша реалізація',
+                status: 'POSTED',
+                createdAt: new Date('2026-08-11T09:00:00.000Z'),
+                attachments: [
+                  { originalFileName: 'акт-реалізації.pdf' },
+                ],
+                createdByUser: { username: 'mvo-a' },
+              },
+            },
+            {
+              quantity: new Prisma.Decimal('0.5'),
+              realization: {
+                displayNumber: 2,
+                realizationDate: new Date('2026-08-12T00:00:00.000Z'),
+                recipientText: 'Підрозділ 2',
+                note: 'Скасована реалізація',
+                status: 'CANCELLED',
+                createdAt: new Date('2026-08-12T09:00:00.000Z'),
+                attachments: [],
+                createdByUser: { username: 'mvo-b' },
+              },
+            },
+          ],
           inventoryItem: {
             externalCode: '=KB-1',
             name: 'Клавіатура',
@@ -145,13 +174,23 @@ describe('IssueHistoryService', () => {
 
     expect(result.csv.startsWith('\uFEFF')).toBe(true);
     expect(result.csv).toContain('"Видано"');
-    expect(result.csv).toContain('"Реалізовано"');
-    expect(result.csv).toContain('"Залишилося реалізувати"');
+    expect(result.csv).toContain('"Реалізовано всього"');
+    expect(result.csv).toContain('"Залишилось нереалізовано"');
+    expect(result.csv).toContain('"№ реалізації"');
     expect(result.csv).toContain('"№ 12"');
     expect(result.csv).toContain("\"'=KB-1\"");
     expect(result.csv).toContain('"Отримувач"');
     expect(result.csv).toContain('"накладна.pdf"');
-    expect(result.rowCount).toBe(2);
+    expect(result.csv).toContain('"акт-реалізації.pdf"');
+    expect(result.csv).toContain('"Скасована реалізація"');
+    expect(result.csv).toContain('"Скасовано"');
+    expect(result.csv).toContain(
+      '"шт.";"2";"1";"1";"№ 2"',
+    );
+    expect(result.csv).toContain(
+      '"шт.";"3";"0";"3";"";"";"";"0"',
+    );
+    expect(result.rowCount).toBe(3);
     expect(h.prisma.stockDocument.findMany).toHaveBeenCalledWith(
       expect.not.objectContaining({
         skip: expect.anything(),

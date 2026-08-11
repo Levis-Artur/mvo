@@ -3,20 +3,42 @@ const HEADERS = [
   'Дата видачі',
   'Код МВО',
   'МВО',
+  'Кому видано',
   'Код номенклатури',
   'Номенклатура',
   'Одиниця',
   'Видано',
-  'Реалізовано',
-  'Залишилося реалізувати',
-  'Кому видано',
-  'Коментар',
-  'Статус',
-  'Є підтверджуючий документ',
-  'Назва файла документа',
-  'Автор',
-  'Дата створення',
+  'Реалізовано всього',
+  'Залишилось нереалізовано',
+  '№ реалізації',
+  'Дата реалізації',
+  'Одержувач / примітка',
+  'Кількість реалізації',
+  'Коментар реалізації',
+  'Статус реалізації',
+  'Документ реалізації',
+  'Назва файла документа реалізації',
+  'Автор реалізації',
+  'Дата створення реалізації',
+  'Коментар видачі',
+  'Статус видачі',
+  'Документ видачі',
+  'Назва файла документа видачі',
+  'Автор видачі',
+  'Дата створення видачі',
 ] as const;
+
+type IssueCsvRealization = {
+  displayNumber: number;
+  realizationDate: Date;
+  recipientText: string | null;
+  quantity: { toString(): string } | string;
+  note: string | null;
+  status: string;
+  attachmentNames: string[];
+  author: string;
+  createdAt: Date;
+};
 
 export type IssueCsvRow = {
   displayNumber: number;
@@ -35,6 +57,7 @@ export type IssueCsvRow = {
   attachmentNames: string[];
   author: string;
   createdAt: Date;
+  realization: IssueCsvRealization | null;
 };
 
 export function buildIssueHistoryCsv(rows: readonly IssueCsvRow[]) {
@@ -45,16 +68,26 @@ export function buildIssueHistoryCsv(rows: readonly IssueCsvRow[]) {
         formatDate(row.documentDate),
         row.mvoCode,
         row.mvoName,
+        row.recipientName,
         row.inventoryCode,
         row.inventoryName,
         row.unit ?? '',
         row.issuedQuantity.toString(),
         row.realizedQuantity.toString(),
         row.availableToRealize.toString(),
-        row.recipientName,
+        row.realization ? `№ ${row.realization.displayNumber}` : '',
+        row.realization ? formatDate(row.realization.realizationDate) : '',
+        row.realization?.recipientText ?? '',
+        row.realization?.quantity.toString() ?? '0',
+        row.realization?.note ?? '',
+        row.realization ? statusLabel(row.realization.status) : '',
+        attachmentLabel(row.realization?.attachmentNames ?? []),
+        row.realization?.attachmentNames.join(', ') ?? '',
+        row.realization?.author ?? '',
+        row.realization?.createdAt.toISOString() ?? '',
         row.note ?? '',
         statusLabel(row.status),
-        row.attachmentNames.length ? 'Так' : 'Ні',
+        attachmentLabel(row.attachmentNames),
         row.attachmentNames.join(', '),
         row.author,
         row.createdAt.toISOString(),
@@ -75,6 +108,10 @@ function csvCell(value: unknown) {
 
 function formatDate(value: Date) {
   return value.toISOString().slice(0, 10);
+}
+
+function attachmentLabel(attachmentNames: readonly string[]) {
+  return attachmentNames.length ? 'Є документ' : 'Немає';
 }
 
 function statusLabel(status: string) {
