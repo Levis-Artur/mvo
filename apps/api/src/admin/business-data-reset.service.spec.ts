@@ -351,10 +351,18 @@ describe('BusinessDataResetService', () => {
       },
     ]);
     expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1',
-      ),
+      'ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1',
     );
+    expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
+      'ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1',
+    );
+    const sequenceStatements = tx.$executeRawUnsafe.mock.calls
+      .map(([statement]) => statement)
+      .filter((statement) => statement.startsWith('ALTER SEQUENCE'));
+    expect(sequenceStatements).toEqual([
+      'ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1',
+      'ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1',
+    ]);
 
     const attachmentDeleteOrder =
       tx.stockDocumentAttachment.deleteMany.mock.invocationCallOrder[0];

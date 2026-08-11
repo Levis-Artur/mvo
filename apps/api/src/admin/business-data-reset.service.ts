@@ -42,10 +42,10 @@ LOCK TABLE
 IN ACCESS EXCLUSIVE MODE
 `;
 
-const RESET_STOCK_DOCUMENT_SEQUENCE_SQL = `
-ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1;
-ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1
-`;
+const RESET_DISPLAY_NUMBER_SEQUENCE_SQL = [
+  'ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1',
+  'ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1',
+] as const;
 
 type ResetClient = PrismaService | Prisma.TransactionClient;
 
@@ -188,7 +188,9 @@ export class BusinessDataResetService {
           ]);
           this.assertPreserved(preservedBefore, preservedAfter);
           this.assertBusinessStateEmpty(currentBusinessState);
-          await tx.$executeRawUnsafe(RESET_STOCK_DOCUMENT_SEQUENCE_SQL);
+          for (const statement of RESET_DISPLAY_NUMBER_SEQUENCE_SQL) {
+            await tx.$executeRawUnsafe(statement);
+          }
 
           return {
             dryRun: false,
