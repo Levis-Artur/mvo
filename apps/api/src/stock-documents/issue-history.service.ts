@@ -12,7 +12,10 @@ import {
   IssueHistoryFiltersDto,
   ListIssueHistoryQueryDto,
 } from './dto/issue-history-query.dto';
-import { buildIssueHistoryCsv } from './issue-history.csv';
+import {
+  buildIssueHistoryCsv,
+  type IssueCsvRow,
+} from './issue-history.csv';
 
 type AuditContext = {
   requestId?: string;
@@ -134,73 +137,75 @@ export class IssueHistoryService {
         { id: 'desc' },
       ],
     });
-    const rows = documents.flatMap((document) => {
-      const mvo = this.person(document.sourceResponsiblePerson);
-      const attachmentNames = document.attachments.map(
-        (attachment) => attachment.originalFileName,
-      );
-      return document.lines.flatMap((line) => {
-        const realizedQuantity = line.realizationLines.reduce(
-          (sum, realizationLine) =>
-            realizationLine.realization.status ===
-            IssueRealizationStatus.POSTED
-              ? sum.plus(realizationLine.quantity)
-              : sum,
-          new Prisma.Decimal(0),
+    const rows: IssueCsvRow[] = documents.flatMap(
+      (document): IssueCsvRow[] => {
+        const mvo = this.person(document.sourceResponsiblePerson);
+        const attachmentNames = document.attachments.map(
+          (attachment) => attachment.originalFileName,
         );
-        const issue = {
-          displayNumber: document.displayNumber,
-          documentDate: document.documentDate,
-          mvoCode: mvo.externalAccountingCode ?? '',
-          mvoName: mvo.fullName,
-          recipientName: document.recipientName ?? '',
-          inventoryCode: line.inventoryItem.externalCode,
-          inventoryName: line.inventoryItem.name,
-          unit: line.inventoryItem.unitOfMeasure,
-          issuedQuantity: line.quantity,
-          realizedQuantity,
-          availableToRealize: Prisma.Decimal.max(
-            line.quantity.minus(realizedQuantity),
+        return document.lines.flatMap((line): IssueCsvRow[] => {
+          const realizedQuantity = line.realizationLines.reduce(
+            (sum, realizationLine) =>
+              realizationLine.realization.status ===
+              IssueRealizationStatus.POSTED
+                ? sum.plus(realizationLine.quantity)
+                : sum,
             new Prisma.Decimal(0),
-          ),
-          note: document.note,
-          status: document.status,
-          attachmentNames,
-          author: document.createdByUser.username,
-          createdAt: document.createdAt,
-        };
-        if (line.realizationLines.length === 0) {
-          return [{ ...issue, realization: null }];
-        }
-        return [...line.realizationLines]
-          .sort(
-            (left, right) =>
-              left.realization.realizationDate.getTime() -
-                right.realization.realizationDate.getTime() ||
-              left.realization.displayNumber -
-                right.realization.displayNumber,
-          )
-          .map((realizationLine) => ({
-            ...issue,
-            realization: {
-              displayNumber: realizationLine.realization.displayNumber,
-              realizationDate:
-                realizationLine.realization.realizationDate,
-              recipientText: realizationLine.realization.recipientText,
-              quantity: realizationLine.quantity,
-              note: realizationLine.realization.note,
-              status: realizationLine.realization.status,
-              attachmentNames:
-                realizationLine.realization.attachments.map(
-                  (attachment) => attachment.originalFileName,
-                ),
-              author:
-                realizationLine.realization.createdByUser.username,
-              createdAt: realizationLine.realization.createdAt,
-            },
-          }));
-      });
-    });
+          );
+          const issue: Omit<IssueCsvRow, 'realization'> = {
+            displayNumber: document.displayNumber,
+            documentDate: document.documentDate,
+            mvoCode: mvo.externalAccountingCode ?? '',
+            mvoName: mvo.fullName,
+            recipientName: document.recipientName ?? '',
+            inventoryCode: line.inventoryItem.externalCode,
+            inventoryName: line.inventoryItem.name,
+            unit: line.inventoryItem.unitOfMeasure,
+            issuedQuantity: line.quantity,
+            realizedQuantity,
+            availableToRealize: Prisma.Decimal.max(
+              line.quantity.minus(realizedQuantity),
+              new Prisma.Decimal(0),
+            ),
+            note: document.note,
+            status: document.status,
+            attachmentNames,
+            author: document.createdByUser.username,
+            createdAt: document.createdAt,
+          };
+          if (line.realizationLines.length === 0) {
+            return [{ ...issue, realization: null }];
+          }
+          return [...line.realizationLines]
+            .sort(
+              (left, right) =>
+                left.realization.realizationDate.getTime() -
+                  right.realization.realizationDate.getTime() ||
+                left.realization.displayNumber -
+                  right.realization.displayNumber,
+            )
+            .map((realizationLine): IssueCsvRow => ({
+              ...issue,
+              realization: {
+                displayNumber: realizationLine.realization.displayNumber,
+                realizationDate:
+                  realizationLine.realization.realizationDate,
+                recipientText: realizationLine.realization.recipientText,
+                quantity: realizationLine.quantity,
+                note: realizationLine.realization.note,
+                status: realizationLine.realization.status,
+                attachmentNames:
+                  realizationLine.realization.attachments.map(
+                    (attachment) => attachment.originalFileName,
+                  ),
+                author:
+                  realizationLine.realization.createdByUser.username,
+                createdAt: realizationLine.realization.createdAt,
+              },
+            }));
+        });
+      },
+    );
     const csv = buildIssueHistoryCsv(rows);
     await this.prisma.securityEvent.create({
       data: {
