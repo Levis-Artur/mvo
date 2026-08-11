@@ -11,11 +11,6 @@ export const MY_PROPERTY_SECTION_LABELS: Record<MyPropertySection, string> = {
   TRANSFERRED: 'Передано іншим МВО',
 };
 
-export const MY_PROPERTY_SECTION_DESCRIPTIONS: Record<MyPropertySection, string> = {
-  DIRECT: 'Поточний залишок майна за даними обліку.',
-  TRANSFERRED: 'Історія проведених і скасованих документів передачі іншим МВО.',
-};
-
 export function myPropertySortOptions(
   section: MyPropertySection,
 ): { value: MyPropertySortBy; label: string }[] {

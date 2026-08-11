@@ -2,10 +2,12 @@ import { apiClient } from '@/lib/api-client';
 
 export const stockDocumentsService = {
   list: apiClient.stockDocuments,
+  issueHistory: apiClient.issueHistory,
+  exportIssueHistory: apiClient.exportIssueHistory,
   findOne: apiClient.stockDocument,
   create: apiClient.createStockDocument,
   createAndPostMvoTransfer: apiClient.createAndPostMvoTransfer,
-  createTransferIssue: apiClient.createTransferIssue,
+  createAndPostIssue: apiClient.createAndPostIssue,
   update: apiClient.updateStockDocument,
   remove: apiClient.deleteStockDocument,
   post: apiClient.postStockDocument,

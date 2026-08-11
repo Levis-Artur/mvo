@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import {
   deliverDownloadedFile,
   exportSection,
-  MY_PROPERTY_SECTION_DESCRIPTIONS,
   MY_PROPERTY_SECTION_LABELS,
   myPropertySortOptions,
   normalizedPropertySearch,
@@ -22,9 +21,6 @@ describe('my-stock frontend model', () => {
       TRANSFERRED: 'Передано іншим МВО',
     });
     expect(MY_PROPERTY_SECTION_LABELS).not.toHaveProperty('ASSIGNED_TO_ME');
-    expect(MY_PROPERTY_SECTION_DESCRIPTIONS.DIRECT).toContain(
-      'Поточний залишок',
-    );
     expect(myPropertySortOptions('TRANSFERRED')).toContainEqual({
       value: 'recipient',
       label: 'Кому передано',
@@ -71,7 +67,7 @@ describe('my-stock frontend model', () => {
       'utf8',
     );
     const css = readFileSync(
-      join(__dirname, '../../styles/responsive.css'),
+      join(__dirname, '../../styles/components.css'),
       'utf8',
     );
 
@@ -84,9 +80,10 @@ describe('my-stock frontend model', () => {
     expect(view).toContain('Не вдалося експортувати CSV');
     expect(modal).toContain('Усе моє майно');
     expect(modal).toContain('Лише поточна вкладка');
-    expect(css).toContain(
-      '.my-stock-toolbar { grid-template-columns: minmax(0, 1fr);',
-    );
+    expect(view).toContain('aria-haspopup="dialog"');
+    expect(view).toContain('Ще');
+    expect(view).not.toContain('className="my-stock-sort-bar"');
+    expect(css).toContain('.my-stock-more__panel');
   });
 
   it('contains no received-from-others tab, custody state, or summary request', () => {
@@ -106,7 +103,7 @@ describe('my-stock frontend model', () => {
     expect(view).toContain("section === 'TRANSFERRED'");
   });
 
-  it('keeps direct stock read-only and renders outgoing transfer-line progress', () => {
+  it('renders a simple four-column desktop list and mobile open action', () => {
     const view = readFileSync(join(__dirname, 'my-stock-view.tsx'), 'utf8');
     const css = readFileSync(
       join(__dirname, '../../styles/components.css'),
@@ -117,30 +114,26 @@ describe('my-stock frontend model', () => {
     expect(view).not.toContain('accountingOwner');
     expect(view).not.toContain('currentCustodian');
     expect(view).toContain("{ label: 'Код', className: 'my-stock-table__code' }");
-    expect(view).toContain("{ label: 'Дата передачі', className: 'my-stock-table__date' }");
-    expect(view).toContain("{ label: '№ передачі', className: 'my-stock-table__document' }");
-    expect(view).toContain("{ label: 'Кому передано', className: 'my-stock-table__person' }");
-    expect(view).toContain("label: 'Передано'");
-    expect(view).toContain("label: 'Видано'");
-    expect(view).toContain("label: 'Залишилось оформити видачу'");
-    expect(view).toContain("label: 'Дія'");
-    expect(view).toContain('item.issuedQuantity');
-    expect(view).toContain('item.availableToIssue');
+    expect(view).toContain("{ label: 'Назва', className: 'my-stock-table__name' }");
+    expect(view).toContain("{ label: 'Одиниця', className: 'my-stock-table__unit' }");
+    expect(view).toContain("section === 'TRANSFERRED' ? 'Передано' : 'Кількість на складі'");
+    expect(view).not.toContain("label: 'Кому передано'");
+    expect(view).not.toContain("label: '№ передачі'");
+    expect(view).not.toContain("label: 'Дата передачі'");
+    expect(view).not.toContain("label: 'Залишилось оформити видачу'");
     expect(view).toContain('<MyTransferredPropertyCard');
-    expect(view).toContain('<TransferIssueModal');
-    expect(view).toContain('Видано повністю');
-    expect(view).toContain('<StockDocumentStatusBadge');
-    expect(view).toContain(
-      "responsiveMode={section === 'TRANSFERRED' ? 'cards-wide' : 'cards'}",
-    );
-    expect(css).toContain('.my-stock-table--direct { table-layout: auto; }');
+    expect(view).not.toContain('<TransferIssueModal');
+    expect(view).toContain('responsiveMode="cards-wide"');
+    expect(view).toContain("className: 'my-stock-table__mobile-action'");
+    expect(view).toContain('Відкрити');
+    expect(css).toContain('.my-stock-table--direct, .my-stock-table--transferred { table-layout: auto; }');
     expect(css).toContain(
-      '.my-stock-table--direct .my-stock-table__code { width: 1%; min-width: 12ch;',
+      '.my-stock-table--direct .my-stock-table__code, .my-stock-table--transferred .my-stock-table__code { width: 1%; min-width: 12ch;',
     );
     expect(css).toContain(
-      '.my-stock-table--direct td.my-stock-table__quantity { white-space: nowrap; }',
+      '.my-stock-table .my-stock-table__mobile-action { display: none; }',
     );
-    expect(css).not.toContain('.my-stock-table--transferred { min-width:');
+    expect(css).toContain('@container (max-width: 960px)');
     expect(css).not.toContain('.my-stock-table--assigned_to_me');
     expect(css).toContain(".data-table-scroll[data-scroll-mode='bounded']");
     expect(css).not.toContain(

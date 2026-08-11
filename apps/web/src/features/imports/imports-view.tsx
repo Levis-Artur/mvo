@@ -1,14 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button, ErrorState, Pagination, Toast } from '@/components/ui';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
+import type { ImportBatch } from '@/lib/types';
 import { CommitImportModal } from './commit-import-modal';
 import { ImportDetailView } from './import-detail-view';
 import { ImportUploadModal } from './import-upload-modal';
 import { ImportsTable } from './imports-table';
+import { AccountingImportsHome } from './accounting-imports-home';
+import { AccountingImportSuccess } from './accounting-import-success';
+import { importsService } from './imports.service';
 import { useImportsController } from './use-imports-controller';
 
 export function ImportsView({ initialImportId, embedded = false, accountingWorkspace = false }: {
@@ -16,18 +20,35 @@ export function ImportsView({ initialImportId, embedded = false, accountingWorks
   embedded?: boolean;
   accountingWorkspace?: boolean;
 }) {
-  const controller = useImportsController(initialImportId, !embedded);
+  const controller = useImportsController(initialImportId, !embedded, !accountingWorkspace);
   const [deletingImportId, setDeletingImportId] = useState<string | null>(null);
+  const [latestImportDetails, setLatestImportDetails] = useState<ImportBatch | null>(null);
   const showDetail = Boolean(initialImportId || controller.selected);
+  const latestListImport = controller.imports[0] ?? null;
+
+  useEffect(() => {
+    if (!accountingWorkspace || showDetail || !latestListImport) {
+      if (!latestListImport) setLatestImportDetails(null);
+      return;
+    }
+    let active = true;
+    void importsService.getImportBatch(latestListImport.id)
+      .then((batch) => { if (active) setLatestImportDetails(batch); })
+      .catch(() => { if (active) setLatestImportDetails(latestListImport); });
+    return () => { active = false; };
+  }, [accountingWorkspace, latestListImport, showDetail]);
 
   function returnToList() {
     controller.setSelected(null);
+    controller.setCommitCompleted(false);
     if (!embedded) controller.router.push('/imports');
   }
 
   return (
     <>
-      {showDetail ? (
+      {accountingWorkspace && controller.commitCompleted && controller.selected ? (
+        <AccountingImportSuccess batch={controller.selected} onDone={returnToList} />
+      ) : showDetail ? (
         <ImportDetailView
           actionLoading={controller.actionLoading}
           accountingWorkspace={accountingWorkspace}
@@ -58,6 +79,19 @@ export function ImportsView({ initialImportId, embedded = false, accountingWorks
           onSaveMappings={() => void controller.saveMappings()}
           onValidate={() => void controller.validateSelected()}
         />
+      ) : accountingWorkspace ? (
+        <AccountingImportsHome
+          canUpload={controller.canWriteImports}
+          error={controller.error}
+          imports={controller.imports}
+          latestImport={latestImportDetails?.id === latestListImport?.id ? latestImportDetails : latestListImport}
+          loading={controller.listLoading}
+          pagination={controller.listPagination}
+          onLimitChange={(limit) => void controller.loadList(1, limit)}
+          onOpen={(batch) => void controller.openImport(batch)}
+          onPage={(page) => void controller.loadList(page, controller.listPagination.limit)}
+          onUpload={() => controller.setUploadOpen(true)}
+        />
       ) : (
         <section className="grid min-w-0 gap-4">
           <PageHeader
@@ -87,6 +121,7 @@ export function ImportsView({ initialImportId, embedded = false, accountingWorks
       {controller.uploadOpen && controller.canWriteImports ? (
         <ImportUploadModal onClose={() => controller.setUploadOpen(false)} onSaved={(batch) => {
           controller.setUploadOpen(false);
+          controller.setCommitCompleted(false);
           if (!embedded) controller.router.push(`/imports/${batch.id}`);
           void controller.loadList();
           void controller.loadImport(batch.id);

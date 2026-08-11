@@ -1,7 +1,6 @@
 import {
   Prisma,
   PrismaClient,
-  StockAccountingModel,
   StockDocumentStatus,
   StockDocumentType,
   UserRole,
@@ -15,11 +14,17 @@ const describeWithPostgres = testDatabaseUrl ? describe : describe.skip;
 
 jest.setTimeout(60_000);
 
-describeWithPostgres('transfer-based ISSUE PostgreSQL concurrency', () => {
-  const firstClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
-  const secondClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
+describeWithPostgres(
+  testDatabaseUrl
+    ? 'standalone ISSUE PostgreSQL concurrency'
+    : 'standalone ISSUE PostgreSQL concurrency (skipped: TEST_DATABASE_URL is not set)',
+  () => {
+  let firstClient: PrismaClient;
+  let secondClient: PrismaClient;
 
   beforeAll(async () => {
+    firstClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
+    secondClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
     await Promise.all([firstClient.$connect(), secondClient.$connect()]);
   });
 
@@ -27,7 +32,7 @@ describeWithPostgres('transfer-based ISSUE PostgreSQL concurrency', () => {
     await Promise.all([firstClient.$disconnect(), secondClient.$disconnect()]);
   });
 
-  it('allows only one concurrent ISSUE when both requests exceed transfer availability together', async () => {
+  it('allows only one concurrent ISSUE when both requests exceed direct stock together', async () => {
     const fixture = await createFixture(firstClient);
     const firstService = createService(firstClient);
     const secondService = createService(secondClient);
@@ -35,16 +40,14 @@ describeWithPostgres('transfer-based ISSUE PostgreSQL concurrency', () => {
 
     try {
       const results = await Promise.allSettled([
-        firstService.createAndPostTransferIssue(
-          fixture.transfer.id,
-          issueDto(fixture.transferLine.id, '4'),
+        firstService.createAndPostIssue(
+          issueDto(fixture.balance.id, fixture.item.id, '4'),
           [file],
           fixture.actor,
           { requestId: `issue-a-${fixture.suffix}` },
         ),
-        secondService.createAndPostTransferIssue(
-          fixture.transfer.id,
-          issueDto(fixture.transferLine.id, '4'),
+        secondService.createAndPostIssue(
+          issueDto(fixture.balance.id, fixture.item.id, '4'),
           [file],
           fixture.actor,
           { requestId: `issue-b-${fixture.suffix}` },
@@ -60,7 +63,8 @@ describeWithPostgres('transfer-based ISSUE PostgreSQL concurrency', () => {
 
       const postedLines = await firstClient.stockDocumentLine.findMany({
         where: {
-          sourceTransferLineId: fixture.transferLine.id,
+          sourceBalanceId: fixture.balance.id,
+          sourceTransferLineId: null,
           document: {
             type: StockDocumentType.ISSUE,
             status: StockDocumentStatus.POSTED,
@@ -77,12 +81,13 @@ describeWithPostgres('transfer-based ISSUE PostgreSQL concurrency', () => {
       const balance = await firstClient.stockBalance.findUniqueOrThrow({
         where: { id: fixture.balance.id },
       });
-      expect(balance.quantity.toString()).toBe('5');
+      expect(balance.quantity.toString()).toBe('1');
     } finally {
       await cleanupFixture(firstClient, fixture);
     }
   });
-});
+  },
+);
 
 function createService(prisma: PrismaClient) {
   const storage = {
@@ -116,8 +121,7 @@ async function createFixture(prisma: PrismaClient) {
       managementId: management.id,
     },
   });
-  const [source, destination] = await Promise.all([
-    prisma.responsiblePerson.create({
+  const source = await prisma.responsiblePerson.create({
       data: {
         lastName: 'Тестовий',
         firstName: 'Відправник',
@@ -126,17 +130,7 @@ async function createFixture(prisma: PrismaClient) {
         managementId: management.id,
         serviceId: service.id,
       },
-    }),
-    prisma.responsiblePerson.create({
-      data: {
-        lastName: 'Тестовий',
-        firstName: 'Одержувач',
-        personnelNumber: `ISS-DST-${suffix}`,
-        managementId: management.id,
-        serviceId: service.id,
-      },
-    }),
-  ]);
+    });
   const user = await prisma.user.create({
     data: {
       username: `issue-${suffix}`,
@@ -161,41 +155,14 @@ async function createFixture(prisma: PrismaClient) {
       quantity: new Prisma.Decimal(5),
     },
   });
-  const transfer = await prisma.stockDocument.create({
-    data: {
-      documentNumber: `issue-transfer-${suffix}`,
-      documentDate: new Date('2026-08-10T00:00:00.000Z'),
-      type: StockDocumentType.MVO_TRANSFER,
-      accountingModel: StockAccountingModel.DIRECT_BALANCE,
-      status: StockDocumentStatus.POSTED,
-      sourceResponsiblePersonId: source.id,
-      destinationResponsiblePersonId: destination.id,
-      createdByUserId: user.id,
-      postedByUserId: user.id,
-      postedAt: new Date('2026-08-10T10:00:00.000Z'),
-      lines: {
-        create: {
-          inventoryItemId: item.id,
-          sourceBalanceId: balance.id,
-          quantity: new Prisma.Decimal(5),
-          quantityBefore: new Prisma.Decimal(10),
-          quantityAfter: new Prisma.Decimal(5),
-        },
-      },
-    },
-    include: { lines: true },
-  });
   return {
     suffix,
     management,
     service,
     source,
-    destination,
     user,
     item,
     balance,
-    transfer,
-    transferLine: transfer.lines[0],
     actor: {
       id: user.id,
       username: user.username,
@@ -209,11 +176,15 @@ async function createFixture(prisma: PrismaClient) {
 
 type Fixture = Awaited<ReturnType<typeof createFixture>>;
 
-function issueDto(sourceTransferLineId: string, quantity: string) {
+function issueDto(
+  sourceBalanceId: string,
+  inventoryItemId: string,
+  quantity: string,
+) {
   return {
     documentDate: '2026-08-10T00:00:00.000Z',
     recipientName: 'Зовнішній одержувач',
-    lines: [{ sourceTransferLineId, quantity }],
+    lines: [{ sourceBalanceId, inventoryItemId, quantity }],
   };
 }
 
@@ -246,21 +217,13 @@ async function cleanupFixture(prisma: PrismaClient, fixture: Fixture) {
       type: StockDocumentType.ISSUE,
     },
   });
-  await prisma.stockDocument.deleteMany({
-    where: {
-      createdByUserId: fixture.user.id,
-      type: StockDocumentType.MVO_TRANSFER,
-    },
-  });
   await prisma.securityEvent.deleteMany({
     where: { actorUserId: fixture.user.id },
   });
   await prisma.stockBalance.delete({ where: { id: fixture.balance.id } });
   await prisma.inventoryItem.delete({ where: { id: fixture.item.id } });
   await prisma.user.delete({ where: { id: fixture.user.id } });
-  await prisma.responsiblePerson.deleteMany({
-    where: { id: { in: [fixture.source.id, fixture.destination.id] } },
-  });
+  await prisma.responsiblePerson.delete({ where: { id: fixture.source.id } });
   await prisma.service.delete({ where: { id: fixture.service.id } });
   await prisma.management.delete({ where: { id: fixture.management.id } });
 }

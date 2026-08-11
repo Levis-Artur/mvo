@@ -136,7 +136,7 @@ export function AccountingMovementsView() {
       onSearchChange={(search) => setDraft((current) => ({ ...current, search }))}
     >
       <FilterField label="Тип операції"><Select value={draft.operationType} onChange={(event) => setDraft((current) => ({ ...current, operationType: event.target.value as FilterState['operationType'] }))}>
-        <option value="">Усі операції</option><option value="IMPORT">Надходження</option><option value="MVO_TRANSFER">Передача МВО</option><option value="ISSUE">Видача з передачі</option>
+        <option value="">Усі операції</option><option value="IMPORT">Надходження</option><option value="MVO_TRANSFER">Передача МВО</option><option value="ISSUE">Видача</option>
       </Select></FilterField>
       <FilterField label="Код МВО"><Input value={draft.mvoCode} onChange={(event) => setDraft((current) => ({ ...current, mvoCode: event.target.value }))} /></FilterField>
       <FilterField label="МВО"><Select value={draft.responsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, responsiblePersonId: event.target.value }))}>

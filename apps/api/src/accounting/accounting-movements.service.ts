@@ -134,7 +134,7 @@ type Movement = Prisma.StockTransactionGetPayload<{
 
 type MovementPerson = Movement['responsiblePerson'];
 
-const DOCUMENTARY_ISSUE_TYPE = StockTransactionType.ISSUE_OUT;
+const ISSUE_MOVEMENT_TYPE = StockTransactionType.ISSUE_OUT;
 
 @Injectable()
 export class AccountingMovementsService {
@@ -238,10 +238,7 @@ export class AccountingMovementsService {
     if (
       !document ||
       (document.type !== StockDocumentType.MVO_TRANSFER &&
-        !(
-          document.type === StockDocumentType.ISSUE &&
-          document.sourceTransferId
-        ))
+        document.type !== StockDocumentType.ISSUE)
     ) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
@@ -582,11 +579,8 @@ export class AccountingMovementsService {
           document: { type: StockDocumentType.MVO_TRANSFER },
         },
         {
-          type: DOCUMENTARY_ISSUE_TYPE,
-          document: {
-            type: StockDocumentType.ISSUE,
-            sourceTransferId: { not: null },
-          },
+          type: ISSUE_MOVEMENT_TYPE,
+          document: { type: StockDocumentType.ISSUE },
         },
       ],
     };
@@ -604,11 +598,8 @@ export class AccountingMovementsService {
     }
     if (operationType === 'ISSUE') {
       return {
-        type: DOCUMENTARY_ISSUE_TYPE,
-        document: {
-          type: StockDocumentType.ISSUE,
-          sourceTransferId: { not: null },
-        },
+        type: ISSUE_MOVEMENT_TYPE,
+        document: { type: StockDocumentType.ISSUE },
       };
     }
     return {};
@@ -731,7 +722,7 @@ export class AccountingMovementsService {
   private operationLabel(type: AccountingMovementType) {
     if (type === 'IMPORT') return 'Надходження';
     if (type === 'MVO_TRANSFER') return 'Передача МВО';
-    return 'Видача з передачі';
+    return 'Видача';
   }
 
   private signedQuantity(
@@ -739,7 +730,9 @@ export class AccountingMovementsService {
     operationType: AccountingMovementType,
   ) {
     const value = quantity.abs().toString();
-    if (operationType === 'MVO_TRANSFER') return `-${value}`;
+    if (operationType === 'MVO_TRANSFER' || operationType === 'ISSUE') {
+      return `-${value}`;
+    }
     if (operationType === 'IMPORT') return `+${value}`;
     return value;
   }

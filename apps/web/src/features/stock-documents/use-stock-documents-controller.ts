@@ -18,7 +18,6 @@ import { stockDocumentsService } from './stock-documents.service';
 import { shouldLoadGlobalResponsiblePersons } from './stock-document-loading-policy';
 import { successfulDocumentActionMessage } from './stock-document-rules';
 import { loadTransferTargets } from './transfer-targets';
-import { submitNewIssue } from './issue-submit';
 import { submitNewMvoTransfer } from './mvo-transfer-submit';
 
 export type DocumentFilters = {
@@ -51,8 +50,6 @@ export function useStockDocumentsController(user: AuthUser) {
   const [formType, setFormType] = useState<StockDocumentType | null>(null);
   const [formSourceId, setFormSourceId] = useState('');
   const [editing, setEditing] = useState<StockDocument | null>(null);
-  const [issueTransfer, setIssueTransfer] = useState<StockDocument | null>(null);
-  const [issueInitialLineId, setIssueInitialLineId] = useState('');
   const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSources, setLoadingSources] = useState(false);
@@ -71,7 +68,7 @@ export function useStockDocumentsController(user: AuthUser) {
     setLoading(true); setError('');
     try {
       const response = await stockDocumentsService.list({
-        type: appliedFilters.type || undefined,
+        type: user.role === 'MVO' ? 'MVO_TRANSFER' : appliedFilters.type || undefined,
         status: appliedFilters.status || undefined,
         sourceResponsiblePersonId: user.role === 'MVO' ? undefined : appliedFilters.sourceId || undefined,
         destinationResponsiblePersonId: user.role === 'MVO' ? undefined : appliedFilters.destinationId || undefined,
@@ -156,43 +153,10 @@ export function useStockDocumentsController(user: AuthUser) {
   function openCreate(nextType: StockDocumentType) {
     if (nextType !== 'MVO_TRANSFER') return;
     setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
-    setIssueTransfer(null);
-    setIssueInitialLineId('');
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : '';
     setFormSourceId(source); setFormType(nextType);
     void loadSources(source);
     if (nextType === 'MVO_TRANSFER') void loadTargets();
-  }
-
-  async function openIssueFromTransfer(
-    document: StockDocument,
-    initialTransferLineId?: string,
-  ) {
-    if (document.type !== 'MVO_TRANSFER' || document.status !== 'POSTED') return;
-    setActionError(''); setSourcesError(''); setSaving(false);
-    try {
-      const transfer = await stockDocumentsService.findOne(document.id);
-      const sources = transfer.lines
-        .filter((line) => Number(line.availableToIssue ?? '0') > 0)
-        .map((line) => ({
-          inventoryItem: line.inventoryItem,
-          balanceId: line.id,
-          sourceTransferLineId: line.id,
-          availableQuantity: line.availableToIssue ?? '0',
-          unit: line.inventoryItem.unitOfMeasure,
-          canTransfer: false,
-          canIssue: true,
-        }));
-      setAvailableSources(sources);
-      setIssueTransfer(transfer);
-      setIssueInitialLineId(initialTransferLineId ?? '');
-      setEditing(null);
-      setSelected(null);
-      setFormSourceId(transfer.sourceResponsiblePersonId);
-      setFormType('ISSUE');
-    } catch (reason) {
-      setActionError(errorMessage(reason));
-    }
   }
 
   async function openDetails(document: Pick<StockDocument, 'id'>) {
@@ -232,28 +196,6 @@ export function useStockDocumentsController(user: AuthUser) {
         window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
         window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
         window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
-        return;
-      }
-      if (!editing && input.type === 'ISSUE') {
-        if (!issueTransfer) {
-          throw new Error('Спочатку відкрийте власну проведену передачу');
-        }
-        await submitNewIssue(
-          issueTransfer.id,
-          input,
-          files,
-          stockDocumentsService.createTransferIssue,
-        );
-        setFormType(null);
-        setIssueTransfer(null);
-        setIssueInitialLineId('');
-        setSelected(null);
-        setSuccess(null);
-        setToast('Видачу оформлено.');
-        await load();
-        window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-transferred-property'));
         return;
       }
       let result = editing
@@ -333,18 +275,16 @@ export function useStockDocumentsController(user: AuthUser) {
 
   function closeForm() {
     setFormType(null);
-    setIssueTransfer(null);
-    setIssueInitialLineId('');
     setActionError('');
   }
 
   return {
     documents: filteredDocuments, persons, transferTargets, availableSources, pagination,
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
-    selected, setSelected, formType, setFormType, formSourceId, editing, issueTransfer, issueInitialLineId,
+    selected, setSelected, formType, setFormType, formSourceId, editing,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
     actionLoading, error, personsError, sourcesError, targetsError, actionError, toast, setToast, success, setSuccess,
-    load, loadReferences, loadSources, loadTargets, openCreate, openIssueFromTransfer, openDetails, openEdit, save, removeAttachment, perform,
+    load, loadReferences, loadSources, loadTargets, openCreate, openDetails, openEdit, save, removeAttachment, perform,
     openConfirmation, closeConfirmation, closeForm,
   };
 }

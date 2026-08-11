@@ -1,10 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import {
-  CreateIssueDto,
-  CreateTransferIssueDto,
-} from './stock-document.dto';
+import { CreateIssueDto } from './stock-document.dto';
 
 describe('CreateIssueDto multipart payload', () => {
   it('parses and validates JSON lines sent by FormData', async () => {
@@ -41,28 +38,5 @@ describe('CreateIssueDto multipart payload', () => {
 
     const errors = await validate(dto);
     expect(errors.some((error) => error.property === 'lines')).toBe(true);
-  });
-});
-
-describe('CreateTransferIssueDto multipart payload', () => {
-  it('parses source transfer line references without accepting balance ids', async () => {
-    const dto = plainToInstance(CreateTransferIssueDto, {
-      documentDate: '2026-08-10T00:00:00.000Z',
-      recipientName: 'Одержувач',
-      lines: JSON.stringify([
-        {
-          sourceTransferLineId:
-            '77777777-7777-4777-8777-777777777777',
-          quantity: '2',
-        },
-      ]),
-    });
-
-    expect(await validate(dto)).toEqual([]);
-    expect(dto.lines[0]).toMatchObject({
-      sourceTransferLineId: '77777777-7777-4777-8777-777777777777',
-      quantity: '2',
-    });
-    expect(dto.lines[0]).not.toHaveProperty('sourceBalanceId');
   });
 });

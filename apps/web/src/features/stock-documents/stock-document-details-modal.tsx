@@ -10,11 +10,10 @@ import {
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
 import { StockDocumentAttachmentList } from './stock-document-attachment-list';
 
-export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onIssue, onViewIssue, onOpenSourceTransfer, onClose }: {
+export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onViewIssue, onOpenSourceTransfer, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
   readOnly?: boolean;
   onEdit: () => void; onPost: () => void; onCancel: () => void; onDelete: () => void;
-  onIssue: (transferLineId?: string) => void;
   onViewIssue?: (issueId: string) => void;
   onOpenSourceTransfer?: (transferId: string) => void;
   onClose: () => void;
@@ -26,13 +25,8 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   const recipient = document.destinationResponsiblePerson
     ? fullName(document.destinationResponsiblePerson)
     : document.recipientName ?? '—';
-  const canCreateIssue =
-    !readOnly &&
-    user.role === 'MVO' &&
-    document.type === 'MVO_TRANSFER' &&
-    document.status === 'POSTED' &&
-    document.sourceResponsiblePersonId === user.responsiblePersonId &&
-    document.lines.some((line) => Number(line.availableToIssue ?? '0') > 0);
+  const showLegacyIssueTracking =
+    user.role !== 'MVO' && document.type === 'MVO_TRANSFER';
   return <Modal
     closeOnEscape={!loading}
     footer={<>
@@ -40,7 +34,6 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
       {actions.post ? <Button disabled={loading} type="button" onClick={onPost}>Провести</Button> : null}
       {actions.cancel ? <Button disabled={loading} variant="danger" type="button" onClick={onCancel}>Скасувати документ</Button> : null}
       {actions.remove ? <Button disabled={loading} variant="danger" type="button" onClick={onDelete}>Видалити чернетку</Button> : null}
-      {canCreateIssue ? <Button disabled={loading} type="button" onClick={() => onIssue()}>Оформити видачу</Button> : null}
       <Button disabled={loading} variant="outline" type="button" onClick={onClose}>Закрити</Button>
     </>}
     onClose={onClose}
@@ -58,10 +51,10 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           <Detail label="Статус"><StockDocumentStatusBadge status={document.status} /></Detail>
           <Detail label="Відправник">{fullName(document.sourceResponsiblePerson)}</Detail>
           <Detail label="Одержувач">{recipient}</Detail>
-          {document.sourceTransfer ? <Detail label="Передача-підстава">
+          {user.role !== 'MVO' && document.sourceTransfer ? <Detail label="Передача-підстава">
             {onOpenSourceTransfer ? <Button type="button" variant="link" onClick={() => onOpenSourceTransfer(document.sourceTransfer!.id)}>{documentNumberLabel(document.sourceTransfer.displayNumber)}</Button> : documentNumberLabel(document.sourceTransfer.displayNumber)}
           </Detail> : null}
-          {document.sourceTransfer?.destinationResponsiblePerson ? <Detail label="Кому передано за передачею">{fullName(document.sourceTransfer.destinationResponsiblePerson)}</Detail> : null}
+          {user.role !== 'MVO' && document.sourceTransfer?.destinationResponsiblePerson ? <Detail label="Кому передано за передачею">{fullName(document.sourceTransfer.destinationResponsiblePerson)}</Detail> : null}
           {document.recipientUnit ? <Detail label="Підрозділ одержувача">{document.recipientUnit}</Detail> : null}
           <Detail label="Автор">{document.createdByUser.username}</Detail>
           <Detail label="Проведено">{document.postedAt ? `${formatDateTime(document.postedAt)} · ${document.postedByUser?.username ?? '—'}` : '—'}</Detail>
@@ -72,11 +65,10 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
       </Card>
       <DataTable
         ariaLabel="Рядки документа"
-        columns={document.type === 'MVO_TRANSFER' ? [
+        columns={showLegacyIssueTracking ? [
           { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
           { label: 'Передано', numeric: true }, { label: 'Видано', numeric: true },
           { label: 'Залишилось оформити', numeric: true }, { label: 'Примітка' },
-          { label: 'Дія', actions: true },
         ] : user.role === 'MVO' ? [
           { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
@@ -85,12 +77,11 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
         ]}
         responsiveMode="cards-wide"
-        rows={document.lines.map((line) => document.type === 'MVO_TRANSFER' ? [
+        rows={document.lines.map((line) => showLegacyIssueTracking ? [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity),
           formatQuantity(line.issuedQuantity ?? '0'),
           formatQuantity(line.availableToIssue ?? line.quantity), line.note ?? '—',
-          canCreateIssue && Number(line.availableToIssue ?? '0') > 0 ? <Button key="issue" size="compact" type="button" onClick={() => onIssue(line.id)}>Видати</Button> : Number(line.availableToIssue ?? '0') <= 0 && document.status === 'POSTED' ? <StatusBadge key="complete" tone="neutral">Видано повністю</StatusBadge> : null,
         ] : user.role === 'MVO' ? [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
@@ -102,7 +93,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ])}
       />
-      {document.type === 'MVO_TRANSFER' && (document.issues?.length ?? 0) > 0 ? (
+      {showLegacyIssueTracking && (document.issues?.length ?? 0) > 0 ? (
         <Card title="Оформлені видачі">
           <DataTable
             ariaLabel="Видачі з цієї передачі"

@@ -155,8 +155,15 @@ export class ImportsService {
       throw new NotFoundException('Імпорт не знайдено');
     }
 
-    const counters = await this.previewCounters(id);
-    return { ...batch, preview: counters };
+    const [counters, uploaders] = await Promise.all([
+      this.previewCounters(id),
+      this.findUploaders([id]),
+    ]);
+    return {
+      ...batch,
+      uploadedByUser: uploaders.get(id) ?? null,
+      preview: counters,
+    };
   }
 
   async rows(id: string, query: ListImportRowsQueryDto) {
@@ -741,7 +748,7 @@ export class ImportsService {
     const uploaders = new Map<string, { id: string; username: string }>();
     if (!importBatchIds.length) return uploaders;
 
-    const events = await this.prisma.securityEvent.findMany({
+    const events = (await this.prisma.securityEvent.findMany({
       where: {
         type: SecurityEventType.IMPORT_ACTION,
         success: true,
@@ -759,7 +766,7 @@ export class ImportsService {
         metadata: true,
         actorUser: { select: { id: true, username: true } },
       },
-    });
+    })) ?? [];
 
     for (const event of events) {
       if (

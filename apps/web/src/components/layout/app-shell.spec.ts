@@ -52,18 +52,21 @@ describe('AppShell presentation model', () => {
       '/accounting', '/profile',
     ]);
     expect(paths('MVO')).toEqual([
-      '/my-stock', '/transfers', '/profile',
+      '/my-stock', '/transfers', '/issues', '/profile',
     ]);
     expect(getNavigationItems(user('MVO')).map((item) => item.label)).toEqual([
-      'Моє майно', 'Передачі та видачі', 'Профіль',
+      'Моє майно', 'Передачі', 'Видачі', 'Профіль',
     ]);
   });
 
   it('ACCOUNTANT може проводити імпорти, але не бачить дій передачі чи адміністрування', () => {
     const accountant = user('ACCOUNTANT');
     expect(can(accountant, 'write', 'imports')).toBe(true);
-    expect(can(accountant, 'read', 'stockDocuments')).toBe(true);
+    expect(can(accountant, 'read', 'stockDocuments')).toBe(false);
     expect(can(accountant, 'write', 'stockDocuments')).toBe(false);
+    expect(can(accountant, 'read', 'stock')).toBe(false);
+    expect(can(accountant, 'read', 'transactions')).toBe(false);
+    expect(can(accountant, 'read', 'accountingTransfers')).toBe(false);
     expect(can(accountant, 'read', 'users')).toBe(false);
     expect(can(accountant, 'read', 'accounting')).toBe(true);
     expect(getDefaultAppPath(accountant)).toBe('/accounting');
@@ -84,6 +87,8 @@ describe('AppShell presentation model', () => {
   it('перенаправляє MVO зі старого журналу до документів', () => {
     expect(getAccessRedirectPath(user('MVO'), 'my-transactions')).toBe('/transfers');
     expect(getAccessRedirectPath(user('OWNER'), 'my-transactions')).toBe('/');
+    expect(canAccessPath(user('MVO'), '/issues', 'issues')).toBe(true);
+    expect(canAccessPath(user('OWNER'), '/issues', 'issues')).toBe(false);
   });
 
   it('відкриває MVO моє майно за замовчуванням і перенаправляє стару картку у профіль', () => {

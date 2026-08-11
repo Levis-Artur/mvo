@@ -108,6 +108,16 @@ export class CreateIssueDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  recipientUnit?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  basis?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(1000)
   note?: string;
 
@@ -129,60 +139,6 @@ export class CreateIssueDto {
   @ValidateNested({ each: true })
   @Type(() => StockDocumentLineDto)
   lines!: StockDocumentLineDto[];
-}
-
-export class TransferIssueLineDto {
-  @IsUUID()
-  sourceTransferLineId!: string;
-
-  @IsString()
-  quantity!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  note?: string;
-}
-
-export class CreateTransferIssueDto {
-  @IsDateString()
-  documentDate!: string;
-
-  @IsString()
-  @MaxLength(255)
-  recipientName!: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  recipientUnit?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  basis?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  note?: string;
-
-  @Transform(({ value }) => {
-    if (typeof value !== 'string') return value;
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      return Array.isArray(parsed)
-        ? parsed.map((line) => Object.assign(new TransferIssueLineDto(), line))
-        : parsed;
-    } catch {
-      return value;
-    }
-  })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => TransferIssueLineDto)
-  lines!: TransferIssueLineDto[];
 }
 
 export class UpdateStockDocumentDto extends CreateStockDocumentDto {}

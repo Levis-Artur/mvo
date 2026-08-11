@@ -43,7 +43,7 @@ describe('stock document workspace modal', () => {
     expect(form).toContain("type === 'MVO_TRANSFER' || createAndPostIssue");
     expect(form).toContain('{!transfer && !createAndPostIssue ? (');
     expect(form).toContain('<FormField label="Мета або підстава" required>');
-    expect(form).toContain('<FormField label="Примітка">');
+    expect(form).toContain("<FormField label={createAndPostIssue ? 'Коментар' : 'Примітка'}>");
     expect(form).toContain(
       "? 'За потреби вкажіть призначення або додаткову інформацію'",
     );
@@ -94,7 +94,7 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('Підтвердити передачу');
     expect(form).toContain('Передаємо…');
     expect(form).toContain(
-      'const createAndPostIssue = issue && !document && Boolean(sourceTransfer);',
+      'const createAndPostIssue = issue && !document;',
     );
     expect(form).toContain('Підтвердити видачу');
     expect(form).toContain('Видаємо…');
@@ -138,9 +138,7 @@ describe('stock document workspace modal', () => {
     expect(form).toContain('<StockDocumentLines');
     expect(form).toContain("{type === 'ISSUE' ? (");
     expect(form).toContain('<StockDocumentAttachments');
-    expect(lines).toContain("transfer ? 'Доступно' : 'Залишилось оформити'");
-    expect(lines).toContain(
-      "transfer ? 'Кількість' : 'Кількість до видачі'",
-    );
+    expect(lines).toContain("transfer ? 'Доступно' : 'На складі'");
+    expect(lines).toContain("label: 'Кількість'");
   });
 });

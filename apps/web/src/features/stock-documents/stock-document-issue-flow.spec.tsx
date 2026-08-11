@@ -6,7 +6,6 @@ import type {
   AuthUser,
   AvailableStockSource,
   StockDocumentInput,
-  StockDocument,
 } from '@/lib/types';
 import { StockDocumentForm } from './stock-document-form';
 
@@ -31,48 +30,26 @@ const source: AvailableStockSource = {
     unitOfMeasure: 'шт',
   },
   balanceId,
-  sourceTransferLineId: balanceId,
   availableQuantity: '10',
   unit: 'шт',
   canTransfer: true,
   canIssue: true,
 };
 
-const transfer = {
-  id: '55555555-5555-4555-8555-555555555555',
-  displayNumber: 7,
-  sourceResponsiblePersonId: sourceId,
-  type: 'MVO_TRANSFER',
-  status: 'POSTED',
-  lines: [
-    {
-      id: balanceId,
-      inventoryItem: source.inventoryItem,
-      quantity: '10',
-      issuedQuantity: '0',
-      availableToIssue: '10',
-    },
-  ],
-} as StockDocument;
-
 afterEach(cleanup);
 
 function issueForm({
   onSubmit = jest.fn(async () => undefined),
   saving = false,
-  initialIssueLineId,
 }: {
   onSubmit?: (input: StockDocumentInput, files: File[]) => Promise<void>;
   saving?: boolean;
-  initialIssueLineId?: string;
 } = {}) {
   return (
     <StockDocumentForm
       availableSources={[source]}
       document={null}
-      sourceTransfer={transfer}
       error=""
-      initialIssueLineId={initialIssueLineId}
       initialSourceId={sourceId}
       loadingSources={false}
       loadingTargets={false}
@@ -92,16 +69,12 @@ function issueForm({
 }
 
 describe('new ISSUE form', () => {
-  it('opens in transfer context with the selected line and available maximum', () => {
-    render(issueForm({ initialIssueLineId: balanceId }));
+  it('opens as a standalone issue without transfer context', () => {
+    render(issueForm());
 
-    expect(screen.getByText('Видача переданого майна')).toBeTruthy();
-    expect(screen.getByText(/Передача № 7/)).toBeTruthy();
-    const quantity = screen.getByRole('spinbutton', {
-      name: 'Кількість рядка 1',
-    });
-    expect(quantity.getAttribute('max')).toBe('10');
-    expect((quantity as HTMLInputElement).value).toBe('');
+    expect(screen.getByText('Нова видача')).toBeTruthy();
+    expect(screen.queryByText(/Передача №/)).toBeNull();
+    expect(screen.getAllByText(/поточного залишку/i)).toHaveLength(2);
   });
 
   it('shows the single confirmation action without draft-only fields', () => {
@@ -123,7 +96,7 @@ describe('new ISSUE form', () => {
     const browser = userEvent.setup();
     render(issueForm());
     const recipient = screen.getByRole('textbox', { name: 'Кому видано' });
-    const note = screen.getByRole('textbox', { name: 'Примітка' });
+    const note = screen.getByRole('textbox', { name: 'Коментар' });
 
     await browser.click(recipient);
     await browser.type(recipient, 'Старший лейтенант поліції Іваненко');
@@ -144,10 +117,10 @@ describe('new ISSUE form', () => {
       'Служба забезпечення',
     );
     await browser.type(
-      screen.getByRole('textbox', { name: 'Примітка' }),
+      screen.getByRole('textbox', { name: 'Коментар' }),
       'Для роботи',
     );
-    await browser.click(screen.getByRole('button', { name: 'Додати позицію' }));
+    await browser.click(screen.getByRole('button', { name: 'Додати майно' }));
     await browser.click(
       screen.getByRole('radio', { name: 'Вибрати Клавіатура' }),
     );
@@ -183,7 +156,6 @@ describe('new ISSUE form', () => {
           expect.objectContaining({
             inventoryItemId: itemId,
             sourceBalanceId: balanceId,
-            sourceTransferLineId: balanceId,
             quantity: '2',
           }),
         ],
@@ -201,7 +173,7 @@ describe('new ISSUE form', () => {
       screen.getByRole('textbox', { name: 'Кому видано' }),
       'Одержувач',
     );
-    await browser.click(screen.getByRole('button', { name: 'Додати позицію' }));
+    await browser.click(screen.getByRole('button', { name: 'Додати майно' }));
     await browser.click(
       screen.getByRole('radio', { name: 'Вибрати Клавіатура' }),
     );

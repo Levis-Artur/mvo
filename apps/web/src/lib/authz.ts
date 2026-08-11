@@ -40,6 +40,7 @@ export type AppView =
   | 'my-stock'
   | 'my-transactions'
   | 'transfers'
+  | 'issues'
   | 'accounting'
   | 'accounting-transfers'
   | 'profile';
@@ -119,15 +120,9 @@ const permissions: Record<
     accountingTransfers: ['read'],
   },
   ACCOUNTANT: {
-    responsiblePersons: ['read'],
-    nomenclature: ['read'],
-    stock: ['read'],
     imports: ['read', 'write'],
-    transactions: ['read'],
     profile: ['read', 'write'],
-    stockDocuments: ['read'],
     accounting: ['read'],
-    accountingTransfers: ['read'],
   },
   DPP_ADMIN: {
     dashboard: ['read'],
@@ -200,7 +195,8 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
   ],
   MVO: [
     nav('Моє майно', '/my-stock', 'my-stock', 'ownStock'),
-    nav('Передачі та видачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
+    nav('Видачі', '/issues', 'issues', 'stockDocuments'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
 };
@@ -319,7 +315,7 @@ const navigationLabels: Record<AppView, string> = {
   nomenclature: 'Номенклатура', stock: 'Залишки', imports: 'Імпорт',
   transactions: 'Журнал операцій', users: 'Користувачі', reports: 'Звіти',
   administration: 'Адміністрування', 'my-card': 'Моя картка', 'my-stock': 'Моє майно',
-  'my-transactions': 'Мої операції', transfers: 'Передачі', profile: 'Профіль',
+  'my-transactions': 'Мої операції', transfers: 'Передачі', issues: 'Видачі', profile: 'Профіль',
   accounting: 'Бухгалтерія',
   'accounting-transfers': 'Передачі МВО для бухгалтерії',
 };
@@ -332,9 +328,7 @@ export function getNavigationItems(user: AuthUser | null) {
   return navigationByRole[user.role]
     .map((item) => ({
       ...item,
-      label: user.role === 'MVO' && item.view === 'transfers'
-        ? 'Передачі та видачі'
-        : navigationLabels[item.view],
+      label: navigationLabels[item.view],
       ...(user.role === 'OWNER' && item.view === 'administration'
         ? { href: '/admin', disabled: false, title: undefined }
         : {}),

@@ -314,7 +314,6 @@ export type StockDocumentInput = {
     inventoryItemId: string;
     quantity: string;
     sourceBalanceId?: string;
-    sourceTransferLineId?: string;
     note?: string;
   }[];
 };
@@ -326,14 +325,15 @@ export type CreateMvoTransferInput = {
   lines: StockDocumentInput['lines'];
 };
 
-export type CreateTransferIssueInput = {
+export type CreateIssueInput = {
   documentDate: string;
   recipientName: string;
   recipientUnit?: string;
   basis?: string;
   note?: string;
   lines: {
-    sourceTransferLineId: string;
+    inventoryItemId: string;
+    sourceBalanceId: string;
     quantity: string;
     note?: string;
   }[];
@@ -342,7 +342,6 @@ export type CreateTransferIssueInput = {
 export type AvailableStockSource = {
   inventoryItem: Pick<InventoryItem, 'id' | 'externalCode' | 'name' | 'unitOfMeasure'>;
   balanceId: string;
-  sourceTransferLineId?: string;
   availableQuantity: string;
   unit: string | null;
   canTransfer: boolean;
@@ -578,6 +577,34 @@ export type StockDocumentsQuery = {
   documentDateTo?: string;
   page?: number;
   limit?: number;
+};
+
+export type IssueHistoryFilters = {
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: StockDocumentStatus;
+  hasAttachment?: boolean;
+};
+
+export type IssueHistoryQuery = IssueHistoryFilters & {
+  page?: number;
+  limit?: 25 | 50 | 100;
+};
+
+export type IssueHistoryItem = {
+  id: string;
+  displayNumber: number;
+  documentDate: string;
+  sourceResponsiblePerson: PersonReference;
+  recipientName: string | null;
+  note: string | null;
+  status: StockDocumentStatus;
+  numberOfLines: number;
+  totalQuantity: string;
+  hasAttachment: boolean;
+  createdBy: Pick<AuthUser, 'id' | 'username' | 'role'>;
+  createdAt: string;
 };
 
 export type AccountingTransferFilters = {

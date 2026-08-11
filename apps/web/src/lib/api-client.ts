@@ -1,6 +1,6 @@
 import type {
   CreateManagementDto,
-  CreateTransferIssueInput,
+  CreateIssueInput,
   CreateMvoTransferInput,
   CreateInventoryItemDto,
   CreateResponsiblePersonDto,
@@ -28,6 +28,9 @@ import type {
   InventoryItemTransferHistory,
   InventoryItemMovementFilters,
   InventoryItemsQuery,
+  IssueHistoryFilters,
+  IssueHistoryItem,
+  IssueHistoryQuery,
   Management,
   MyInventoryItemTransferHistory,
   MyPropertyExportSection,
@@ -447,6 +450,14 @@ export const apiClient = {
     ),
   stockDocuments: (query: StockDocumentsQuery) =>
     request<PaginatedResponse<StockDocument>>('/stock-documents', {}, query),
+  issueHistory: (query: IssueHistoryQuery) =>
+    request<PaginatedResponse<IssueHistoryItem>>(
+      '/stock-documents/issues',
+      {},
+      query,
+    ),
+  exportIssueHistory: (query: IssueHistoryFilters) =>
+    downloadRequest('/stock-documents/issues/export.csv', query),
   accountingMvoTransfers: (
     query: AccountingTransferFilters & { page?: number; limit?: number },
   ) =>
@@ -494,9 +505,8 @@ export const apiClient = {
       '/stock-documents/mvo-transfer',
       mutation('POST', body),
     ),
-  createTransferIssue: (
-    transferId: string,
-    body: CreateTransferIssueInput,
+  createAndPostIssue: (
+    body: CreateIssueInput,
     files: File[],
   ) => {
     const formData = new FormData();
@@ -508,7 +518,7 @@ export const apiClient = {
     formData.set('lines', JSON.stringify(body.lines));
     for (const file of files) formData.append('files', file);
     return uploadRequest<StockDocument>(
-      `/stock-documents/transfers/${encodeURIComponent(transferId)}/issues`,
+      '/stock-documents/issue',
       formData,
     );
   },

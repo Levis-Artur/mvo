@@ -4,6 +4,7 @@ import { StockDocumentsController } from './stock-documents.controller';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockDocumentAttachmentStorageService } from './stock-document-attachment-storage.service';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
+import { IssueHistoryService } from './issue-history.service';
 
 @Module({
   imports: [StockModule],
@@ -12,7 +13,8 @@ import { StockDocumentAttachmentsService } from './stock-document-attachments.se
     StockDocumentsService,
     StockDocumentAttachmentStorageService,
     StockDocumentAttachmentsService,
+    IssueHistoryService,
   ],
-  exports: [StockDocumentAttachmentStorageService],
+  exports: [StockDocumentAttachmentStorageService, IssueHistoryService],
 })
 export class StockDocumentsModule {}

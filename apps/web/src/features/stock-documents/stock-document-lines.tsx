@@ -52,12 +52,12 @@ export function StockDocumentLines({
     { label: 'Код', className: 'stock-document-lines__code' },
     { label: 'Назва', className: 'stock-document-lines__name' },
     {
-      label: transfer ? 'Доступно' : 'Залишилось оформити',
+      label: transfer ? 'Доступно' : 'На складі',
       numeric: true,
       className: 'stock-document-lines__available',
     },
     {
-      label: transfer ? 'Кількість' : 'Кількість до видачі',
+      label: 'Кількість',
       numeric: true,
       className: 'stock-document-lines__quantity',
     },
@@ -87,7 +87,7 @@ export function StockDocumentLines({
             variant="outline"
             onClick={onAddRequest}
           >
-            Додати позицію
+            {transfer ? 'Додати позицію' : 'Додати майно'}
           </Button>
         </div>
         {!loading && !lines.length ? (
@@ -95,7 +95,9 @@ export function StockDocumentLines({
             message={
               disabled
                 ? 'Спочатку виберіть МВО-відправника.'
-                : 'Додайте позицію з доступного майна.'
+                : transfer
+                  ? 'Додайте позицію з доступного майна.'
+                  : 'Додайте майно зі свого поточного залишку.'
             }
           />
         ) : null}

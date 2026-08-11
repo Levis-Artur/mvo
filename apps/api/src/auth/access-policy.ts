@@ -40,12 +40,8 @@ export const roleCapabilities = {
     'USER_ADMINISTRATION',
   ],
   [UserRole.ACCOUNTANT]: [
-    'REFERENCE_DATA_READ',
-    'STOCK_READ',
     'IMPORT_READ',
     'IMPORT_WRITE',
-    'STOCK_DOCUMENT_READ',
-    'ACCOUNTING_TRANSFER_READ',
     'ACCOUNTING_WORKSPACE_READ',
   ],
   [UserRole.AUDITOR]: [
@@ -66,7 +62,6 @@ export const roleCapabilities = {
 export const REFERENCE_DATA_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
 ];
 
@@ -83,14 +78,12 @@ export const STOCK_READ_ROLES = [
 export const TRANSACTION_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
 ];
 
 export const ACCOUNTING_CARD_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
   UserRole.MVO,
 ];
@@ -98,7 +91,6 @@ export const ACCOUNTING_CARD_READ_ROLES = [
 export const INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
 ];
 
@@ -115,6 +107,11 @@ export const IMPORT_WRITE_ROLES = [
   UserRole.ACCOUNTANT,
 ];
 
+export const IMPORT_MAINTENANCE_ROLES = [
+  UserRole.OWNER,
+  UserRole.DPP_ADMIN,
+];
+
 export const STOCK_DOCUMENT_READ_ROLES = [
   ...REFERENCE_DATA_READ_ROLES,
   UserRole.MVO,
@@ -129,19 +126,16 @@ export const STOCK_DOCUMENT_WRITE_ROLES = [
 export const ACCOUNTING_TRANSFER_READ_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
   UserRole.AUDITOR,
 ];
 
 export const ACCOUNTING_TRANSFER_EXPORT_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
-  UserRole.ACCOUNTANT,
 ];
 
-export const ACCOUNTING_WORKSPACE_ROLES = [
+export const ACCOUNTING_ANALYTICS_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.ACCOUNTANT,
 ];
 
 export const TRANSFER_TARGET_READ_ROLES = [

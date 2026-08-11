@@ -83,7 +83,7 @@ const rows: AccountingMovementRow[] = [
     ...baseRow,
     id: 'movement-3',
     operationType: 'ISSUE',
-    operationLabel: 'Видача з передачі',
+    operationLabel: 'Видача',
     documentLabel: '№ 8',
     documentId: 'issue-1',
     quantity: '3',
@@ -175,7 +175,7 @@ describe('AccountingMovementsView', () => {
     expect(await screen.findByRole('table', { name: 'Бухгалтерський журнал руху майна' })).toBeTruthy();
     expect(screen.getAllByText('Надходження').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Передача МВО').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Видача з передачі').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Видача').length).toBeGreaterThan(0);
     expect(screen.getAllByText('0057').length).toBeGreaterThan(0);
     expect(screen.getByText('+10')).toBeTruthy();
     expect(screen.getByText('−2')).toBeTruthy();

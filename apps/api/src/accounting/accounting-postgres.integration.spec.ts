@@ -16,11 +16,17 @@ const describeWithPostgres = testDatabaseUrl ? describe : describe.skip;
 
 jest.setTimeout(60_000);
 
-describeWithPostgres('AccountingService PostgreSQL integration', () => {
-  const firstClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
-  const secondClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
+describeWithPostgres(
+  testDatabaseUrl
+    ? 'AccountingService PostgreSQL integration'
+    : 'AccountingService PostgreSQL integration (skipped: TEST_DATABASE_URL is not set)',
+  () => {
+  let firstClient: PrismaClient;
+  let secondClient: PrismaClient;
 
   beforeAll(async () => {
+    firstClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
+    secondClient = new PrismaClient({ datasourceUrl: testDatabaseUrl });
     await Promise.all([firstClient.$connect(), secondClient.$connect()]);
   });
 
@@ -156,7 +162,8 @@ describeWithPostgres('AccountingService PostgreSQL integration', () => {
       await cleanupFixture(firstClient, fixture);
     }
   });
-});
+  },
+);
 
 async function createFixture(prisma: PrismaClient) {
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12);

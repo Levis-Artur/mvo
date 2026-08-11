@@ -15,6 +15,7 @@ import { memoryStorage } from 'multer';
 import { validateEnvironment } from '../config/env';
 import {
   IMPORT_READ_ROLES,
+  IMPORT_MAINTENANCE_ROLES,
   IMPORT_WRITE_ROLES,
 } from '../auth/access-policy';
 import { Roles } from '../auth/roles.decorator';
@@ -70,7 +71,7 @@ export class ImportsController {
   }
 
   @Patch(':id/mappings')
-  @Roles(...IMPORT_WRITE_ROLES)
+  @Roles(...IMPORT_MAINTENANCE_ROLES)
   mappings(
     @Param('id') id: string,
     @Body() dto: UpdateImportMappingsDto,
@@ -110,7 +111,7 @@ export class ImportsController {
   }
 
   @Post(':id/cancel')
-  @Roles(...IMPORT_WRITE_ROLES)
+  @Roles(...IMPORT_MAINTENANCE_ROLES)
   cancel(
     @Param('id') id: string,
     @CurrentUserParam() actor: CurrentUser,

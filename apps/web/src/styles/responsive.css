@@ -28,15 +28,17 @@
   .stock-source-picker__filters .form-field { grid-template-columns: minmax(0, 1fr); }
   .stock-source-picker__filters .form-field__hint,
   .stock-source-picker__filters .form-field__error { grid-column: 1; }
-  .my-stock-toolbar { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
-  .my-stock-toolbar__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: stretch; }
-  .my-stock-toolbar__actions .btn:last-child { grid-column: 1 / -1; }
-  .my-stock-sort-bar { align-items: stretch; flex-direction: column; }
-  .my-stock-sort-bar > strong, .my-stock-sort-bar label { width: 100%; margin-right: 0; }
   .transfer-line-details,
   .transfer-issue-context { grid-template-columns: minmax(0, 1fr); }
   .stock-document-attachment-list > li { align-items: stretch; flex-direction: column; }
   .stock-document-attachment-list__actions { flex-wrap: wrap; }
+  .mvo-issues-search { grid-template-columns: minmax(0, 1fr) auto; }
+  .mvo-issues-search .form-field { grid-column: 1 / -1; }
+  .mvo-issues-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .issue-details__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .accounting-imports__latest-content { grid-template-columns: minmax(0, 1fr) auto; }
+  .accounting-imports__latest-summary { grid-column: 1 / -1; }
+  .accounting-import-detail__metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .organization-node > summary, .organization-people > li { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 1100px) and (min-width: 769px) {
@@ -57,6 +59,19 @@
   .attachment-preview__toolbar { justify-content: flex-start; }
   .attachment-preview__toolbar output { min-width: 0; flex: 1 1 8rem; }
   .attachment-preview__pdf { min-height: calc(100dvh - 11rem); }
+  .mvo-issues-search, .mvo-issues-filters { grid-template-columns: minmax(0, 1fr); }
+  .mvo-issues-search .form-field, .mvo-issues-filters__actions { grid-column: 1; }
+  .mvo-issues-search > .btn { width: 100%; }
+  .mvo-issues-filters__actions { display: grid; }
+  .issue-details__summary { grid-template-columns: minmax(0, 1fr); }
+  .accounting-imports__upload { padding: var(--space-4); }
+  .accounting-imports__primary-action { width: 100%; }
+  .accounting-imports__latest-content { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .accounting-imports__latest-summary { grid-column: auto; }
+  .accounting-imports__latest-content > .btn { width: 100%; }
+  .accounting-import-detail__metadata, .accounting-import-detail__summary { grid-template-columns: minmax(0, 1fr); }
+  .accounting-import-detail__actions { position: static; flex-direction: column-reverse; }
+  .accounting-import-detail__actions > .btn { width: 100%; }
 }
 @media (max-width: 520px) {
   .dashboard-metrics { grid-template-columns: minmax(0, 1fr); }

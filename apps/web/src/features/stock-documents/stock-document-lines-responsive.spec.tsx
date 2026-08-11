@@ -50,7 +50,7 @@ describe('StockDocumentLines responsive table', () => {
     expect(
       screen.getByRole('spinbutton', { name: 'Кількість рядка 1' }).closest('td')
         ?.dataset.label,
-    ).toBe('Кількість до видачі');
+    ).toBe('Кількість');
 
     fireEvent.change(screen.getByRole('spinbutton'), {
       target: { value: '3.25' },

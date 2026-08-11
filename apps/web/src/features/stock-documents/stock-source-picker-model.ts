@@ -2,15 +2,15 @@ import type { AvailableStockSource, StockDocumentType } from '@/lib/types';
 import type { DocumentFormLine } from './stock-document.types';
 
 export function stockSourceKey(
-  source: Pick<AvailableStockSource, 'balanceId' | 'sourceTransferLineId'>,
+  source: Pick<AvailableStockSource, 'balanceId'>,
 ) {
-  return source.sourceTransferLineId ?? source.balanceId;
+  return source.balanceId;
 }
 
 export function documentLineSourceKey(
-  line: Pick<DocumentFormLine, 'sourceBalanceId' | 'sourceTransferLineId'>,
+  line: Pick<DocumentFormLine, 'sourceBalanceId'>,
 ) {
-  return line.sourceTransferLineId ?? line.sourceBalanceId;
+  return line.sourceBalanceId;
 }
 
 export function findStockSourceForLine(
@@ -38,7 +38,7 @@ export function availableSourceOptions(
   return sources.filter(
     (source) =>
       !('sourceKind' in source) &&
-      Boolean(source.sourceTransferLineId ?? source.balanceId) &&
+      Boolean(source.balanceId) &&
       (type === 'MVO_TRANSFER' ? source.canTransfer : source.canIssue) &&
       Number(source.availableQuantity) > 0 &&
       !selected.has(stockSourceKey(source)),
@@ -85,7 +85,6 @@ export function sourceToDocumentLine(
   return {
     inventoryItemId: source.inventoryItem.id,
     sourceBalanceId: source.balanceId,
-    sourceTransferLineId: source.sourceTransferLineId,
     quantity: '',
     note: '',
   };

@@ -90,21 +90,11 @@ function documentMovement(
       type,
       status,
       recipientName: type === StockDocumentType.ISSUE ? 'Склад отримувача' : null,
-      sourceTransferId:
-        type === StockDocumentType.ISSUE
-          ? '77777777-7777-4777-8777-777777777777'
-          : null,
+      sourceTransferId: null,
       sourceResponsiblePerson: person,
       destinationResponsiblePerson:
         type === StockDocumentType.MVO_TRANSFER ? destination : null,
-      sourceTransfer:
-        type === StockDocumentType.ISSUE
-          ? {
-              id: '77777777-7777-4777-8777-777777777777',
-              displayNumber: 6,
-              destinationResponsiblePerson: destination,
-            }
-          : null,
+      sourceTransfer: null,
       attachments:
         type === StockDocumentType.ISSUE ? [{ id: 'attachment-id' }] : [],
     },
@@ -145,7 +135,7 @@ describe('AccountingMovementsService', () => {
 
   it.each([
     [StockDocumentType.MVO_TRANSFER, StockTransactionType.MVO_TRANSFER_OUT, 'MVO_TRANSFER', 'Передача МВО', '-2'],
-    [StockDocumentType.ISSUE, StockTransactionType.ISSUE_OUT, 'ISSUE', 'Видача з передачі', '2'],
+    [StockDocumentType.ISSUE, StockTransactionType.ISSUE_OUT, 'ISSUE', 'Видача', '-2'],
   ])('serializes %s/%s as %s', async (documentType, transactionType, operationType, operationLabel, quantity) => {
     const h = harness([documentMovement(documentType, transactionType)]);
     const result = await h.service.list({ page: 1, limit: 25 });
@@ -159,13 +149,9 @@ describe('AccountingMovementsService', () => {
     if (operationType === 'ISSUE') {
       expect(result.items[0]).toEqual(
         expect.objectContaining({
-          transferredTo: expect.objectContaining({
-            externalAccountingCode: '0061',
-          }),
+          transferredTo: null,
           issuedTo: 'Склад отримувача',
-          relatedDocument: expect.objectContaining({
-            label: 'Передача № 6',
-          }),
+          relatedDocument: null,
           hasAttachment: true,
         }),
       );

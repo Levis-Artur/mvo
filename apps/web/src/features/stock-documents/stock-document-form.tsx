@@ -40,8 +40,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     user,
     type,
     document,
-    sourceTransfer,
-    initialIssueLineId,
     initialSourceId,
     persons,
     transferTargets,
@@ -59,9 +57,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   } = props;
   const initialSource = resolveSourceId(
     user,
-    document?.sourceResponsiblePersonId ??
-      sourceTransfer?.sourceResponsiblePersonId ??
-      initialSourceId,
+    document?.sourceResponsiblePersonId ?? initialSourceId,
   );
   const [documentDate, setDocumentDate] = useState(
     (document?.documentDate ?? new Date().toISOString()).slice(0, 10),
@@ -82,20 +78,9 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     document?.lines.map((line) => ({
       inventoryItemId: line.inventoryItemId,
       sourceBalanceId: line.sourceBalanceId ?? '',
-      sourceTransferLineId: line.sourceTransferLineId ?? undefined,
       quantity: line.quantity,
       note: line.note ?? '',
-    })) ??
-      (() => {
-        const initialIssueSource = initialIssueLineId
-          ? availableSources.find(
-              (source) => source.sourceTransferLineId === initialIssueLineId,
-            )
-          : undefined;
-        return initialIssueSource
-          ? addSelectedStockSource([], initialIssueSource)
-          : [];
-      })(),
+    })) ?? [],
   );
   const [files, setFiles] = useState<File[]>([]);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
@@ -106,7 +91,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const transfer = type === 'MVO_TRANSFER';
   const issue = type === 'ISSUE';
   const createAndPostTransfer = transfer && !document;
-  const createAndPostIssue = issue && !document && Boolean(sourceTransfer);
+  const createAndPostIssue = issue && !document;
 
   useEffect(() => {
     const uploaded = document?.attachments ?? [];
@@ -145,7 +130,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
       lines: lines.map((line) => ({
         inventoryItemId: line.inventoryItemId,
         sourceBalanceId: line.sourceBalanceId,
-        sourceTransferLineId: line.sourceTransferLineId,
         quantity: line.quantity,
         note: line.note.trim() || undefined,
       })),
@@ -245,7 +229,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     ? `Редагування ${transfer ? 'передачі' : 'видачі'}`
     : transfer
       ? 'Нова передача'
-      : 'Видача переданого майна';
+      : 'Нова видача';
   return (
     <Modal
       closeOnEscape={!saving}
@@ -387,7 +371,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                 />
               </FormField>
             ) : null}
-            <FormField label="Примітка">
+            <FormField label={createAndPostIssue ? 'Коментар' : 'Примітка'}>
               <Textarea
                 placeholder={
                   createAndPostIssue
@@ -404,66 +388,14 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
           </div>
         </Card>
         <div className="stock-document-form-workspace">
-          {createAndPostIssue && sourceTransfer ? (
-            <Card title={`Передача № ${sourceTransfer.displayNumber}`}>
-              <dl className="transfer-issue-context">
-                <div>
-                  <dt>Кому передано</dt>
-                  <dd>
-                    {sourceTransfer.destinationResponsiblePerson
-                      ? `${sourceTransfer.destinationResponsiblePerson.externalAccountingCode ?? sourceTransfer.destinationResponsiblePerson.personnelNumber} — ${[
-                          sourceTransfer.destinationResponsiblePerson.lastName,
-                          sourceTransfer.destinationResponsiblePerson.firstName,
-                          sourceTransfer.destinationResponsiblePerson.middleName,
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}`
-                      : 'Не вказано'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Номенклатура</dt>
-                  <dd>
-                    {lines.length === 1
-                      ? (() => {
-                          const source = eligibleSources.find(
-                            (item) =>
-                              item.sourceTransferLineId ===
-                              lines[0]?.sourceTransferLineId,
-                          );
-                          return source
-                            ? `${source.inventoryItem.externalCode} — ${source.inventoryItem.name}`
-                            : 'Оберіть позицію';
-                        })()
-                      : `${lines.length} позицій`}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Передано / вже видано / доступно</dt>
-                  <dd>
-                    {lines.length === 1
-                      ? (() => {
-                          const sourceLine = sourceTransfer.lines.find(
-                            (line) =>
-                              line.id === lines[0]?.sourceTransferLineId,
-                          );
-                          return sourceLine
-                            ? `${sourceLine.quantity} / ${sourceLine.issuedQuantity ?? '0'} / ${sourceLine.availableToIssue ?? sourceLine.quantity} ${sourceLine.inventoryItem.unitOfMeasure ?? ''}`
-                            : '—';
-                        })()
-                      : 'Значення наведені у таблиці позицій'}
-                  </dd>
-                </div>
-              </dl>
-              <p className="stock-document-transfer-info" role="status">
-                Залишок МВО повторно не списується.
-              </p>
-            </Card>
-          ) : null}
           {transfer ? (
             <div className="stock-document-transfer-info" role="status">
               Після проведення кількість буде списана з вашого залишку.
               Одержувачу майно автоматично не додається.
+            </div>
+          ) : createAndPostIssue ? (
+            <div className="stock-document-transfer-info" role="status">
+              Після підтвердження кількість буде списана з вашого поточного залишку.
             </div>
           ) : null}
           {loadingSources ? (

@@ -1,17 +1,15 @@
 import type {
-  CreateTransferIssueInput,
+  CreateIssueInput,
   StockDocument,
   StockDocumentInput,
 } from '@/lib/types';
 
 export type CreateAndPostIssue = (
-  transferId: string,
-  input: CreateTransferIssueInput,
+  input: CreateIssueInput,
   files: File[],
 ) => Promise<StockDocument>;
 
 export async function submitNewIssue(
-  transferId: string,
   input: StockDocumentInput,
   files: File[],
   createAndPost: CreateAndPostIssue,
@@ -29,7 +27,6 @@ export async function submitNewIssue(
   }
 
   return createAndPost(
-    transferId,
     {
       documentDate: input.documentDate,
       recipientName: input.recipientName.trim(),
@@ -37,11 +34,12 @@ export async function submitNewIssue(
       basis: input.basis,
       note: input.note,
       lines: input.lines.map((line) => {
-        if (!line.sourceTransferLineId) {
-          throw new Error('Вибрана позиція не пов’язана з передачею');
+        if (!line.sourceBalanceId) {
+          throw new Error('Вибрана позиція не пов’язана з прямим залишком');
         }
         return {
-          sourceTransferLineId: line.sourceTransferLineId,
+          inventoryItemId: line.inventoryItemId,
+          sourceBalanceId: line.sourceBalanceId,
           quantity: line.quantity,
           note: line.note,
         };

@@ -3,15 +3,15 @@ import { ROLES_KEY } from '../auth/roles.decorator';
 import { AccountingController } from './accounting.controller';
 
 describe('AccountingController access', () => {
-  it('allows accounting readers and excludes MVO', () => {
+  it('keeps legacy accounting registers for privileged global readers, excluding ACCOUNTANT and MVO', () => {
     const roles = Reflect.getMetadata(ROLES_KEY, AccountingController) as UserRole[];
     expect(roles).toEqual(expect.arrayContaining([
-      UserRole.ACCOUNTANT,
       UserRole.OWNER,
       UserRole.DPP_ADMIN,
       UserRole.AUDITOR,
     ]));
     expect(roles).not.toContain(UserRole.MVO);
+    expect(roles).not.toContain(UserRole.ACCOUNTANT);
   });
 
   it('allows only operational accounting roles to create an export batch', () => {
@@ -22,19 +22,31 @@ describe('AccountingController access', () => {
     expect(roles).toEqual([
       UserRole.OWNER,
       UserRole.DPP_ADMIN,
-      UserRole.ACCOUNTANT,
     ]);
     expect(roles).not.toContain(UserRole.AUDITOR);
     expect(roles).not.toContain(UserRole.MVO);
   });
 
-  it('limits the accounting workspace overview to OWNER and ACCOUNTANT', () => {
+  it('allows ISSUE CSV export to accounting export roles but not MVO', () => {
+    const roles = Reflect.getMetadata(
+      ROLES_KEY,
+      AccountingController.prototype.exportIssues,
+    ) as UserRole[];
+    expect(roles).toEqual([
+      UserRole.OWNER,
+      UserRole.DPP_ADMIN,
+      UserRole.AUDITOR,
+    ]);
+    expect(roles).not.toContain(UserRole.MVO);
+  });
+
+  it('limits the legacy accounting overview to OWNER', () => {
     const roles = Reflect.getMetadata(
       ROLES_KEY,
       AccountingController.prototype.overview,
     ) as UserRole[];
 
-    expect(roles).toEqual([UserRole.OWNER, UserRole.ACCOUNTANT]);
+    expect(roles).toEqual([UserRole.OWNER]);
   });
 
   it.each(['movements', 'exportMovements', 'movementDetails'] as const)(
@@ -45,7 +57,7 @@ describe('AccountingController access', () => {
         AccountingController.prototype[method],
       ) as UserRole[];
 
-      expect(roles).toEqual([UserRole.OWNER, UserRole.ACCOUNTANT]);
+      expect(roles).toEqual([UserRole.OWNER]);
       expect(roles).not.toContain(UserRole.MVO);
     },
   );
@@ -66,7 +78,6 @@ describe('AccountingController access', () => {
       expect.arrayContaining([
         UserRole.OWNER,
         UserRole.DPP_ADMIN,
-        UserRole.ACCOUNTANT,
         UserRole.AUDITOR,
       ]),
     );

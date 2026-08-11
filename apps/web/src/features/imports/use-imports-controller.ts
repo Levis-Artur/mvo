@@ -28,6 +28,7 @@ const DEFAULT_ROW_FILTERS: ImportRowFilters = {
 export function useImportsController(
   initialImportId?: string,
   syncRoute = true,
+  loadReferencePersons = true,
 ) {
   const { user } = useAuth();
   const router = useRouter();
@@ -52,6 +53,7 @@ export function useImportsController(
   const [commitLoading, setCommitLoading] = useState(false);
   const [commitError, setCommitError] = useState('');
   const [toast, setToast] = useState('');
+  const [commitCompleted, setCommitCompleted] = useState(false);
 
   const loadList = useCallback(async (page = 1, limit = 20) => {
     setListLoading(true);
@@ -111,8 +113,10 @@ export function useImportsController(
 
   useEffect(() => {
     void loadList();
-    void loadPersons().catch((reason: unknown) => setError(getErrorMessage(reason)));
-  }, [loadList, loadPersons]);
+    if (loadReferencePersons) {
+      void loadPersons().catch((reason: unknown) => setError(getErrorMessage(reason)));
+    }
+  }, [loadList, loadPersons, loadReferencePersons]);
 
   useEffect(() => {
     if (initialImportId) void loadImport(initialImportId, DEFAULT_ROW_FILTERS);
@@ -162,6 +166,7 @@ export function useImportsController(
   }
 
   async function openImport(batch: ImportBatch) {
+    setCommitCompleted(false);
     if (syncRoute) router.push(`/imports/${batch.id}`);
     await loadImport(batch.id, DEFAULT_ROW_FILTERS);
   }
@@ -200,6 +205,7 @@ export function useImportsController(
         window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
         router.refresh();
         setConfirmOpen(false);
+        setCommitCompleted(true);
         setToast('Імпорт успішно проведено');
       },
     });
@@ -218,6 +224,7 @@ export function useImportsController(
     listLoading, detailLoading, rowsLoading, actionLoading,
     error, actionError, uploadOpen, setUploadOpen, confirmOpen, setConfirmOpen,
     commitLoading, commitError, setCommitError, toast, setToast,
+    commitCompleted, setCommitCompleted,
     loadList, loadImport, loadRows, openImport, reloadSelected, saveMappings, commitSelected,
     validateSelected: () => selected && runAction(() => apiClient.validateImport(selected.id), 'Імпорт повторно перевірено'),
     cancelSelected: () => selected && runAction(() => apiClient.cancelImport(selected.id), 'Імпорт скасовано'),

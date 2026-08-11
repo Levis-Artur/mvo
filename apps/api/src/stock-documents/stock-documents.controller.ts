@@ -30,13 +30,14 @@ import { attachmentFileSizeLimitBytes } from '../config/env';
 import {
   CreateMvoTransferDto,
   CreateIssueDto,
-  CreateTransferIssueDto,
   CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
 } from './dto/stock-document.dto';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
+import { ListIssueHistoryQueryDto } from './dto/issue-history-query.dto';
+import { IssueHistoryService } from './issue-history.service';
 
 @Controller('stock-documents')
 @Roles(...STOCK_DOCUMENT_READ_ROLES)
@@ -44,6 +45,7 @@ export class StockDocumentsController {
   constructor(
     private readonly service: StockDocumentsService,
     private readonly attachmentsService: StockDocumentAttachmentsService,
+    private readonly issueHistoryService: IssueHistoryService,
   ) {}
 
   @Get()
@@ -58,6 +60,34 @@ export class StockDocumentsController {
   @Roles(UserRole.OWNER)
   attachmentOrphans() {
     return this.attachmentsService.findOrphans();
+  }
+
+  @Get('issues')
+  issueHistory(
+    @Query() query: ListIssueHistoryQueryDto,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.issueHistoryService.list(query, actor);
+  }
+
+  @Get('issues/export.csv')
+  async exportIssueHistory(
+    @Query() query: ListIssueHistoryQueryDto,
+    @CurrentUserParam() actor: CurrentUser,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const exported = await this.issueHistoryService.exportCsv(
+      query,
+      actor,
+      getRequestContext(request),
+    );
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return new StreamableFile(Buffer.from(exported.csv, 'utf8'), {
+      type: 'text/csv; charset=utf-8',
+      disposition: `attachment; filename="${exported.filename}"`,
+    });
   }
 
   @Post('mvo-transfer')
@@ -89,30 +119,6 @@ export class StockDocumentsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.service.createAndPostIssue(
-      dto,
-      files ?? [],
-      actor,
-      getRequestContext(request),
-    );
-  }
-
-  @Post('transfers/:transferId/issues')
-  @Roles(UserRole.MVO)
-  @UseInterceptors(
-    FilesInterceptor('files', 10, {
-      storage: memoryStorage(),
-      limits: { fileSize: attachmentFileSizeLimitBytes() },
-    }),
-  )
-  createTransferIssue(
-    @Param('transferId') transferId: string,
-    @Body() dto: CreateTransferIssueDto,
-    @UploadedFiles() files: Express.Multer.File[],
-    @CurrentUserParam() actor: CurrentUser,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.service.createAndPostTransferIssue(
-      transferId,
       dto,
       files ?? [],
       actor,

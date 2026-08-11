@@ -77,61 +77,30 @@ describe('stock document lazy loading policy', () => {
   });
 
   it('creates a new ISSUE through the atomic multipart endpoint without a draft success modal', () => {
-    const view = readFileSync(
-      join(__dirname, 'stock-documents-view.tsx'),
-      'utf8',
-    );
-    const details = readFileSync(
-      join(__dirname, 'stock-document-details-modal.tsx'),
-      'utf8',
-    );
-    const controller = readFileSync(
-      join(__dirname, 'use-stock-documents-controller.ts'),
-      'utf8',
-    );
+    const view = readFileSync(join(__dirname, 'mvo-issues-view.tsx'), 'utf8');
+    const form = readFileSync(join(__dirname, 'stock-document-form.tsx'), 'utf8');
     const apiClient = readFileSync(
       join(__dirname, '../../lib/api-client.ts'),
       'utf8',
     );
-    const issueModal = readFileSync(
-      join(__dirname, 'transfer-issue-modal.tsx'),
-      'utf8',
+    expect(view).toContain('submitNewIssue');
+    expect(view).toContain(
+      'stockDocumentsService.createAndPostIssue',
     );
-    const branchStart = controller.indexOf(
-      "if (!editing && input.type === 'ISSUE')",
-    );
-    const branchEnd = controller.indexOf('\n      let result = editing', branchStart);
-    const createAndPostBranch = controller.slice(branchStart, branchEnd);
-
-    expect(createAndPostBranch).toContain('submitNewIssue');
-    expect(createAndPostBranch).toContain(
-      'stockDocumentsService.createTransferIssue',
-    );
-    expect(createAndPostBranch).not.toContain('stockDocumentsService.create(');
-    expect(createAndPostBranch).not.toContain('uploadAttachment');
-    expect(createAndPostBranch).not.toContain("mode: 'draft'");
-    expect(createAndPostBranch).toContain('setFormType(null)');
-    expect(createAndPostBranch).toContain(
-      "setToast('Видачу оформлено.')",
-    );
-    expect(createAndPostBranch).toContain(
-      "new CustomEvent('mvo:refresh-transferred-property')",
-    );
-    expect(createAndPostBranch).not.toContain(
-      "new CustomEvent('mvo:refresh-stock')",
-    );
+    expect(view).not.toContain('stockDocumentsService.create(');
+    expect(view).not.toContain('uploadAttachment');
+    expect(view).not.toContain("mode: 'draft'");
+    expect(view).toContain("setToast('Видачу успішно оформлено.')");
+    expect(view).toContain("new CustomEvent('mvo:refresh-stock')");
     expect(apiClient).toContain(
-      '`/stock-documents/transfers/${encodeURIComponent(transferId)}/issues`',
+      "'/stock-documents/issue'",
     );
     expect(apiClient).toContain("formData.set('lines', JSON.stringify(body.lines))");
     expect(apiClient).toContain("formData.append('files', file)");
-    expect(view).not.toContain("controller.openCreate('ISSUE')");
-    expect(view).not.toContain('Нова видача');
-    expect(details).toContain('Оформити видачу');
-    expect(details).toContain("document.sourceResponsiblePersonId === user.responsiblePersonId");
-    expect(issueModal).toContain('transfer.id');
-    expect(issueModal).toContain('sourceTransferLineId: line.id');
-    expect(issueModal).toContain('initialIssueLineId={initialTransferLineId}');
+    expect(view).toContain('+ Нова видача');
+    expect(form).toContain('const createAndPostIssue = issue && !document;');
+    expect(view).not.toContain('sourceTransferId');
+    expect(view).not.toContain('sourceTransferLineId');
   });
 
   it('uses a compact MVO list without technical status labels', () => {

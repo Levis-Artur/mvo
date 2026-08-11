@@ -24,7 +24,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
 }) {
   if (user.role === 'MVO') {
     return <DataTable
-      ariaLabel="Мої передачі та видачі"
+      ariaLabel="Мої передачі"
       columns={[
         { label: 'Дата', className: 'stock-documents-table__date' },
         { label: 'Документ', className: 'stock-documents-table__document' },
@@ -33,7 +33,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         { label: 'Статус', className: 'stock-documents-table__status' },
         { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
       ]}
-      emptyMessage="Передач і видач поки немає."
+      emptyMessage="Передач поки немає."
       loading={loading}
       responsiveMode="cards-wide"
       tableClassName="stock-documents-table stock-documents-table--mvo"
@@ -43,7 +43,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         const volume = documentVolumePresentation(document.totalPositions, document.totalQuantity);
         return [
           new Date(document.documentDate).toLocaleDateString('uk-UA'),
-          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'MVO_TRANSFER' ? 'info' : 'neutral'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button></div>,
+          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'MVO_TRANSFER' ? 'info' : 'neutral'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>{document.attachments.length ? <StatusBadge tone="info">Є вкладення</StatusBadge> : null}</div>,
           <span className="stock-documents-table__person-text" key="counterparty" title={counterparty}>{counterparty}</span>,
           <span aria-label={volume.full} className="stock-documents-table__volume-text" key="volume" title={volume.full}>{volume.compact}</span>,
           <StockDocumentStatusBadge key="status" status={document.status} />,

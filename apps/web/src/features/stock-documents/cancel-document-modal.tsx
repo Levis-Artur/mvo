@@ -8,10 +8,11 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
   const state = documentActionState(error, loading);
   const documentaryIssue =
     document.type === 'ISSUE' && Boolean(document.sourceTransferId);
+  const directIssue = document.type === 'ISSUE' && !document.sourceTransferId;
   return <Modal
     closeOnEscape={!state.loading}
     destructive
-    footer={<><Button disabled={state.disabled} variant="outline" type="button" onClick={onClose}>Закрити</Button><Button disabled={state.disabled} variant="danger" type="button" onClick={onConfirm}>{state.loading ? 'Скасування…' : 'Скасувати документ'}</Button></>}
+    footer={<><Button disabled={state.disabled} variant="outline" type="button" onClick={onClose}>Закрити</Button><Button disabled={state.disabled} variant="danger" type="button" onClick={onConfirm}>{state.loading ? 'Скасування…' : directIssue ? 'Скасувати видачу' : 'Скасувати документ'}</Button></>}
     onClose={onClose}
     title="Скасування документа"
   >
@@ -22,11 +23,15 @@ export function CancelDocumentModal({ document, loading, error, onConfirm, onClo
         <strong>
           {documentaryIssue
             ? 'Доступну для оформлення кількість передачі буде відновлено'
+            : directIssue
+              ? 'Кількість буде повернено до вашого залишку'
             : 'Попередній стан майна буде відновлено'}
         </strong>
         <span>
           {documentaryIssue
             ? 'Складський залишок не зміниться. Історія видачі збережеться.'
+            : directIssue
+              ? 'Документ і підтверджуючий файл залишаться в історії зі статусом «Скасовано».'
             : 'Історія документа збережеться. Якщо майно вже було видане, скасування може бути недоступним.'}
         </span>
       </div>

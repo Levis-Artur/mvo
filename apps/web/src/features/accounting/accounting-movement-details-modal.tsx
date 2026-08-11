@@ -205,7 +205,7 @@ function operationTitle(operation: AccountingMovementDetails['operationType']) {
 function operationLabel(operation: AccountingMovementDetails['operationType']) {
   if (operation === 'IMPORT') return 'Надходження';
   if (operation === 'MVO_TRANSFER') return 'Передача МВО';
-  return 'Видача з передачі';
+  return 'Видача';
 }
 
 function operationTone(operation: AccountingMovementDetails['operationType']): 'success' | 'info' {

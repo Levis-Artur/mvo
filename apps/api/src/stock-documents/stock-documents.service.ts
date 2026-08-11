@@ -29,7 +29,6 @@ import {
   CreateIssueDto,
   CreateMvoTransferDto,
   CreateStockDocumentDto,
-  CreateTransferIssueDto,
   ListStockDocumentsQueryDto,
   UpdateStockDocumentDto,
 } from './dto/stock-document.dto';
@@ -340,23 +339,7 @@ export class StockDocumentsService {
   }
 
   async createAndPostIssue(
-    _dto: CreateIssueDto,
-    _files: Express.Multer.File[],
-    _actor: CurrentUser,
-    _context: AuditContext,
-  ): Promise<{ status: StockDocumentStatus; displayNumber: number }> {
-    void _dto;
-    void _files;
-    void _actor;
-    void _context;
-    throw new BadRequestException(
-      'Нову видачу можна оформити лише з власної проведеної передачі',
-    );
-  }
-
-  async createAndPostTransferIssue(
-    transferId: string,
-    dto: CreateTransferIssueDto,
+    dto: CreateIssueDto,
     files: Express.Multer.File[],
     actor: CurrentUser,
     context: AuditContext,
@@ -364,15 +347,7 @@ export class StockDocumentsService {
     this.assertCanWrite(actor);
     if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
       throw new ForbiddenException(
-        'Видачу може створити лише МВО-відправник проведеної передачі',
-      );
-    }
-    if (!dto.recipientName?.trim()) {
-      throw new BadRequestException('Для видачі обов’язково вкажіть одержувача');
-    }
-    if (!Array.isArray(dto.lines) || dto.lines.length === 0) {
-      throw new BadRequestException(
-        'Документ повинен містити щонайменше одну позицію',
+        'Видачу може створити лише користувач із пов’язаною карткою МВО',
       );
     }
     if (!files.length) {
@@ -381,7 +356,16 @@ export class StockDocumentsService {
       );
     }
 
-    const normalizedLines = this.normalizeTransferIssueLines(dto.lines);
+    const sourceResponsiblePersonId = actor.responsiblePersonId;
+    const normalized = this.validateDto(
+      {
+        ...dto,
+        type: StockDocumentType.ISSUE,
+        sourceResponsiblePersonId,
+      },
+      actor,
+      { requireIssueBasis: false },
+    );
     const documentId = randomUUID();
     const storedAttachments: StoredAttachment[] = [];
 
@@ -395,91 +379,7 @@ export class StockDocumentsService {
 
       await this.prisma.$transaction(
         async (tx) => {
-          await tx.$queryRaw`
-            SELECT "id"
-            FROM "StockDocument"
-            WHERE "id" = ${transferId}::uuid
-            FOR UPDATE
-          `;
-          const transfer = await tx.stockDocument.findUnique({
-            where: { id: transferId },
-            include: { lines: true },
-          });
-          if (!transfer) {
-            throw new NotFoundException('Передачу не знайдено');
-          }
-          if (
-            transfer.type !== StockDocumentType.MVO_TRANSFER ||
-            transfer.status !== StockDocumentStatus.POSTED
-          ) {
-            throw new ConflictException(
-              'Видачу можна оформити лише з проведеної передачі',
-            );
-          }
-          if (transfer.sourceResponsiblePersonId !== actor.responsiblePersonId) {
-            throw new ForbiddenException(
-              'Видачу може оформити лише МВО-відправник цієї передачі',
-            );
-          }
-          await this.assertActiveMvoSender(
-            tx,
-            transfer.sourceResponsiblePersonId,
-          );
-
-          const transferLines = new Map(
-            transfer.lines.map((line) => [line.id, line]),
-          );
-          const sourceLineIds = normalizedLines.map(
-            (line) => line.sourceTransferLineId,
-          );
-          const issued = await tx.stockDocumentLine.groupBy({
-            by: ['sourceTransferLineId'],
-            where: {
-              sourceTransferLineId: { in: sourceLineIds },
-              document: {
-                type: StockDocumentType.ISSUE,
-                status: StockDocumentStatus.POSTED,
-              },
-            },
-            _sum: { quantity: true },
-          });
-          const issuedByLine = new Map(
-            issued.map((entry) => [
-              entry.sourceTransferLineId,
-              entry._sum.quantity ?? new Prisma.Decimal(0),
-            ]),
-          );
-
-          const issueLines = normalizedLines.map((requested) => {
-            const sourceLine = transferLines.get(requested.sourceTransferLineId);
-            if (!sourceLine) {
-              throw new BadRequestException(
-                'Вибрана позиція не належить цій передачі',
-              );
-            }
-            const available = sourceLine.quantity.minus(
-              issuedByLine.get(sourceLine.id) ?? new Prisma.Decimal(0),
-            );
-            if (requested.quantity.gt(available)) {
-              throw new ConflictException(
-                'Недостатня кількість, доступна для оформлення видачі',
-              );
-            }
-            return {
-              inventoryItemId: sourceLine.inventoryItemId,
-              sourceTransferLineId: sourceLine.id,
-              sourceBalanceId: null,
-              sourceKind: null,
-              accountingOwnerResponsiblePersonId: null,
-              sourceCustodianResponsiblePersonId: null,
-              sourceCustodyBalanceId: null,
-              quantityBefore: null,
-              quantityAfter: null,
-              quantity: requested.quantity,
-              note: requested.note,
-            };
-          });
-
+          await this.assertActiveMvoSender(tx, sourceResponsiblePersonId);
           const now = new Date();
           const issue = await tx.stockDocument.create({
             data: {
@@ -489,17 +389,17 @@ export class StockDocumentsService {
               type: StockDocumentType.ISSUE,
               accountingModel: StockAccountingModel.DIRECT_BALANCE,
               status: StockDocumentStatus.POSTED,
-              sourceTransferId: transfer.id,
-              sourceResponsiblePersonId: transfer.sourceResponsiblePersonId,
+              sourceTransferId: null,
+              sourceResponsiblePersonId,
               destinationResponsiblePersonId: null,
-              recipientName: dto.recipientName.trim(),
-              recipientUnit: dto.recipientUnit?.trim() || null,
+              recipientName: normalized.recipientName,
+              recipientUnit: normalized.recipientUnit,
               basis: dto.basis?.trim() || null,
               note: dto.note?.trim() || null,
               createdByUserId: actor.id,
               postedByUserId: actor.id,
               postedAt: now,
-              lines: { create: issueLines },
+              lines: { create: normalized.lines },
               attachments: {
                 create: storedAttachments.map((attachment) => ({
                   ...attachment,
@@ -507,11 +407,19 @@ export class StockDocumentsService {
                 })),
               },
             },
-            include: { lines: true },
+            include: {
+              lines: true,
+              attachments: { select: { id: true, storagePath: true } },
+            },
           });
 
           for (const line of issue.lines) {
-            await this.createDocumentaryIssueTransaction(tx, issue, line);
+            await this.postDirectBalanceLine(
+              tx,
+              issue,
+              line,
+              StockTransactionType.ISSUE_OUT,
+            );
           }
           await this.auditInTx(
             tx,
@@ -934,54 +842,6 @@ export class StockDocumentsService {
     });
   }
 
-  private async createDocumentaryIssueTransaction(
-    tx: Prisma.TransactionClient,
-    document: {
-      id: string;
-      documentNumber: string;
-      documentDate: Date;
-      sourceResponsiblePersonId: string;
-      basis: string | null;
-      note: string | null;
-    },
-    line: { id: string; inventoryItemId: string; quantity: Prisma.Decimal },
-  ) {
-    const balance = await tx.stockBalance.findUnique({
-      where: {
-        responsiblePersonId_inventoryItemId: {
-          responsiblePersonId: document.sourceResponsiblePersonId,
-          inventoryItemId: line.inventoryItemId,
-        },
-      },
-      select: { quantity: true },
-    });
-    const unchangedBalance = balance?.quantity ?? new Prisma.Decimal(0);
-    await tx.stockDocumentLine.update({
-      where: { id: line.id },
-      data: {
-        quantityBefore: unchangedBalance,
-        quantityAfter: unchangedBalance,
-      },
-    });
-    await tx.stockTransaction.create({
-      data: {
-        type: StockTransactionType.ISSUE_OUT,
-        responsiblePersonId: document.sourceResponsiblePersonId,
-        inventoryItemId: line.inventoryItemId,
-        quantity: line.quantity,
-        balanceBefore: unchangedBalance,
-        balanceAfter: unchangedBalance,
-        occurredAt: document.documentDate,
-        sourceDocument: document.documentNumber,
-        comment: document.basis ?? document.note,
-        documentId: document.id,
-        documentLineId: line.id,
-        accountingModel: StockAccountingModel.DIRECT_BALANCE,
-        bucketKind: null,
-      },
-    });
-  }
-
   private async reverseLine(
     tx: Prisma.TransactionClient,
     document: CancellationDocument,
@@ -1003,6 +863,17 @@ export class StockDocumentsService {
       document.sourceTransferId
     ) {
       await this.reverseDocumentaryIssueLine(tx, document, line);
+      return;
+    }
+    if (document.type === StockDocumentType.ISSUE) {
+      await this.reverseDirectBalanceLine(
+        tx,
+        document,
+        line,
+        StockTransactionType.ISSUE_OUT,
+        StockTransactionType.ISSUE_REVERSAL,
+        'Скасування видачі',
+      );
       return;
     }
     throw new BadRequestException(
@@ -1257,6 +1128,7 @@ export class StockDocumentsService {
         sourceCustodianResponsiblePersonId: null,
         sourceCustodyBalanceId: null,
         sourceBalanceId: line.sourceBalanceId,
+        sourceTransferLineId: null,
         quantityBefore: null,
         quantityAfter: null,
         note: line.note?.trim() || null,
@@ -1280,43 +1152,6 @@ export class StockDocumentsService {
           : null,
       lines,
     };
-  }
-
-  private normalizeTransferIssueLines(
-    lines: CreateTransferIssueDto['lines'],
-  ) {
-    const seen = new Set<string>();
-    return lines.map((line) => {
-      if (seen.has(line.sourceTransferLineId)) {
-        throw new BadRequestException(
-          'Один рядок передачі не можна додавати до видачі двічі',
-        );
-      }
-      seen.add(line.sourceTransferLineId);
-      let quantity: Prisma.Decimal;
-      try {
-        quantity = new Prisma.Decimal(line.quantity);
-      } catch {
-        throw new BadRequestException(
-          'Кількість у кожному рядку має бути коректним числом',
-        );
-      }
-      if (
-        !quantity.isFinite() ||
-        quantity.lte(0) ||
-        quantity.decimalPlaces() > 4 ||
-        quantity.gt(new Prisma.Decimal('99999999999999.9999'))
-      ) {
-        throw new BadRequestException(
-          'Кількість у кожному рядку має бути додатною і містити не більше 4 знаків після коми',
-        );
-      }
-      return {
-        sourceTransferLineId: line.sourceTransferLineId,
-        quantity,
-        note: line.note?.trim() || null,
-      };
-    });
   }
 
   private async stageAttachmentFiles(storagePaths: string[]) {
@@ -1400,14 +1235,6 @@ export class StockDocumentsService {
         'Документ старої моделі доступний лише для перегляду',
       );
     }
-    if (
-      document.type === StockDocumentType.ISSUE &&
-      !document.sourceTransferId
-    ) {
-      throw new BadRequestException(
-        'Видача старої моделі доступна лише для перегляду',
-      );
-    }
   }
 
   private assertDraftWorkflowDocument(document: {
@@ -1418,7 +1245,7 @@ export class StockDocumentsService {
     this.assertMutableDocument(document);
     if (document.type === StockDocumentType.ISSUE) {
       throw new BadRequestException(
-        'Видача з передачі створюється і проводиться однією операцією без чернетки',
+        'Видача створюється і проводиться однією операцією без чернетки',
       );
     }
   }

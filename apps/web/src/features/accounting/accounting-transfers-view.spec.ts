@@ -16,16 +16,19 @@ describe('AccountingTransfersView', () => {
   const view = readFileSync(join(__dirname, 'accounting-transfers-view.tsx'), 'utf8');
   const client = readFileSync(join(__dirname, '../../lib/api-client.ts'), 'utf8');
 
-  it.each(['ACCOUNTANT', 'OWNER', 'DPP_ADMIN', 'AUDITOR'] as const)(
+  it.each(['OWNER', 'DPP_ADMIN', 'AUDITOR'] as const)(
     'shows the accounting register to %s',
     (role) => {
       expect(can(user(role), 'read', 'accountingTransfers')).toBe(true);
-      const expectedHref = role === 'ACCOUNTANT'
-        ? '/accounting'
-        : '/accounting/mvo-transfers';
+      const expectedHref = '/accounting/mvo-transfers';
       expect(getNavigationItems(user(role)).some((item) => item.href === expectedHref)).toBe(true);
     },
   );
+
+  it('does not expose the transfer register to ACCOUNTANT', () => {
+    expect(can(user('ACCOUNTANT'), 'read', 'accountingTransfers')).toBe(false);
+    expect(getNavigationItems(user('ACCOUNTANT')).some((item) => item.href === '/accounting/mvo-transfers')).toBe(false);
+  });
 
   it('does not expose the accounting register to MVO', () => {
     expect(can(user('MVO'), 'read', 'accountingTransfers')).toBe(false);

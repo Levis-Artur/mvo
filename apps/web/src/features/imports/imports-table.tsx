@@ -3,11 +3,39 @@ import { Button, DataTable } from '@/components/ui';
 import { importTypeLabel } from '@/components/common';
 import { ImportStatusBadge } from './import-status-badge';
 
-export function ImportsTable({ imports, loading, onOpen }: {
+export function ImportsTable({ imports, loading, onOpen, compact = false }: {
   imports: ImportBatch[];
   loading: boolean;
   onOpen: (batch: ImportBatch) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <DataTable
+        ariaLabel="Історія завантажених відомостей"
+        columns={[
+          { label: 'Дата' },
+          { label: 'Файл' },
+          { label: 'Рядків', numeric: true },
+          { label: 'Статус' },
+          { label: 'Автор' },
+          { label: 'Дія', actions: true },
+        ]}
+        emptyMessage="Відомості ще не завантажувалися."
+        loading={loading}
+        responsiveMode="cards-wide"
+        rows={imports.map((batch) => [
+          new Date(batch.createdAt).toLocaleString('uk-UA'),
+          <Button className="accounting-imports__filename" key="file" variant="link" type="button" onClick={() => onOpen(batch)}>{batch.originalFilename}</Button>,
+          batch.totalRows,
+          <ImportStatusBadge key="status" status={batch.status} />,
+          batch.uploadedByUser?.username ?? 'Невідомо',
+          <Button key="actions" size="compact" variant="outline" type="button" onClick={() => onOpen(batch)}>Переглянути</Button>,
+        ])}
+      />
+    );
+  }
+
   return (
     <DataTable
       ariaLabel="Список завантажених імпортів"

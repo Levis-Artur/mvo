@@ -20,8 +20,9 @@ describe('stock route role metadata', () => {
       expect.arrayContaining([UserRole.MVO, UserRole.OWNER, UserRole.AUDITOR]),
     );
     expect(roles(StockController.prototype.exportMyProperty)).toEqual(
-      expect.arrayContaining([UserRole.MVO, UserRole.ACCOUNTANT, UserRole.DPP_ADMIN]),
+      expect.arrayContaining([UserRole.MVO, UserRole.DPP_ADMIN]),
     );
+    expect(roles(StockController.prototype.exportMyProperty)).not.toContain(UserRole.ACCOUNTANT);
   });
 
   it('allows transfer-targets without opening the administrative registry', () => {
@@ -31,10 +32,9 @@ describe('stock route role metadata', () => {
     expect(roles(ResponsiblePersonsController)).not.toContain(UserRole.MVO);
   });
 
-  it('keeps ACCOUNTANT and AUDITOR read-only for stock documents', () => {
-    expect(roles(StockDocumentsController)).toEqual(
-      expect.arrayContaining([UserRole.ACCOUNTANT, UserRole.AUDITOR]),
-    );
+  it('keeps AUDITOR read-only and closes stock documents to ACCOUNTANT', () => {
+    expect(roles(StockDocumentsController)).toContain(UserRole.AUDITOR);
+    expect(roles(StockDocumentsController)).not.toContain(UserRole.ACCOUNTANT);
   });
 
   it('keeps the technical transaction journal closed to MVO', () => {
@@ -42,8 +42,9 @@ describe('stock route role metadata', () => {
     expect(roles(StockController.prototype.findTransaction)).not.toContain(UserRole.MVO);
     expect(roles(ResponsiblePersonsController.prototype.stockTransactions)).not.toContain(UserRole.MVO);
     expect(roles(StockController.prototype.listTransactions)).toEqual(
-      expect.arrayContaining([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.ACCOUNTANT, UserRole.AUDITOR]),
+      expect.arrayContaining([UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.AUDITOR]),
     );
+    expect(roles(StockController.prototype.listTransactions)).not.toContain(UserRole.ACCOUNTANT);
   });
 
   it('keeps the global inventory accounting card read-only and closed to MVO', () => {
@@ -55,11 +56,11 @@ describe('stock route role metadata', () => {
       expect.arrayContaining([
         UserRole.OWNER,
         UserRole.DPP_ADMIN,
-        UserRole.ACCOUNTANT,
         UserRole.AUDITOR,
       ]),
     );
     expect(cardRoles).not.toContain(UserRole.MVO);
+    expect(cardRoles).not.toContain(UserRole.ACCOUNTANT);
     expect(exportRoles).toEqual(cardRoles);
   });
 });

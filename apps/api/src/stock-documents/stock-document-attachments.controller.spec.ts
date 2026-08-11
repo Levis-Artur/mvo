@@ -28,6 +28,7 @@ describe('StockDocumentsController attachment preview', () => {
     const controller = new StockDocumentsController(
       {} as never,
       attachments as never,
+      {} as never,
     );
     const response = { setHeader: jest.fn() };
 

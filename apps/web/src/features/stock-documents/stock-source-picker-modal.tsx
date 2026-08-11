@@ -85,7 +85,7 @@ export function StockSourcePickerModal({
           <FormField label="Пошук">
             <Input
               autoFocus
-              placeholder="Код або назва"
+              placeholder="Знайти майно за кодом або назвою"
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}

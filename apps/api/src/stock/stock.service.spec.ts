@@ -169,7 +169,7 @@ describe('StockService', () => {
       availableQuantity: '2',
       unit: 'шт',
       canTransfer: true,
-      canIssue: false,
+      canIssue: true,
     }]);
     expect(prisma).not.toHaveProperty('custodyBalance');
   });

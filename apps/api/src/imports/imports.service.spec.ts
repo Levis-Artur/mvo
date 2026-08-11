@@ -148,6 +148,22 @@ describe('ImportsService', () => {
     });
   });
 
+  it('returns the uploader in import details without exposing an internal user id as display data', async () => {
+    const { service, prisma } = createService();
+    const batch = { id: 'batch-id', totalRows: 1 };
+    prisma.importBatch.findUnique.mockResolvedValue(batch);
+    prisma.importRow.findMany.mockResolvedValue([]);
+    prisma.securityEvent.findMany.mockResolvedValue([{
+      metadata: { action: 'UPLOAD', importBatchId: 'batch-id' },
+      actorUser: { id: 'accountant-id', username: 'accountant' },
+    }]);
+
+    await expect(service.findOne('batch-id')).resolves.toMatchObject({
+      ...batch,
+      uploadedByUser: { id: 'accountant-id', username: 'accountant' },
+    });
+  });
+
   it('counts distinct matched MVO and new or updated inventory positions', async () => {
     const { service, prisma } = createService();
     prisma.importBatch.findUnique.mockResolvedValue({ id: 'batch-id' });

@@ -360,7 +360,7 @@ export class StockService {
       availableQuantity: balance.quantity.toString(),
       unit: balance.inventoryItem.unitOfMeasure,
       canTransfer: true,
-      canIssue: false,
+      canIssue: true,
     }));
   }
 

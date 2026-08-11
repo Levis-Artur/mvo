@@ -47,14 +47,12 @@ const source = (id: string, quantity: string): AvailableStockSource => ({
   inventoryItem: { id, externalCode: id, name: id, unitOfMeasure: 'шт' },
   availableQuantity: quantity,
   balanceId: `balance-${id}`,
-  sourceTransferLineId: `transfer-line-${id}`,
   unit: 'шт',
   canTransfer: true,
   canIssue: true,
 });
 const line = () => ({
   inventoryItemId: 'item-1', quantity: '2', sourceBalanceId: 'balance-item-1',
-  sourceTransferLineId: 'transfer-line-item-1',
 });
 const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => ({
   type: 'ISSUE', documentDate: '2026-07-16T00:00:00.000Z',
@@ -132,7 +130,7 @@ describe('stock document frontend rules', () => {
     }, mvoUser).cancel).toBe(true);
   });
 
-  it('залишає standalone ISSUE read-only та дозволяє скасувати child ISSUE', () => {
+  it('не редагує ISSUE та дозволяє скасувати власну проведену видачу', () => {
     expect(lifecycleActions({
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
@@ -141,6 +139,10 @@ describe('stock document frontend rules', () => {
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       sourceTransferId: 'transfer-1',
     }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+    expect(lifecycleActions({
+      type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: 'person-1',
+      lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
+    }, mvoUser).cancel).toBe(true);
     expect(lifecycleActions({
       type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: 'person-1',
       sourceTransferId: 'transfer-1',

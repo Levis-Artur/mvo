@@ -56,13 +56,11 @@ function personSearchText(person: TransferTarget) {
 
 export function documentLineError(
   line: StockDocumentInput['lines'][number] &
-    Partial<Pick<DocumentFormLine, 'sourceBalanceId' | 'sourceTransferLineId'>>,
+    Partial<Pick<DocumentFormLine, 'sourceBalanceId'>>,
   sources: AvailableStockSource[],
 ) {
   const source = sources.find((item) =>
     item.inventoryItem.id === line.inventoryItemId &&
-    (!line.sourceTransferLineId ||
-      item.sourceTransferLineId === line.sourceTransferLineId) &&
     (!line.sourceBalanceId || item.balanceId === line.sourceBalanceId),
   );
   const quantity = Number(line.quantity);
@@ -106,14 +104,9 @@ export function validateDocumentInput(
     ) {
       return 'Для нового документа можна вибирати лише власний поточний залишок';
     }
-    const sourceKey =
-      input.type === 'ISSUE'
-        ? line.sourceTransferLineId
-        : line.sourceBalanceId;
+    const sourceKey = line.sourceBalanceId;
     if (!sourceKey) {
-      return input.type === 'ISSUE'
-        ? 'Виберіть рядок проведеної передачі'
-        : 'Виберіть залишок для кожного рядка';
+      return 'Виберіть залишок для кожного рядка';
     }
     if (sourceKeys.has(sourceKey)) return 'Одне джерело майна не можна додавати двічі';
     sourceKeys.add(sourceKey);
@@ -172,10 +165,10 @@ export function documentCounterparty(
     return `Кому: ${document.recipientName ?? 'Не вказано'}`;
   }
   if (document.destinationResponsiblePersonId === user.responsiblePersonId) {
-    return `Від кого: ${document.sourceResponsiblePerson.lastName} ${document.sourceResponsiblePerson.firstName}`;
+    return `Від кого: ${document.sourceResponsiblePerson.externalAccountingCode ?? document.sourceResponsiblePerson.personnelNumber} — ${document.sourceResponsiblePerson.lastName} ${document.sourceResponsiblePerson.firstName}`;
   }
   const destination = document.destinationResponsiblePerson;
-  return `Кому: ${destination ? `${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
+  return `Кому: ${destination ? `${destination.externalAccountingCode ?? destination.personnelNumber} — ${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
 }
 
 export function successfulDocumentActionMessage(
@@ -233,9 +226,8 @@ export function lifecycleActions(
   const transferDocument =
     document.type === 'MVO_TRANSFER' &&
     !document.lines?.some((line) => !line.sourceBalanceId);
-  const childIssue =
-    document.type === 'ISSUE' && Boolean(document.sourceTransferId);
-  const writable = (transferDocument || childIssue) && canChangeStockDocuments(user) && (
+  const issueDocument = document.type === 'ISSUE';
+  const writable = (transferDocument || issueDocument) && canChangeStockDocuments(user) && (
     user.role !== 'MVO' || document.sourceResponsiblePersonId === user.responsiblePersonId
   );
   return {
@@ -244,7 +236,7 @@ export function lifecycleActions(
     remove: writable && transferDocument && document.status === 'DRAFT',
     cancel:
       writable &&
-      (transferDocument || childIssue) &&
+      (transferDocument || issueDocument) &&
       document.status === 'POSTED' &&
       !(
         document.type === 'MVO_TRANSFER' &&
