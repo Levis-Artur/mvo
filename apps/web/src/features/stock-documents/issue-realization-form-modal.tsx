@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Button,
-  Card,
   ErrorState,
   FormField,
   Input,
@@ -16,6 +15,9 @@ import type {
   StockDocument,
 } from '@/lib/types';
 import { documentNumberLabel } from './stock-document-rules';
+
+const REALIZATION_ATTACHMENT_TYPES =
+  'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf';
 
 export function IssueRealizationFormModal({
   issue,
@@ -38,6 +40,7 @@ export function IssueRealizationFormModal({
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [files, setFiles] = useState<File[]>([]);
   const [validationError, setValidationError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const availableLines = useMemo(
     () =>
@@ -45,6 +48,40 @@ export function IssueRealizationFormModal({
         (line) => Number(line.availableToRealize ?? line.quantity) > 0,
       ),
     [issue.lines],
+  );
+  const quantityErrors = useMemo(
+    () => Object.fromEntries(
+      availableLines.map((line) => {
+        const value = quantities[line.id]?.trim() ?? '';
+        const available = Number(line.availableToRealize ?? line.quantity);
+        if (!value) return [line.id, ''];
+        const quantity = Number(value);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          return [line.id, 'Вкажіть кількість більшу за нуль.'];
+        }
+        if (quantity > available) {
+          return [
+            line.id,
+            `Кількість не може перевищувати ${formatQuantity(
+              line.availableToRealize ?? line.quantity,
+            )} ${line.inventoryItem.unitOfMeasure ?? ''}`.trim(),
+          ];
+        }
+        return [line.id, ''];
+      }),
+    ),
+    [availableLines, quantities],
+  );
+  const hasQuantity = availableLines.some(
+    (line) => (quantities[line.id]?.trim() ?? '') !== '',
+  );
+  const hasQuantityError = Object.values(quantityErrors).some(Boolean);
+  const canSubmit = Boolean(
+    realizationDate &&
+      availableLines.length &&
+      hasQuantity &&
+      !hasQuantityError &&
+      !saving,
   );
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -88,30 +125,31 @@ export function IssueRealizationFormModal({
     );
   }
 
+  function removeFile(index: number) {
+    setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
   return (
     <Modal
       closeOnEscape={!saving}
       footer={
         <>
           <Button disabled={saving} type="button" variant="outline" onClick={onClose}>
-            Закрити
+            Скасувати
           </Button>
-          <Button disabled={saving || !availableLines.length} form="issue-realization-form" type="submit">
+          <Button disabled={!canSubmit} form="issue-realization-form" type="submit">
             {saving ? 'Оформлюємо…' : 'Підтвердити реалізацію'}
           </Button>
         </>
       }
       onClose={onClose}
-      size="large"
       title={`Реалізація видачі ${documentNumberLabel(issue.displayNumber)}`}
     >
       <form className="issue-realization-form" id="issue-realization-form" onSubmit={submit}>
         {error || validationError ? (
           <ErrorState message={error || validationError} />
         ) : null}
-        <p className="text-sm text-[var(--color-text-secondary)]">
-          Кому видано: <strong>{issue.recipientName ?? 'Не вказано'}</strong>
-        </p>
         <div className="issue-realization-form__fields">
           <FormField label="Дата реалізації" required>
             <Input
@@ -121,62 +159,143 @@ export function IssueRealizationFormModal({
               onChange={(event) => setRealizationDate(event.target.value)}
             />
           </FormField>
-          <FormField label="Одержувач або примітка до одержувача">
+          <FormField
+            label={issue.recipientName
+              ? 'Примітка до одержувача'
+              : 'Одержувач / примітка'}
+          >
             <Input
+              placeholder={issue.recipientName
+                ? 'За потреби додайте уточнення'
+                : undefined}
               value={recipientText}
               onChange={(event) => setRecipientText(event.target.value)}
             />
           </FormField>
           <FormField label="Коментар">
-            <Textarea value={note} onChange={(event) => setNote(event.target.value)} />
+            <Textarea
+              rows={3}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
           </FormField>
         </div>
 
-        <Card title="Позиції для реалізації">
+        <section
+          aria-labelledby="issue-realization-lines-title"
+          className="issue-realization-section"
+        >
+          <h3 id="issue-realization-lines-title">Позиції для реалізації</h3>
           <div className="issue-realization-lines">
             {availableLines.map((line) => (
-              <div className="issue-realization-line" key={line.id}>
-                <div className="issue-realization-line__item">
+              <article className="issue-realization-line" key={line.id}>
+                <header className="issue-realization-line__item">
                   <strong>{line.inventoryItem.name}</strong>
-                  <span>
-                    {line.inventoryItem.externalCode} · видано{' '}
-                    {formatQuantity(line.quantity)} · реалізовано{' '}
-                    {formatQuantity(line.realizedQuantity ?? '0')} · доступно{' '}
-                    {formatQuantity(line.availableToRealize ?? line.quantity)}{' '}
-                    {line.inventoryItem.unitOfMeasure ?? ''}
-                  </span>
+                  <span>Код: {line.inventoryItem.externalCode}</span>
+                </header>
+                <dl className="issue-realization-line__summary">
+                  <div><dt>Видано</dt><dd>{formatQuantity(line.quantity)} {line.inventoryItem.unitOfMeasure ?? ''}</dd></div>
+                  <div><dt>Реалізовано</dt><dd>{formatQuantity(line.realizedQuantity ?? '0')} {line.inventoryItem.unitOfMeasure ?? ''}</dd></div>
+                  <div><dt>Залишилось</dt><dd>{formatQuantity(line.availableToRealize ?? line.quantity)} {line.inventoryItem.unitOfMeasure ?? ''}</dd></div>
+                </dl>
+                <div className="issue-realization-line__quantity">
+                  <label htmlFor={`issue-realization-quantity-${line.id}`}>
+                    Кількість до реалізації
+                  </label>
+                  <div className="issue-realization-line__quantity-control">
+                    <Input
+                      aria-describedby={`issue-realization-quantity-help-${line.id}`}
+                      aria-invalid={Boolean(quantityErrors[line.id])}
+                      id={`issue-realization-quantity-${line.id}`}
+                      inputMode="decimal"
+                      max={line.availableToRealize ?? line.quantity}
+                      min="0.000000000001"
+                      step="any"
+                      type="number"
+                      value={quantities[line.id] ?? ''}
+                      onChange={(event) => {
+                        setValidationError('');
+                        setQuantities((current) => ({
+                          ...current,
+                          [line.id]: event.target.value,
+                        }));
+                      }}
+                    />
+                    <span>{line.inventoryItem.unitOfMeasure ?? ''}</span>
+                  </div>
+                  {quantityErrors[line.id] ? (
+                    <p
+                      className="form-field__error"
+                      id={`issue-realization-quantity-help-${line.id}`}
+                      role="alert"
+                    >
+                      {quantityErrors[line.id]}
+                    </p>
+                  ) : (
+                    <p
+                      className="form-field__hint"
+                      id={`issue-realization-quantity-help-${line.id}`}
+                    >
+                      Доступно: {formatQuantity(
+                        line.availableToRealize ?? line.quantity,
+                      )} {line.inventoryItem.unitOfMeasure ?? ''}
+                    </p>
+                  )}
                 </div>
-                <FormField label={`Кількість — ${line.inventoryItem.name}`}>
-                  <Input
-                    inputMode="decimal"
-                    min="0"
-                    step="any"
-                    type="number"
-                    value={quantities[line.id] ?? ''}
-                    onChange={(event) =>
-                      setQuantities((current) => ({
-                        ...current,
-                        [line.id]: event.target.value,
-                      }))
-                    }
-                  />
-                </FormField>
-              </div>
+              </article>
             ))}
           </div>
-        </Card>
+        </section>
 
-        <Card title="Фото або PDF (необов’язково)">
-          <Input
+        <section
+          aria-labelledby="issue-realization-attachments-title"
+          className="issue-realization-section issue-realization-attachment"
+        >
+          <div>
+            <h3 id="issue-realization-attachments-title">
+              Підтверджуючий документ
+            </h3>
+            <p>Додайте фото або PDF за потреби.</p>
+          </div>
+          <input
+            ref={fileInputRef}
+            hidden
             multiple
-            accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+            accept={REALIZATION_ATTACHMENT_TYPES}
             type="file"
-            onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+            onChange={(event) =>
+              setFiles(Array.from(event.target.files ?? []))
+            }
           />
+          <Button
+            className="issue-realization-attachment__choose"
+            disabled={saving}
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Обрати файл
+          </Button>
           {files.length ? (
-            <p className="form-field__hint">Вибрано файлів: {files.length}</p>
+            <ul className="issue-realization-attachment__files">
+              {files.map((file, index) => (
+                <li key={`${file.name}-${file.lastModified}-${index}`}>
+                  <span title={file.name}>{file.name}</span>
+                  <Button
+                    aria-label={`Видалити файл ${file.name}`}
+                    disabled={saving}
+                    size="compact"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => removeFile(index)}
+                  >
+                    Видалити
+                  </Button>
+                </li>
+              ))}
+            </ul>
           ) : null}
-        </Card>
+        </section>
       </form>
     </Modal>
   );

@@ -254,7 +254,7 @@ describe('MVO issues workspace', () => {
       }),
     ).toBeTruthy();
     await browser.type(
-      screen.getByRole('spinbutton', { name: /Кількість —/ }),
+      screen.getByRole('spinbutton', { name: 'Кількість до реалізації' }),
       '1',
     );
     await browser.click(screen.getByRole('button', { name: 'Підтвердити реалізацію' }));
@@ -276,6 +276,9 @@ describe('MVO issues workspace', () => {
     expect(
       await screen.findByText('Реалізацію успішно оформлено.'),
     ).toBeTruthy();
+    expect(
+      screen.queryByRole('heading', { name: 'Реалізація видачі № 15' }),
+    ).toBeNull();
   });
 
   it('shows the fully realized badge instead of the realization action', async () => {

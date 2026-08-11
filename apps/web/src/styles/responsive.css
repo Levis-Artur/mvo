@@ -36,8 +36,7 @@
   .mvo-issues-search .form-field { grid-column: 1 / -1; }
   .mvo-issues-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .issue-details__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .issue-realization-form__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .issue-realization-form__fields > :last-child { grid-column: 1 / -1; }
+  .issue-realization-form__fields { grid-template-columns: minmax(10rem, 0.55fr) minmax(0, 1.45fr); }
   .accounting-imports__latest-content { grid-template-columns: minmax(0, 1fr) auto; }
   .accounting-imports__latest-summary { grid-column: 1 / -1; }
   .accounting-import-detail__metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -66,8 +65,11 @@
   .mvo-issues-search > .btn { width: 100%; }
   .mvo-issues-filters__actions { display: grid; }
   .issue-details__summary { grid-template-columns: minmax(0, 1fr); }
-  .issue-realization-form__fields, .issue-realization-line { grid-template-columns: minmax(0, 1fr); }
+  .issue-realization-form__fields { grid-template-columns: minmax(0, 1fr); }
   .issue-realization-form__fields > :last-child { grid-column: 1; }
+  .issue-realization-form__fields > :first-child .form-field__control { width: 100%; }
+  .issue-realization-line__quantity-control .input { width: min(10rem, calc(100vw - 5rem)); }
+  .issue-realization-attachment__choose { width: 100%; }
   .accounting-imports__upload { padding: var(--space-4); }
   .accounting-imports__primary-action { width: 100%; }
   .accounting-imports__latest-content { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
