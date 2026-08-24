@@ -6,7 +6,7 @@
     "apps/*"
   ],
   "dependencies": {
-    "@prisma/client": "^7.9.1",
+    "@prisma/client": "^6.19.3",
     "prisma": "^6.12.0"
   },
   "scripts": {
