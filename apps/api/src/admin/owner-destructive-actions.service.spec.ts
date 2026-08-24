@@ -57,7 +57,38 @@ function createService() {
       callback(tx),
     ),
   };
-  const businessDataReset = { run: jest.fn().mockResolvedValue({}) };
+  const businessDataReset = {
+    run: jest.fn().mockResolvedValue({
+      preserved: { ownerUsers: 1, ownerSessions: 1 },
+      deleteCandidates: {
+        nonOwnerUsers: 2,
+        userAccessScopes: 3,
+        managements: 1,
+        services: 3,
+        units: 2,
+        responsiblePersons: 4,
+        inventoryItems: 5,
+        stockBalances: 6,
+        custodyBalances: 1,
+        stockTransactions: 8,
+        stockDocuments: 7,
+        mvoTransfers: 3,
+        issues: 4,
+        stockDocumentLines: 11,
+        issueRealizations: 2,
+        issueRealizationLines: 5,
+        stockDocumentAttachments: 2,
+        issueRealizationAttachments: 1,
+        importBatches: 1,
+        importRows: 9,
+        accountingExportBatches: 1,
+        securityEvents: 10,
+      },
+      deleted: null,
+      attachmentFilesDeleted: 3,
+      orphanAttachmentFiles: 1,
+    }),
+  };
 
   return {
     service: new OwnerDestructiveActionsService(
@@ -208,12 +239,42 @@ describe('OwnerDestructiveActionsService', () => {
     expect(businessDataReset.run).not.toHaveBeenCalled();
   });
 
-  it('delegates the API reset to the preserving business-data reset service', async () => {
+  it('rejects a non-OWNER reset request', async () => {
     process.env.ALLOW_BUSINESS_DATA_RESET = 'YES';
     const { service, businessDataReset } = createService();
 
-    await expect(service.resetTestData(owner, {})).resolves.toEqual({
+    await expect(
+      service.resetTestData({ ...owner, role: UserRole.ACCOUNTANT }, {}),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(businessDataReset.run).not.toHaveBeenCalled();
+  });
+
+  it('delegates the API reset and returns deletion summary counts', async () => {
+    process.env.ALLOW_BUSINESS_DATA_RESET = 'YES';
+    const { service, businessDataReset } = createService();
+
+    await expect(service.resetTestData(owner, {})).resolves.toMatchObject({
       reset: true,
+      preservedOwners: 1,
+      preservedOwnerSessions: 1,
+      deletedUsers: 2,
+      deletedUserAccessScopes: 3,
+      deletedManagements: 1,
+      deletedServices: 3,
+      deletedResponsiblePersons: 4,
+      deletedInventoryItems: 5,
+      deletedBalances: 7,
+      deletedTransactions: 8,
+      deletedDocuments: 7,
+      deletedTransfers: 3,
+      deletedIssues: 4,
+      deletedDocumentLines: 11,
+      deletedRealizations: 2,
+      deletedRealizationLines: 5,
+      deletedAttachments: 3,
+      deletedImports: 1,
+      attachmentFilesDeleted: 3,
+      orphanAttachmentFiles: 1,
     });
     expect(businessDataReset.run).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,38 +1,32 @@
-import {
-  SecurityEventType,
-  StockDocumentType,
-  UserRole,
-} from '@prisma/client';
+import { StockDocumentType, UserRole } from '@prisma/client';
+import { ManagementsService } from '../managements/managements.service';
 import {
   BUSINESS_DATA_RESET_REFUSAL,
   BusinessDataResetRefusedError,
   BusinessDataResetService,
+  type BusinessDataCounts,
   formatBusinessDataResetReport,
 } from './business-data-reset.service';
 
-type BusinessState = {
-  inventoryItems: number;
-  stockBalances: number;
-  custodyBalances: number;
-  stockDocuments: number;
-  mvoTransfers: number;
-  issues: number;
-  childIssues: number;
-  legacyIssues: number;
-  legacyDocuments: number;
-  stockDocumentLines: number;
-  attachments: number;
-  stockTransactions: number;
-  importBatches: number;
-  importRows: number;
-  accountingExportBatches: number;
-  accountingExportBatchDocuments: number;
-  accountingExportRows: number;
-  businessAuditEvents: number;
+type ResetState = BusinessDataCounts;
+
+const ownerRecord = {
+  id: 'owner-id',
+  username: 'owner',
+  passwordHash: 'unchanged-password-hash',
+  role: UserRole.OWNER,
+  isActive: true,
 };
 
-function harness() {
-  const state: BusinessState = {
+function initialState(): ResetState {
+  return {
+    nonOwnerUsers: 4,
+    userAccessScopes: 3,
+    nonOwnerSessions: 2,
+    responsiblePersons: 4,
+    managements: 1,
+    services: 3,
+    units: 2,
     inventoryItems: 4,
     stockBalances: 3,
     custodyBalances: 2,
@@ -43,56 +37,105 @@ function harness() {
     legacyIssues: 1,
     legacyDocuments: 2,
     stockDocumentLines: 6,
-    attachments: 2,
+    stockDocumentAttachments: 2,
+    issueRealizations: 2,
+    issueRealizationLines: 3,
+    issueRealizationAttachments: 1,
     stockTransactions: 8,
     importBatches: 1,
     importRows: 4,
     accountingExportBatches: 1,
     accountingExportBatchDocuments: 1,
     accountingExportRows: 2,
-    businessAuditEvents: 3,
+    securityEvents: 7,
   };
-  const deleteCount = (key: keyof BusinessState) =>
+}
+
+function harness() {
+  const state = initialState();
+  const owners = [{ ...ownerRecord }];
+  const createdServiceCodes: string[] = [];
+  let ownerSessions = 2;
+
+  const count = (key: keyof ResetState) => jest.fn(async () => state[key]);
+  const remove = (key: keyof ResetState) =>
     jest.fn(async () => {
-      const count = state[key];
+      const deleted = state[key];
       state[key] = 0;
-      return { count };
+      return { count: deleted };
     });
-  const simpleCount = (key: keyof BusinessState) =>
-    jest.fn(async () => state[key]);
 
   const tx = {
     user: {
-      count: jest.fn(async (args?: { where?: { role?: UserRole } }) =>
-        args?.where?.role === UserRole.ACCOUNTANT
-          ? 1
-          : args?.where?.role === UserRole.OWNER
-            ? 1
-            : 5,
+      count: jest.fn(
+        async (args?: { where?: { role?: UserRole | { not: UserRole } } }) => {
+          const role = args?.where?.role;
+          if (role === UserRole.OWNER) return owners.length;
+          if (typeof role === 'object' && role.not === UserRole.OWNER) {
+            return state.nonOwnerUsers;
+          }
+          return owners.length + state.nonOwnerUsers;
+        },
       ),
+      findMany: jest.fn(async () => owners.map((owner) => ({ ...owner }))),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: remove('nonOwnerUsers'),
     },
-    userSession: { count: jest.fn().mockResolvedValue(4) },
-    responsiblePerson: {
+    userAccessScope: {
+      count: count('userAccessScopes'),
+      deleteMany: remove('userAccessScopes'),
+    },
+    userSession: {
       count: jest.fn(
         async (args?: {
-          where?: { externalAccountingCode?: { not: null } };
-        }) => (args?.where?.externalAccountingCode ? 3 : 4),
+          where?: { user?: { role?: UserRole | { not: UserRole } } };
+        }) => {
+          const role = args?.where?.user?.role;
+          return role === UserRole.OWNER
+            ? ownerSessions
+            : state.nonOwnerSessions;
+        },
+      ),
+      deleteMany: remove('nonOwnerSessions'),
+    },
+    responsiblePerson: {
+      count: count('responsiblePersons'),
+      deleteMany: remove('responsiblePersons'),
+    },
+    management: {
+      count: count('managements'),
+      deleteMany: remove('managements'),
+      create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        state.managements += 1;
+        return { id: 'new-management-id', ...data };
+      }),
+    },
+    service: {
+      count: count('services'),
+      deleteMany: remove('services'),
+      createMany: jest.fn(
+        async ({ data }: { data: Array<{ code: string }> }) => {
+          createdServiceCodes.push(...data.map((service) => service.code));
+          state.services += data.length;
+          return { count: data.length };
+        },
       ),
     },
-    management: { count: jest.fn().mockResolvedValue(1) },
-    service: { count: jest.fn().mockResolvedValue(2) },
-    unit: { count: jest.fn().mockResolvedValue(3) },
+    unit: {
+      count: count('units'),
+      deleteMany: remove('units'),
+    },
     inventoryItem: {
-      count: simpleCount('inventoryItems'),
-      deleteMany: deleteCount('inventoryItems'),
+      count: count('inventoryItems'),
+      deleteMany: remove('inventoryItems'),
     },
     stockBalance: {
-      count: simpleCount('stockBalances'),
-      deleteMany: deleteCount('stockBalances'),
+      count: count('stockBalances'),
+      deleteMany: remove('stockBalances'),
     },
     custodyBalance: {
-      count: simpleCount('custodyBalances'),
-      deleteMany: deleteCount('custodyBalances'),
+      count: count('custodyBalances'),
+      deleteMany: remove('custodyBalances'),
     },
     stockDocument: {
       count: jest.fn(
@@ -115,99 +158,109 @@ function harness() {
       ),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       deleteMany: jest.fn(async () => {
-        const count = state.stockDocuments;
+        const deleted = state.stockDocuments;
         state.stockDocuments = 0;
         state.mvoTransfers = 0;
         state.issues = 0;
         state.childIssues = 0;
         state.legacyIssues = 0;
         state.legacyDocuments = 0;
-        return { count };
+        return { count: deleted };
       }),
     },
     stockDocumentLine: {
-      count: simpleCount('stockDocumentLines'),
+      count: count('stockDocumentLines'),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
-      deleteMany: deleteCount('stockDocumentLines'),
+      deleteMany: remove('stockDocumentLines'),
     },
     stockDocumentAttachment: {
-      count: simpleCount('attachments'),
+      count: count('stockDocumentAttachments'),
       findMany: jest.fn(async () =>
-        state.attachments
+        state.stockDocumentAttachments
           ? [
-              { storagePath: 'attachment-a.pdf' },
-              { storagePath: 'attachment-b.jpg' },
+              { storagePath: 'document-a.pdf' },
+              { storagePath: 'document-b.jpg' },
             ]
           : [],
       ),
-      deleteMany: deleteCount('attachments'),
-    },
-    issueRealizationAttachment: {
-      findMany: jest.fn().mockResolvedValue([]),
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
-    },
-    issueRealizationLine: {
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      deleteMany: remove('stockDocumentAttachments'),
     },
     issueRealization: {
-      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      count: count('issueRealizations'),
+      deleteMany: remove('issueRealizations'),
+    },
+    issueRealizationLine: {
+      count: count('issueRealizationLines'),
+      deleteMany: remove('issueRealizationLines'),
+    },
+    issueRealizationAttachment: {
+      count: count('issueRealizationAttachments'),
+      findMany: jest.fn(async () =>
+        state.issueRealizationAttachments
+          ? [{ storagePath: 'realization-a.png' }]
+          : [],
+      ),
+      deleteMany: remove('issueRealizationAttachments'),
     },
     stockTransaction: {
-      count: simpleCount('stockTransactions'),
+      count: count('stockTransactions'),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
-      deleteMany: deleteCount('stockTransactions'),
+      deleteMany: remove('stockTransactions'),
     },
     importBatch: {
-      count: simpleCount('importBatches'),
-      deleteMany: deleteCount('importBatches'),
+      count: count('importBatches'),
+      deleteMany: remove('importBatches'),
     },
     importRow: {
-      count: simpleCount('importRows'),
-      deleteMany: deleteCount('importRows'),
+      count: count('importRows'),
+      deleteMany: remove('importRows'),
     },
     accountingTransferExportBatch: {
-      count: simpleCount('accountingExportBatches'),
-      deleteMany: deleteCount('accountingExportBatches'),
+      count: count('accountingExportBatches'),
+      deleteMany: remove('accountingExportBatches'),
     },
     accountingTransferExportBatchDocument: {
-      count: simpleCount('accountingExportBatchDocuments'),
-      deleteMany: deleteCount('accountingExportBatchDocuments'),
+      count: count('accountingExportBatchDocuments'),
+      deleteMany: remove('accountingExportBatchDocuments'),
     },
     accountingTransferExportRow: {
-      count: simpleCount('accountingExportRows'),
-      deleteMany: deleteCount('accountingExportRows'),
+      count: count('accountingExportRows'),
+      deleteMany: remove('accountingExportRows'),
     },
     securityEvent: {
-      count: jest.fn(
-        async (args?: {
-          where?: {
-            type?: {
-              in?: SecurityEventType[];
-              notIn?: SecurityEventType[];
-            };
-          };
-        }) => (args?.where?.type?.in ? state.businessAuditEvents : 7),
-      ),
-      deleteMany: deleteCount('businessAuditEvents'),
+      count: count('securityEvents'),
+      deleteMany: remove('securityEvents'),
     },
     $executeRawUnsafe: jest.fn().mockResolvedValue(0),
-    $queryRawUnsafe: jest.fn().mockResolvedValue([{ setval: 1 }]),
   };
+
   const prisma = {
     ...tx,
-    $transaction: jest.fn(async (
-      callback: (client: typeof tx) => Promise<unknown>,
-    ) => {
-      const snapshot = { ...state };
-      try {
-        return await callback(tx);
-      } catch (error) {
-        Object.assign(state, snapshot);
-        throw error;
-      }
-    }),
+    $transaction: jest.fn(
+      async (callback: (client: typeof tx) => Promise<unknown>) => {
+        const stateSnapshot = { ...state };
+        const ownerSnapshot = owners.map((owner) => ({ ...owner }));
+        const ownerSessionSnapshot = ownerSessions;
+        try {
+          return await callback(tx);
+        } catch (error) {
+          Object.assign(state, stateSnapshot);
+          owners.splice(0, owners.length, ...ownerSnapshot);
+          ownerSessions = ownerSessionSnapshot;
+          throw error;
+        }
+      },
+    ),
   };
   const storage = {
+    listStoredFileNames: jest
+      .fn()
+      .mockResolvedValue([
+        'document-a.pdf',
+        'document-b.jpg',
+        'realization-a.png',
+        'unreferenced-orphan.pdf',
+      ]),
     stageForDeletion: jest.fn(async (storagePath: string) => ({
       storagePath,
       stagedStoragePath: `.deleting-${storagePath}`,
@@ -215,12 +268,15 @@ function harness() {
     restoreStaged: jest.fn().mockResolvedValue(undefined),
     finalizeDeletion: jest.fn().mockResolvedValue(undefined),
   };
+
   return {
     service: new BusinessDataResetService(prisma as never, storage as never),
     prisma,
     tx,
     storage,
     state,
+    owners,
+    createdServiceCodes,
   };
 }
 
@@ -238,34 +294,13 @@ describe('BusinessDataResetService', () => {
     expect(storage.stageForDeletion).not.toHaveBeenCalled();
   });
 
-  it('reports a dry run while preserving users, roles, MVO codes and structure', async () => {
+  it('reports a dry run without deleting any record or file', async () => {
     const { service, prisma, tx, storage } = harness();
 
     const report = await service.run({ allowedFlag: 'YES', dryRun: true });
 
-    expect(report.preserved).toMatchObject({
-      users: 5,
-      accountantUsers: 1,
-      ownerUsers: 1,
-      userSessions: 4,
-      responsiblePersons: 4,
-      responsiblePersonsWithAccountingCode: 3,
-      managements: 1,
-      services: 2,
-      units: 3,
-    });
-    expect(report.deleteCandidates).toMatchObject({
-      inventoryItems: 4,
-      stockBalances: 3,
-      mvoTransfers: 1,
-      issues: 2,
-      childIssues: 1,
-      legacyIssues: 1,
-      attachments: 2,
-      importBatches: 1,
-      accountingExportBatches: 1,
-      stockTransactions: 8,
-    });
+    expect(report.preserved).toEqual({ ownerUsers: 1, ownerSessions: 2 });
+    expect(report.deleteCandidates).toMatchObject(initialState());
     expect(report.deleted).toBeNull();
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(tx.inventoryItem.deleteMany).not.toHaveBeenCalled();
@@ -275,87 +310,53 @@ describe('BusinessDataResetService', () => {
     );
   });
 
-  it('deletes every business model in FK-safe order and preserves identities', async () => {
-    const { service, tx, storage } = harness();
+  it('refuses a real reset when no OWNER account exists', async () => {
+    const { service, owners, tx, storage } = harness();
+    owners.splice(0, owners.length);
+
+    await expect(service.run({ allowedFlag: 'YES' })).rejects.toThrow(
+      'no OWNER user exists',
+    );
+    expect(tx.user.deleteMany).not.toHaveBeenCalled();
+    expect(storage.stageForDeletion).not.toHaveBeenCalled();
+  });
+
+  it('deletes all non-owner, organization and business records in FK-safe order', async () => {
+    const { service, tx, storage, owners } = harness();
+    const ownerBefore = { ...owners[0] };
 
     const report = await service.run({ allowedFlag: 'YES' });
 
+    expect(report.preserved).toEqual({ ownerUsers: 1, ownerSessions: 2 });
     expect(report.currentBusinessState).toEqual(
-      expect.objectContaining(
-        Object.fromEntries(
-          Object.keys(report.deleteCandidates).map((key) => [key, 0]),
-        ),
+      Object.fromEntries(
+        Object.keys(report.deleteCandidates).map((key) => [key, 0]),
       ),
     );
-    expect(report.preserved).toMatchObject({
-      users: 5,
-      accountantUsers: 1,
-      ownerUsers: 1,
-      responsiblePersons: 4,
-      responsiblePersonsWithAccountingCode: 3,
-      managements: 1,
-      services: 2,
-      units: 3,
+    expect(owners[0]).toEqual(ownerBefore);
+    expect(tx.userAccessScope.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.userSession.deleteMany).toHaveBeenCalledWith({
+      where: { user: { role: { not: UserRole.OWNER } } },
     });
-    expect(tx.stockTransaction.updateMany).toHaveBeenCalledWith({
-      where: { reversalOfTransactionId: { not: null } },
-      data: { reversalOfTransactionId: null },
+    expect(tx.user.deleteMany).toHaveBeenCalledWith({
+      where: { role: { not: UserRole.OWNER } },
     });
-    expect(tx.stockDocumentLine.updateMany).toHaveBeenCalledWith({
-      where: { sourceTransferLineId: { not: null } },
-      data: { sourceTransferLineId: null },
-    });
-    expect(tx.stockDocument.updateMany).toHaveBeenCalledWith({
-      where: { sourceTransferId: { not: null } },
-      data: { sourceTransferId: null },
-    });
-    expect(tx.accountingTransferExportRow.deleteMany).toHaveBeenCalled();
-    expect(tx.accountingTransferExportBatchDocument.deleteMany).toHaveBeenCalled();
-    expect(tx.accountingTransferExportBatch.deleteMany).toHaveBeenCalled();
-    expect(tx.stockDocumentAttachment.deleteMany).toHaveBeenCalled();
-    expect(tx.issueRealizationAttachment.deleteMany).toHaveBeenCalled();
-    expect(tx.issueRealizationLine.deleteMany).toHaveBeenCalled();
-    expect(tx.issueRealization.deleteMany).toHaveBeenCalled();
-    expect(tx.stockTransaction.deleteMany).toHaveBeenCalled();
-    expect(tx.stockDocumentLine.deleteMany).toHaveBeenCalled();
-    expect(tx.stockDocument.deleteMany).toHaveBeenCalled();
-    expect(tx.stockBalance.deleteMany).toHaveBeenCalled();
-    expect(tx.custodyBalance.deleteMany).toHaveBeenCalled();
-    expect(tx.importRow.deleteMany).toHaveBeenCalled();
-    expect(tx.importBatch.deleteMany).toHaveBeenCalled();
-    expect(tx.inventoryItem.deleteMany).toHaveBeenCalled();
-    expect(tx.securityEvent.deleteMany).toHaveBeenCalledWith({
-      where: {
-        type: {
-          in: [
-            SecurityEventType.STOCK_DOCUMENT_ACTION,
-            SecurityEventType.IMPORT_ACTION,
-          ],
-        },
-      },
-    });
-    expect(tx.user).not.toHaveProperty('deleteMany');
-    expect(tx.responsiblePerson).not.toHaveProperty('deleteMany');
-    expect(tx.management).not.toHaveProperty('deleteMany');
-    expect(tx.service).not.toHaveProperty('deleteMany');
-    expect(tx.unit).not.toHaveProperty('deleteMany');
-    expect(storage.stageForDeletion).toHaveBeenCalledTimes(2);
-    expect(storage.finalizeDeletion).toHaveBeenCalledWith([
-      {
-        storagePath: 'attachment-a.pdf',
-        stagedStoragePath: '.deleting-attachment-a.pdf',
-      },
-      {
-        storagePath: 'attachment-b.jpg',
-        stagedStoragePath: '.deleting-attachment-b.jpg',
-      },
-    ]);
-    expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
-      'ALTER SEQUENCE "StockDocument_displayNumber_seq" RESTART WITH 1',
-    );
-    expect(tx.$executeRawUnsafe).toHaveBeenCalledWith(
-      'ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1',
-    );
+    expect(tx.responsiblePerson.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.unit.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.service.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.management.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.inventoryItem.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.stockBalance.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.custodyBalance.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.stockTransaction.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.stockDocument.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.importRow.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.importBatch.deleteMany).toHaveBeenCalledWith({});
+    expect(tx.securityEvent.deleteMany).toHaveBeenCalledWith({});
+    expect(report.attachmentFilesDeleted).toBe(3);
+    expect(report.orphanAttachmentFiles).toBe(1);
+    expect(storage.stageForDeletion).toHaveBeenCalledTimes(3);
+    expect(storage.finalizeDeletion).toHaveBeenCalledTimes(1);
     const sequenceStatements = tx.$executeRawUnsafe.mock.calls
       .map(([statement]) => statement)
       .filter((statement) => statement.startsWith('ALTER SEQUENCE'));
@@ -364,47 +365,62 @@ describe('BusinessDataResetService', () => {
       'ALTER SEQUENCE "IssueRealization_displayNumber_seq" RESTART WITH 1',
     ]);
 
-    const attachmentDeleteOrder =
-      tx.stockDocumentAttachment.deleteMany.mock.invocationCallOrder[0];
-    const transactionDeleteOrder =
-      tx.stockTransaction.deleteMany.mock.invocationCallOrder[0];
-    const lineDeleteOrder =
-      tx.stockDocumentLine.deleteMany.mock.invocationCallOrder[0];
-    const documentDeleteOrder =
-      tx.stockDocument.deleteMany.mock.invocationCallOrder[0];
-    const balanceDeleteOrder =
-      tx.stockBalance.deleteMany.mock.invocationCallOrder[0];
-    const itemDeleteOrder =
-      tx.inventoryItem.deleteMany.mock.invocationCallOrder[0];
-    expect(attachmentDeleteOrder).toBeLessThan(documentDeleteOrder);
-    expect(transactionDeleteOrder).toBeLessThan(lineDeleteOrder);
-    expect(lineDeleteOrder).toBeLessThan(documentDeleteOrder);
-    expect(documentDeleteOrder).toBeLessThan(balanceDeleteOrder);
-    expect(balanceDeleteOrder).toBeLessThan(itemDeleteOrder);
+    expect(
+      tx.stockDocumentAttachment.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(tx.stockDocument.deleteMany.mock.invocationCallOrder[0]);
+    expect(
+      tx.userAccessScope.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(tx.user.deleteMany.mock.invocationCallOrder[0]);
+    expect(
+      tx.userSession.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(tx.user.deleteMany.mock.invocationCallOrder[0]);
+    expect(tx.user.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.responsiblePerson.deleteMany.mock.invocationCallOrder[0],
+    );
+    expect(
+      tx.responsiblePerson.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(tx.unit.deleteMany.mock.invocationCallOrder[0]);
+    expect(tx.unit.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.service.deleteMany.mock.invocationCallOrder[0],
+    );
+    expect(tx.service.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.management.deleteMany.mock.invocationCallOrder[0],
+    );
   });
 
-  it('is idempotent when the business state is already empty', async () => {
+  it('does not change OWNER id, login, password hash, role or active status', async () => {
+    const { service, tx, owners } = harness();
+
+    await service.run({ allowedFlag: 'YES' });
+
+    expect(owners).toEqual([ownerRecord]);
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: {
+        role: UserRole.OWNER,
+        responsiblePersonId: { not: null },
+      },
+      data: { responsiblePersonId: null },
+    });
+  });
+
+  it('is idempotent when run repeatedly on an already clean database', async () => {
     const { service, storage } = harness();
 
     await service.run({ allowedFlag: 'YES' });
     const second = await service.run({ allowedFlag: 'YES' });
 
     expect(second.deleteCandidates).toEqual(
-      expect.objectContaining({
-        inventoryItems: 0,
-        stockBalances: 0,
-        stockDocuments: 0,
-        importBatches: 0,
-        accountingExportBatches: 0,
-      }),
+      Object.fromEntries(
+        Object.keys(second.deleteCandidates).map((key) => [key, 0]),
+      ),
     );
     expect(second.currentBusinessState).toEqual(second.deleteCandidates);
-    expect(storage.stageForDeletion).toHaveBeenCalledTimes(2);
+    expect(storage.stageForDeletion).toHaveBeenCalledTimes(3);
   });
 
   it('restores staged files when the database transaction fails', async () => {
     const { service, tx, storage, state } = harness();
-    const stateBefore = { ...state };
+    const before = { ...state };
     tx.stockDocument.deleteMany.mockRejectedValueOnce(new Error('FK failure'));
 
     await expect(service.run({ allowedFlag: 'YES' })).rejects.toThrow(
@@ -412,15 +428,35 @@ describe('BusinessDataResetService', () => {
     );
     expect(storage.restoreStaged).toHaveBeenCalledWith([
       {
-        storagePath: 'attachment-a.pdf',
-        stagedStoragePath: '.deleting-attachment-a.pdf',
+        storagePath: 'document-a.pdf',
+        stagedStoragePath: '.deleting-document-a.pdf',
       },
       {
-        storagePath: 'attachment-b.jpg',
-        stagedStoragePath: '.deleting-attachment-b.jpg',
+        storagePath: 'document-b.jpg',
+        stagedStoragePath: '.deleting-document-b.jpg',
+      },
+      {
+        storagePath: 'realization-a.png',
+        stagedStoragePath: '.deleting-realization-a.png',
       },
     ]);
     expect(storage.finalizeDeletion).not.toHaveBeenCalled();
-    expect(state).toEqual(stateBefore);
+    expect(state).toEqual(before);
+  });
+
+  it('allows creating a new Management with exactly three base services after reset', async () => {
+    const { service, prisma, state, createdServiceCodes } = harness();
+
+    await service.run({ allowedFlag: 'YES' });
+    const managements = new ManagementsService(prisma as never);
+    await managements.create({
+      name: 'Нове управління',
+      code: 'NEW',
+      isActive: true,
+    });
+
+    expect(state.managements).toBe(1);
+    expect(state.services).toBe(3);
+    expect(createdServiceCodes.sort()).toEqual(['IT', 'MTZ', 'UATZ']);
   });
 });

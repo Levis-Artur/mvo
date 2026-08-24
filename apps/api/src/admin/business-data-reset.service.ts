@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   Prisma,
-  SecurityEventType,
   StockDocumentType,
   UserRole,
 } from '@prisma/client';
@@ -15,11 +14,6 @@ export const BUSINESS_DATA_RESET_FLAG = 'ALLOW_BUSINESS_DATA_RESET';
 export const BUSINESS_DATA_RESET_FLAG_VALUE = 'YES';
 export const BUSINESS_DATA_RESET_REFUSAL =
   'REFUSED: set ALLOW_BUSINESS_DATA_RESET=YES';
-
-const BUSINESS_AUDIT_EVENT_TYPES = [
-  SecurityEventType.STOCK_DOCUMENT_ACTION,
-  SecurityEventType.IMPORT_ACTION,
-] as const;
 
 const LOCK_BUSINESS_TABLES_SQL = `
 LOCK TABLE
@@ -38,7 +32,14 @@ LOCK TABLE
   "ImportRow",
   "ImportBatch",
   "InventoryItem",
-  "SecurityEvent"
+  "UserAccessScope",
+  "UserSession",
+  "SecurityEvent",
+  "User",
+  "ResponsiblePerson",
+  "Unit",
+  "Service",
+  "Management"
 IN ACCESS EXCLUSIVE MODE
 `;
 
@@ -50,19 +51,18 @@ const RESET_DISPLAY_NUMBER_SEQUENCE_SQL = [
 type ResetClient = PrismaService | Prisma.TransactionClient;
 
 export type PreservedBusinessDataCounts = {
-  users: number;
-  accountantUsers: number;
   ownerUsers: number;
-  userSessions: number;
-  responsiblePersons: number;
-  responsiblePersonsWithAccountingCode: number;
-  managements: number;
-  services: number;
-  units: number;
-  retainedSecurityEvents: number;
+  ownerSessions: number;
 };
 
 export type BusinessDataCounts = {
+  nonOwnerUsers: number;
+  userAccessScopes: number;
+  nonOwnerSessions: number;
+  responsiblePersons: number;
+  managements: number;
+  services: number;
+  units: number;
   inventoryItems: number;
   stockBalances: number;
   custodyBalances: number;
@@ -73,14 +73,17 @@ export type BusinessDataCounts = {
   legacyIssues: number;
   legacyDocuments: number;
   stockDocumentLines: number;
-  attachments: number;
+  stockDocumentAttachments: number;
+  issueRealizations: number;
+  issueRealizationLines: number;
+  issueRealizationAttachments: number;
   stockTransactions: number;
   importBatches: number;
   importRows: number;
   accountingExportBatches: number;
   accountingExportBatchDocuments: number;
   accountingExportRows: number;
-  businessAuditEvents: number;
+  securityEvents: number;
 };
 
 export type BusinessDataResetReport = {
@@ -90,7 +93,16 @@ export type BusinessDataResetReport = {
   deleted: BusinessDataCounts | null;
   currentBusinessState: BusinessDataCounts | null;
   attachmentFilesDeleted: number;
+  orphanAttachmentFiles: number;
   documentDisplayNumberReset: boolean;
+};
+
+type PreservedOwner = {
+  id: string;
+  username: string;
+  passwordHash: string;
+  role: UserRole;
+  isActive: boolean;
 };
 
 export type BusinessDataResetOptions = {
@@ -142,6 +154,7 @@ export class BusinessDataResetService {
         deleted: null,
         currentBusinessState: null,
         attachmentFilesDeleted: 0,
+        orphanAttachmentFiles: 0,
         documentDisplayNumberReset: false,
       };
     }
@@ -152,9 +165,15 @@ export class BusinessDataResetService {
       report = await this.prisma.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(LOCK_BUSINESS_TABLES_SQL);
-          const [preservedBefore, deleteCandidates, documentAttachments, realizationAttachments] =
-            await Promise.all([
+          const [
+            preservedBefore,
+            ownersBefore,
+            deleteCandidates,
+            documentAttachments,
+            realizationAttachments,
+          ] = await Promise.all([
               this.preservedCounts(tx),
+              this.preservedOwners(tx),
               this.businessCounts(tx),
               tx.stockDocumentAttachment.findMany({
                 select: { storagePath: true },
@@ -165,6 +184,9 @@ export class BusinessDataResetService {
                 orderBy: { id: 'asc' },
               }),
             ]);
+          if (preservedBefore.ownerUsers === 0) {
+            throw new Error('Test data reset refused: no OWNER user exists');
+          }
 
           const storagePaths = [
             ...new Set(
@@ -173,6 +195,14 @@ export class BusinessDataResetService {
               ),
             ),
           ];
+          const storedFileNames =
+            await this.attachmentStorage.listStoredFileNames();
+          const referencedStoragePaths = new Set(storagePaths);
+          const orphanAttachmentFiles = storedFileNames.filter(
+            (fileName) =>
+              !fileName.startsWith('.deleting-') &&
+              !referencedStoragePaths.has(fileName),
+          ).length;
           for (const storagePath of storagePaths) {
             stagedFiles.push(
               await this.attachmentStorage.stageForDeletion(storagePath),
@@ -180,14 +210,21 @@ export class BusinessDataResetService {
           }
 
           await this.deleteBusinessData(tx);
-          if (options.onBeforeCommit) await options.onBeforeCommit(tx);
 
-          const [preservedAfter, currentBusinessState] = await Promise.all([
-            this.preservedCounts(tx),
-            this.businessCounts(tx),
-          ]);
-          this.assertPreserved(preservedBefore, preservedAfter);
+          const [preservedAfter, ownersAfter, currentBusinessState] =
+            await Promise.all([
+              this.preservedCounts(tx),
+              this.preservedOwners(tx),
+              this.businessCounts(tx),
+            ]);
+          this.assertPreserved(
+            preservedBefore,
+            preservedAfter,
+            ownersBefore,
+            ownersAfter,
+          );
           this.assertBusinessStateEmpty(currentBusinessState);
+          if (options.onBeforeCommit) await options.onBeforeCommit(tx);
           for (const statement of RESET_DISPLAY_NUMBER_SEQUENCE_SQL) {
             await tx.$executeRawUnsafe(statement);
           }
@@ -199,6 +236,7 @@ export class BusinessDataResetService {
             deleted: deleteCandidates,
             currentBusinessState,
             attachmentFilesDeleted: stagedFiles.length,
+            orphanAttachmentFiles,
             documentDisplayNumberReset: true,
           };
         },
@@ -256,59 +294,62 @@ export class BusinessDataResetService {
     await tx.importRow.deleteMany({});
     await tx.importBatch.deleteMany({});
     await tx.inventoryItem.deleteMany({});
-    await tx.securityEvent.deleteMany({
-      where: { type: { in: [...BUSINESS_AUDIT_EVENT_TYPES] } },
+    await tx.userAccessScope.deleteMany({});
+    await tx.userSession.deleteMany({
+      where: { user: { role: { not: UserRole.OWNER } } },
     });
+    await tx.user.updateMany({
+      where: {
+        role: UserRole.OWNER,
+        responsiblePersonId: { not: null },
+      },
+      data: { responsiblePersonId: null },
+    });
+    await tx.user.deleteMany({ where: { role: { not: UserRole.OWNER } } });
+    await tx.responsiblePerson.deleteMany({});
+    await tx.unit.deleteMany({});
+    await tx.service.deleteMany({});
+    await tx.management.deleteMany({});
+    await tx.securityEvent.deleteMany({});
   }
 
   private async preservedCounts(
     client: ResetClient,
   ): Promise<PreservedBusinessDataCounts> {
-    const [
-      users,
-      accountantUsers,
-      ownerUsers,
-      userSessions,
-      responsiblePersons,
-      responsiblePersonsWithAccountingCode,
-      managements,
-      services,
-      units,
-      retainedSecurityEvents,
-    ] = await Promise.all([
-      client.user.count(),
-      client.user.count({ where: { role: UserRole.ACCOUNTANT } }),
+    const [ownerUsers, ownerSessions] = await Promise.all([
       client.user.count({ where: { role: UserRole.OWNER } }),
-      client.userSession.count(),
-      client.responsiblePerson.count(),
-      client.responsiblePerson.count({
-        where: { externalAccountingCode: { not: null } },
-      }),
-      client.management.count(),
-      client.service.count(),
-      client.unit.count(),
-      client.securityEvent.count({
-        where: { type: { notIn: [...BUSINESS_AUDIT_EVENT_TYPES] } },
+      client.userSession.count({
+        where: { user: { role: UserRole.OWNER } },
       }),
     ]);
-    return {
-      users,
-      accountantUsers,
-      ownerUsers,
-      userSessions,
-      responsiblePersons,
-      responsiblePersonsWithAccountingCode,
-      managements,
-      services,
-      units,
-      retainedSecurityEvents,
-    };
+    return { ownerUsers, ownerSessions };
+  }
+
+  private preservedOwners(client: ResetClient): Promise<PreservedOwner[]> {
+    return client.user.findMany({
+      where: { role: UserRole.OWNER },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        username: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+      },
+    });
   }
 
   private async businessCounts(
     client: ResetClient,
   ): Promise<BusinessDataCounts> {
     const [
+      nonOwnerUsers,
+      userAccessScopes,
+      nonOwnerSessions,
+      responsiblePersons,
+      managements,
+      services,
+      units,
       inventoryItems,
       stockBalances,
       custodyBalances,
@@ -319,15 +360,27 @@ export class BusinessDataResetService {
       legacyIssues,
       legacyDocuments,
       stockDocumentLines,
-      attachments,
+      stockDocumentAttachments,
+      issueRealizations,
+      issueRealizationLines,
+      issueRealizationAttachments,
       stockTransactions,
       importBatches,
       importRows,
       accountingExportBatches,
       accountingExportBatchDocuments,
       accountingExportRows,
-      businessAuditEvents,
+      securityEvents,
     ] = await Promise.all([
+      client.user.count({ where: { role: { not: UserRole.OWNER } } }),
+      client.userAccessScope.count(),
+      client.userSession.count({
+        where: { user: { role: { not: UserRole.OWNER } } },
+      }),
+      client.responsiblePerson.count(),
+      client.management.count(),
+      client.service.count(),
+      client.unit.count(),
       client.inventoryItem.count(),
       client.stockBalance.count(),
       client.custodyBalance.count(),
@@ -357,17 +410,25 @@ export class BusinessDataResetService {
       }),
       client.stockDocumentLine.count(),
       client.stockDocumentAttachment.count(),
+      client.issueRealization.count(),
+      client.issueRealizationLine.count(),
+      client.issueRealizationAttachment.count(),
       client.stockTransaction.count(),
       client.importBatch.count(),
       client.importRow.count(),
       client.accountingTransferExportBatch.count(),
       client.accountingTransferExportBatchDocument.count(),
       client.accountingTransferExportRow.count(),
-      client.securityEvent.count({
-        where: { type: { in: [...BUSINESS_AUDIT_EVENT_TYPES] } },
-      }),
+      client.securityEvent.count(),
     ]);
     return {
+      nonOwnerUsers,
+      userAccessScopes,
+      nonOwnerSessions,
+      responsiblePersons,
+      managements,
+      services,
+      units,
       inventoryItems,
       stockBalances,
       custodyBalances,
@@ -378,36 +439,37 @@ export class BusinessDataResetService {
       legacyIssues,
       legacyDocuments,
       stockDocumentLines,
-      attachments,
+      stockDocumentAttachments,
+      issueRealizations,
+      issueRealizationLines,
+      issueRealizationAttachments,
       stockTransactions,
       importBatches,
       importRows,
       accountingExportBatches,
       accountingExportBatchDocuments,
       accountingExportRows,
-      businessAuditEvents,
+      securityEvents,
     };
   }
 
   private assertPreserved(
     before: PreservedBusinessDataCounts,
     after: PreservedBusinessDataCounts,
+    ownersBefore: PreservedOwner[],
+    ownersAfter: PreservedOwner[],
   ) {
     const stableKeys: (keyof PreservedBusinessDataCounts)[] = [
-      'users',
-      'accountantUsers',
       'ownerUsers',
-      'userSessions',
-      'responsiblePersons',
-      'responsiblePersonsWithAccountingCode',
-      'managements',
-      'services',
-      'units',
+      'ownerSessions',
     ];
     for (const key of stableKeys) {
       if (before[key] !== after[key]) {
         throw new Error(`Preserved model count changed during reset: ${key}`);
       }
+    }
+    if (JSON.stringify(ownersBefore) !== JSON.stringify(ownersAfter)) {
+      throw new Error('OWNER identity or credentials changed during reset');
     }
   }
 
@@ -425,16 +487,8 @@ export class BusinessDataResetService {
 
 export function formatBusinessDataResetReport(report: BusinessDataResetReport) {
   const preserved = [
-    `Users: ${report.preserved.users}`,
-    `ACCOUNTANT users: ${report.preserved.accountantUsers}`,
     `OWNER users: ${report.preserved.ownerUsers}`,
-    `User sessions: ${report.preserved.userSessions}`,
-    `ResponsiblePersons (MVO): ${report.preserved.responsiblePersons}`,
-    `MVO with externalAccountingCode: ${report.preserved.responsiblePersonsWithAccountingCode}`,
-    `Managements: ${report.preserved.managements}`,
-    `Services: ${report.preserved.services}`,
-    `Units: ${report.preserved.units}`,
-    `Security events retained: ${report.preserved.retainedSecurityEvents}`,
+    `OWNER sessions: ${report.preserved.ownerSessions}`,
   ];
   const candidates = businessCountLines(report.deleteCandidates);
   if (report.dryRun) {
@@ -456,6 +510,7 @@ export function formatBusinessDataResetReport(report: BusinessDataResetReport) {
     '=== DELETED ===',
     ...businessCountLines(report.deleted ?? report.deleteCandidates),
     `Physical attachment files: ${report.attachmentFilesDeleted}`,
+    `Orphan attachment files retained: ${report.orphanAttachmentFiles}`,
     `StockDocument displayNumber reset to №1: ${report.documentDisplayNumberReset ? 'yes' : 'no'}`,
     '',
     '=== CURRENT BUSINESS STATE ===',
@@ -465,6 +520,13 @@ export function formatBusinessDataResetReport(report: BusinessDataResetReport) {
 
 function businessCountLines(counts: BusinessDataCounts) {
   return [
+    `Non-OWNER users: ${counts.nonOwnerUsers}`,
+    `UserAccessScopes: ${counts.userAccessScopes}`,
+    `Non-OWNER sessions: ${counts.nonOwnerSessions}`,
+    `ResponsiblePersons: ${counts.responsiblePersons}`,
+    `Managements: ${counts.managements}`,
+    `Services: ${counts.services}`,
+    `Units: ${counts.units}`,
     `InventoryItems: ${counts.inventoryItems}`,
     `StockBalances: ${counts.stockBalances}`,
     `CustodyBalances: ${counts.custodyBalances}`,
@@ -475,13 +537,16 @@ function businessCountLines(counts: BusinessDataCounts) {
     `Legacy/standalone ISSUE documents: ${counts.legacyIssues}`,
     `Legacy TRANSFER/ASSIGNMENT documents: ${counts.legacyDocuments}`,
     `StockDocumentLines: ${counts.stockDocumentLines}`,
-    `StockDocumentAttachments: ${counts.attachments}`,
+    `StockDocumentAttachments: ${counts.stockDocumentAttachments}`,
+    `IssueRealizations: ${counts.issueRealizations}`,
+    `IssueRealizationLines: ${counts.issueRealizationLines}`,
+    `IssueRealizationAttachments: ${counts.issueRealizationAttachments}`,
     `StockTransactions: ${counts.stockTransactions}`,
     `ImportBatches: ${counts.importBatches}`,
     `ImportRows: ${counts.importRows}`,
     `AccountingTransferExportBatches: ${counts.accountingExportBatches}`,
     `AccountingTransferExportBatchDocuments: ${counts.accountingExportBatchDocuments}`,
     `AccountingTransferExportRows: ${counts.accountingExportRows}`,
-    `Business audit events: ${counts.businessAuditEvents}`,
+    `SecurityEvents: ${counts.securityEvents}`,
   ];
 }

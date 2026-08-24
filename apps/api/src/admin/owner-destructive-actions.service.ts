@@ -217,12 +217,12 @@ export class OwnerDestructiveActionsService {
   async resetTestData(
     actor: CurrentUser,
     context: RequestAuditContext,
-  ): Promise<{ reset: true }> {
+  ) {
     this.assertEnabledOwner(actor);
     if (!isBusinessDataResetAllowed(process.env.ALLOW_BUSINESS_DATA_RESET)) {
       throw new ForbiddenException(BUSINESS_DATA_RESET_REFUSAL);
     }
-    await this.businessDataReset.run({
+    const report = await this.businessDataReset.run({
       allowedFlag: process.env.ALLOW_BUSINESS_DATA_RESET,
       onBeforeCommit: async (tx) => {
         await this.audit(tx, actor, 'inventory-items', 'ALL', 'Business data', {
@@ -233,7 +233,38 @@ export class OwnerDestructiveActionsService {
         });
       },
     });
-    return { reset: true as const };
+    const deleted = report.deleted ?? report.deleteCandidates;
+    return {
+      reset: true as const,
+      preservedOwners: report.preserved.ownerUsers,
+      preservedOwnerSessions: report.preserved.ownerSessions,
+      deletedUsers: deleted.nonOwnerUsers,
+      deletedUserAccessScopes: deleted.userAccessScopes,
+      deletedManagements: deleted.managements,
+      deletedServices: deleted.services,
+      deletedUnits: deleted.units,
+      deletedResponsiblePersons: deleted.responsiblePersons,
+      deletedInventoryItems: deleted.inventoryItems,
+      deletedStockBalances: deleted.stockBalances,
+      deletedCustodyBalances: deleted.custodyBalances,
+      deletedBalances: deleted.stockBalances + deleted.custodyBalances,
+      deletedTransactions: deleted.stockTransactions,
+      deletedDocuments: deleted.stockDocuments,
+      deletedTransfers: deleted.mvoTransfers,
+      deletedIssues: deleted.issues,
+      deletedDocumentLines: deleted.stockDocumentLines,
+      deletedRealizations: deleted.issueRealizations,
+      deletedRealizationLines: deleted.issueRealizationLines,
+      deletedAttachments:
+        deleted.stockDocumentAttachments +
+        deleted.issueRealizationAttachments,
+      deletedImports: deleted.importBatches,
+      deletedImportRows: deleted.importRows,
+      deletedAccountingExportBatches: deleted.accountingExportBatches,
+      deletedSecurityEvents: deleted.securityEvents,
+      attachmentFilesDeleted: report.attachmentFilesDeleted,
+      orphanAttachmentFiles: report.orphanAttachmentFiles,
+    };
   }
 
   private assertEnabledOwner(actor: CurrentUser | undefined): void {
