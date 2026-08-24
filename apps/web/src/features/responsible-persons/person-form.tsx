@@ -89,10 +89,24 @@ export function PersonForm({
       setServices([]);
       return;
     }
+    const managementId = form.managementId;
+    let cancelled = false;
+    setServices([]);
     apiClient
-      .services({ managementId: form.managementId })
-      .then(setServices)
-      .catch((reason: unknown) => setError(getErrorMessage(reason)));
+      .services({ managementId })
+      .then((items) => {
+        if (!cancelled) {
+          setServices(
+            items.filter((service) => service.managementId === managementId),
+          );
+        }
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) setError(getErrorMessage(reason));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [form.managementId]);
 
   useEffect(() => {

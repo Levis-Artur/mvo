@@ -1,4 +1,44 @@
-import type { ResponsiblePerson, UserRole, UserSummary } from '../../lib/types';
+import type { ResponsiblePerson, Service, UserRole, UserSummary } from '../../lib/types';
+
+const baseServiceLabels: Record<string, string> = {
+  IT: 'ІТ',
+  MTZ: 'МТЗ',
+  UATZ: 'УАТЗ',
+};
+
+const baseServiceOrder = ['IT', 'MTZ', 'UATZ'];
+
+export function serviceCodeLabel(code: string) {
+  return baseServiceLabels[code] ?? code;
+}
+
+export function serviceCodesForScope(
+  services: Service[],
+  managementId: string | null,
+) {
+  const uniqueCodes = [
+    ...new Set(
+      services
+        .filter(
+          (service) =>
+            service.isActive &&
+            (!managementId || service.managementId === managementId),
+        )
+        .map((service) => service.code),
+    ),
+  ];
+
+  return uniqueCodes.sort((left, right) => {
+    const leftIndex = baseServiceOrder.indexOf(left);
+    const rightIndex = baseServiceOrder.indexOf(right);
+    if (leftIndex >= 0 || rightIndex >= 0) {
+      if (leftIndex < 0) return 1;
+      if (rightIndex < 0) return -1;
+      return leftIndex - rightIndex;
+    }
+    return left.localeCompare(right, 'uk-UA');
+  });
+}
 
 export type UserUiAccess = { visible: boolean; readOnly: boolean; destructive: boolean };
 

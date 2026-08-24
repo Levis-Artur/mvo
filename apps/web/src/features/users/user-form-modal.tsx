@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
 import type {
@@ -14,6 +14,7 @@ import type {
 import { Button, Checkbox, ErrorState, FormField, Input, LoadingState, Modal, Select } from '@/components/ui';
 import { fullName, getErrorMessage } from '@/components/common';
 import { usersService } from './users.service';
+import { serviceCodeLabel, serviceCodesForScope } from './user-model';
 
 type AccessScopeDraft = UserAccessScopeInput & { key: string };
 
@@ -66,20 +67,8 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
       .finally(() => setLoadingPersons(false));
   }, [user]);
 
-  const allServiceCodes = useMemo(
-    () => [...new Set(services.map((service) => service.code))].sort(),
-    [services],
-  );
-
   function serviceCodesFor(managementId: string | null) {
-    if (!managementId) return allServiceCodes;
-    return [
-      ...new Set(
-        services
-          .filter((service) => service.managementId === managementId)
-          .map((service) => service.code),
-      ),
-    ].sort();
+    return serviceCodesForScope(services, managementId);
   }
 
   function updateScope(
@@ -194,10 +183,10 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
                   const serviceCodes = serviceCodesFor(scope.managementId);
                   const description = scope.managementId
                     ? scope.serviceCode
-                      ? `${scope.serviceCode} — ${management?.name ?? 'обране управління'}`
+                      ? `${serviceCodeLabel(scope.serviceCode)} — ${management?.name ?? 'обране управління'}`
                       : `Усі служби — ${management?.name ?? 'обране управління'}`
                     : scope.serviceCode
-                      ? `${scope.serviceCode} — усі управління`
+                      ? `${serviceCodeLabel(scope.serviceCode)} — усі управління`
                       : 'Виберіть управління або службу';
                   return (
                     <div className="user-access-scope-row" key={scope.key}>
@@ -234,7 +223,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
                         >
                           <option value="">Усі служби</option>
                           {serviceCodes.map((code) => (
-                            <option key={code} value={code}>{code}</option>
+                            <option key={code} value={code}>{serviceCodeLabel(code)}</option>
                           ))}
                         </Select>
                       </FormField>

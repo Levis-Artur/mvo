@@ -18,6 +18,15 @@ async function main() {
     },
   });
 
+  await prisma.service.createMany({
+    data: [
+      { managementId: management.id, code: 'IT', name: 'ІТ', isActive: true },
+      { managementId: management.id, code: 'MTZ', name: 'МТЗ', isActive: true },
+      { managementId: management.id, code: 'UATZ', name: 'УАТЗ', isActive: true },
+    ],
+    skipDuplicates: true,
+  });
+
   const supportService = await prisma.service.upsert({
     where: {
       managementId_code: {

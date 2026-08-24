@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateManagementDto } from './dto/create-management.dto';
 import { UpdateManagementDto } from './dto/update-management.dto';
+import { baseServicesForManagement } from '../services/base-services';
 
 @Injectable()
 export class ManagementsService {
@@ -50,7 +51,14 @@ export class ManagementsService {
 
   async create(dto: CreateManagementDto) {
     try {
-      return await this.prisma.management.create({ data: dto });
+      return await this.prisma.$transaction(async (transaction) => {
+        const management = await transaction.management.create({ data: dto });
+        await transaction.service.createMany({
+          data: baseServicesForManagement(management.id),
+          skipDuplicates: true,
+        });
+        return management;
+      });
     } catch (error) {
       this.handleUniqueError(error);
     }

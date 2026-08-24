@@ -1,5 +1,10 @@
-import type { UserSummary } from '../../lib/types';
-import { safeUserPresentation, userUiAccess } from './user-model';
+import type { Service, UserSummary } from '../../lib/types';
+import {
+  safeUserPresentation,
+  serviceCodeLabel,
+  serviceCodesForScope,
+  userUiAccess,
+} from './user-model';
 
 const user = {
   id: 'user-1', username: 'owner', role: 'OWNER', isActive: true,
@@ -23,5 +28,34 @@ describe('users presentation permissions', () => {
     const keys = Object.keys(safeUserPresentation(user));
     expect(keys).not.toContain('passwordHash');
     expect(keys).not.toContain('sessionToken');
+  });
+
+  it('uses services of a selected management for manager scopes', () => {
+    const services = [
+      { id: '1', code: 'IT', managementId: 'm-1', isActive: true },
+      { id: '2', code: 'MTZ', managementId: 'm-1', isActive: true },
+      { id: '3', code: 'IT', managementId: 'm-2', isActive: true },
+      { id: '4', code: 'UATZ', managementId: 'm-2', isActive: true },
+    ] as Service[];
+
+    expect(serviceCodesForScope(services, 'm-1')).toEqual(['IT', 'MTZ']);
+  });
+
+  it('deduplicates service codes across all managements', () => {
+    const services = [
+      { id: '1', code: 'IT', managementId: 'm-1', isActive: true },
+      { id: '2', code: 'IT', managementId: 'm-2', isActive: true },
+      { id: '3', code: 'MTZ', managementId: 'm-2', isActive: true },
+      { id: '4', code: 'UATZ', managementId: 'm-2', isActive: true },
+    ] as Service[];
+
+    expect(serviceCodesForScope(services, null)).toEqual([
+      'IT',
+      'MTZ',
+      'UATZ',
+    ]);
+    expect(serviceCodeLabel('IT')).toBe('ІТ');
+    expect(serviceCodeLabel('MTZ')).toBe('МТЗ');
+    expect(serviceCodeLabel('UATZ')).toBe('УАТЗ');
   });
 });

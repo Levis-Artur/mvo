@@ -79,8 +79,26 @@ beforeEach(() => {
     },
     {
       id: 'service-2',
-      name: 'MTZ Львів',
+      name: 'МТЗ Волинь',
       code: 'MTZ',
+      managementId: 'management-1',
+      isActive: true,
+      createdAt: '',
+      updatedAt: '',
+    },
+    {
+      id: 'service-3',
+      name: 'УАТЗ Волинь',
+      code: 'UATZ',
+      managementId: 'management-1',
+      isActive: true,
+      createdAt: '',
+      updatedAt: '',
+    },
+    {
+      id: 'service-4',
+      name: 'ІТ Львів',
+      code: 'IT',
       managementId: 'management-2',
       isActive: true,
       createdAt: '',
@@ -217,6 +235,37 @@ describe('UserFormModal manager access scopes', () => {
     expect(
       (screen.getAllByLabelText('Служба')[1] as HTMLSelectElement).value,
     ).toBe('MTZ');
+  });
+
+  it('shows canonical services for the selected management and unique codes globally', async () => {
+    const user = userEvent.setup();
+    render(
+      <UserFormModal
+        mode="users"
+        user={manager}
+        onClose={jest.fn()}
+        onSaved={jest.fn()}
+      />,
+    );
+    await waitForFormLoaded();
+
+    await user.click(screen.getByRole('button', { name: '+ Додати область' }));
+    const management = screen.getByLabelText('Управління');
+    const service = screen.getByLabelText('Служба') as HTMLSelectElement;
+    expect([...service.options].map((option) => option.text)).toEqual([
+      'Усі служби',
+      'ІТ',
+      'МТЗ',
+      'УАТЗ',
+    ]);
+
+    await user.selectOptions(management, 'management-1');
+    expect([...service.options].map((option) => option.text)).toEqual([
+      'Усі служби',
+      'ІТ',
+      'МТЗ',
+      'УАТЗ',
+    ]);
   });
 
   it('saves a new manager and then replaces the complete scope set', async () => {

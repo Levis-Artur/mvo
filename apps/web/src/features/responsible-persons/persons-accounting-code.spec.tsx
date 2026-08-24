@@ -28,6 +28,13 @@ const management = {
   updatedAt: '2026-07-29T00:00:00.000Z',
 } satisfies Management;
 
+const secondManagement = {
+  ...management,
+  id: 'management-2',
+  name: 'Друге управління',
+  code: 'M2',
+} satisfies Management;
+
 const service = {
   id: 'service-1',
   name: 'Служба забезпечення',
@@ -94,6 +101,56 @@ afterEach(() => {
 });
 
 describe('MVO accounting code form', () => {
+  it('reloads and shows only services of the selected management', async () => {
+    const user = userEvent.setup();
+    const baseServices = [
+      { ...service, id: 'it-1', code: 'IT', name: 'ІТ' },
+      { ...service, id: 'mtz-1', code: 'MTZ', name: 'МТЗ' },
+      { ...service, id: 'uatz-1', code: 'UATZ', name: 'УАТЗ' },
+    ];
+    const secondServices = [
+      {
+        ...service,
+        id: 'it-2',
+        code: 'IT',
+        name: 'ІТ другого управління',
+        managementId: secondManagement.id,
+      },
+    ];
+    api.managements.mockResolvedValue([management, secondManagement]);
+    api.services.mockImplementation(({ managementId }) =>
+      Promise.resolve(
+        managementId === management.id ? baseServices : secondServices,
+      ),
+    );
+
+    render(<PersonForm person={null} onClose={jest.fn()} onSaved={jest.fn()} />);
+    await user.selectOptions(
+      await screen.findByLabelText(/Управління/),
+      management.id,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'УАТЗ' })).not.toBeNull(),
+    );
+    expect(screen.getByRole('option', { name: 'ІТ' })).not.toBeNull();
+    expect(screen.getByRole('option', { name: 'МТЗ' })).not.toBeNull();
+
+    await user.selectOptions(
+      screen.getByLabelText(/Управління/),
+      secondManagement.id,
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: 'ІТ другого управління' }),
+      ).not.toBeNull(),
+    );
+    expect(screen.queryByRole('option', { name: 'МТЗ' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'УАТЗ' })).toBeNull();
+    expect(api.services).toHaveBeenLastCalledWith({
+      managementId: secondManagement.id,
+    });
+  });
+
   it('requires the code, preserves 0057 as text, and sends it unchanged', async () => {
     const user = userEvent.setup();
     render(<PersonForm person={null} onClose={jest.fn()} onSaved={jest.fn()} />);
