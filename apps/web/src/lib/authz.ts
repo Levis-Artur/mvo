@@ -83,6 +83,7 @@ export const roleLabels: Record<UserRole, string> = {
   ACCOUNTANT: 'Бухгалтер',
   DPP_ADMIN: 'Адміністратор ДПП',
   MVO: 'Матеріально відповідальна особа',
+  ORG_MANAGER: 'Менеджер',
 };
 
 const permissions: Record<
@@ -142,6 +143,11 @@ const permissions: Record<
     stockDocuments: ['read', 'write'],
     profile: ['read', 'write'],
   },
+  ORG_MANAGER: {
+    responsiblePersons: ['read'],
+    stock: ['read'],
+    profile: ['read', 'write'],
+  },
 };
 
 const navigationByRole: Record<UserRole, NavigationItem[]> = {
@@ -197,6 +203,11 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
     nav('Моє майно', '/my-stock', 'my-stock', 'ownStock'),
     nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
     nav('Видачі', '/issues', 'issues', 'stockDocuments'),
+    nav('Профіль', '/profile', 'profile', 'profile'),
+  ],
+  ORG_MANAGER: [
+    nav('МВО', '/persons', 'persons', 'responsiblePersons'),
+    nav('Залишки', '/stock', 'stock', 'stock'),
     nav('Профіль', '/profile', 'profile', 'profile'),
   ],
 };
@@ -420,7 +431,13 @@ export function getAssignableUserRoles(
     return ['OWNER'] satisfies UserRole[];
   }
 
-  return ['AUDITOR', 'ACCOUNTANT', 'DPP_ADMIN', 'MVO'] satisfies UserRole[];
+  return [
+    'AUDITOR',
+    'ACCOUNTANT',
+    'DPP_ADMIN',
+    'ORG_MANAGER',
+    'MVO',
+  ] satisfies UserRole[];
 }
 
 export function requiresResponsiblePerson(role: UserRole) {

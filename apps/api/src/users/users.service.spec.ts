@@ -55,11 +55,20 @@ function createService(prisma = createPrismaMock()) {
     ),
     hashPassword: jest.fn(async () => 'hashed-password'),
   };
+  const accessScopes = {
+    listForUser: jest.fn().mockResolvedValue([]),
+    replaceForUser: jest.fn().mockResolvedValue([]),
+  };
 
   return {
-    service: new UsersService(prisma as never, auth as never),
+    service: new UsersService(
+      prisma as never,
+      auth as never,
+      accessScopes as never,
+    ),
     prisma,
     auth,
+    accessScopes,
   };
 }
 
@@ -168,6 +177,54 @@ describe('UsersService', () => {
         data: expect.objectContaining({
           role: UserRole.ORG_MANAGER,
           responsiblePersonId: null,
+        }),
+      }),
+    );
+  });
+
+  it('allows only OWNER to read and replace manager scopes', async () => {
+    const { service, accessScopes } = createService();
+    accessScopes.listForUser.mockResolvedValue([{ id: 'scope-1' }]);
+
+    await expect(service.findAccessScopes(owner, 'manager-id')).resolves.toEqual([
+      { id: 'scope-1' },
+    ]);
+    await service.replaceAccessScopes(
+      owner,
+      'manager-id',
+      [{ managementId: 'management-1' }],
+      context,
+    );
+
+    expect(accessScopes.listForUser).toHaveBeenCalledWith('manager-id');
+    expect(accessScopes.replaceForUser).toHaveBeenCalledWith('manager-id', [
+      { managementId: 'management-1' },
+    ]);
+    await expect(
+      service.findAccessScopes(dppAdmin, 'manager-id'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.replaceAccessScopes(dppAdmin, 'manager-id', [], context),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('atomically clears scopes when ORG_MANAGER changes to another role', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findFirst.mockResolvedValue(user(UserRole.ORG_MANAGER));
+    prisma.user.update.mockResolvedValue(user(UserRole.AUDITOR));
+
+    await service.update(
+      owner,
+      'manager-id',
+      { role: UserRole.AUDITOR },
+      context,
+    );
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: UserRole.AUDITOR,
+          accessScopes: { deleteMany: {} },
         }),
       }),
     );

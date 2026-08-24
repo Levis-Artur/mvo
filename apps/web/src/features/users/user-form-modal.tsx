@@ -1,12 +1,30 @@
 'use client';
 
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
-import type { ResponsiblePerson, UserRole, UserSummary } from '@/lib/types';
+import type {
+  Management,
+  ResponsiblePerson,
+  Service,
+  UserAccessScopeInput,
+  UserRole,
+  UserSummary,
+} from '@/lib/types';
 import { Button, Checkbox, ErrorState, FormField, Input, LoadingState, Modal, Select } from '@/components/ui';
 import { fullName, getErrorMessage } from '@/components/common';
 import { usersService } from './users.service';
+
+type AccessScopeDraft = UserAccessScopeInput & { key: string };
+
+let nextScopeKey = 0;
+
+function scopeDraft(
+  scope: UserAccessScopeInput = { managementId: null, serviceCode: null },
+): AccessScopeDraft {
+  nextScopeKey += 1;
+  return { ...scope, key: `access-scope-${nextScopeKey}` };
+}
 
 export function UserFormModal({ mode, user, onClose, onSaved }: {
   mode: 'users' | 'mvoUsers';
@@ -19,28 +37,99 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
   const [responsiblePersonId, setResponsiblePersonId] = useState(user?.responsiblePersonId ?? '');
   const [mustChangePassword, setMustChangePassword] = useState(user?.mustChangePassword ?? true);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
+  const [managements, setManagements] = useState<Management[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [accessScopes, setAccessScopes] = useState<AccessScopeDraft[]>([]);
   const [loadingPersons, setLoadingPersons] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const ownerMode = mode === 'users';
+  const selectedRole = resolveUserFormRole(mode, role);
+  const isManager = selectedRole === 'ORG_MANAGER';
 
   useEffect(() => {
-    fetchAllPages((pagination) => usersService.responsiblePersons({ ...pagination, isActive: true }))
-      .then(setPersons).catch((reason: unknown) => setError(getErrorMessage(reason)))
+    Promise.all([
+      fetchAllPages((pagination) => usersService.responsiblePersons({ ...pagination, isActive: true })),
+      usersService.managements(),
+      usersService.services(),
+      user?.role === 'ORG_MANAGER'
+        ? usersService.userAccessScopes(user.id)
+        : Promise.resolve([]),
+    ])
+      .then(([nextPersons, nextManagements, nextServices, nextScopes]) => {
+        setPersons(nextPersons);
+        setManagements(nextManagements.filter((item) => item.isActive));
+        setServices(nextServices.filter((item) => item.isActive));
+        setAccessScopes(nextScopes.map((scope) => scopeDraft(scope)));
+      })
+      .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoadingPersons(false));
-  }, []);
+  }, [user]);
+
+  const allServiceCodes = useMemo(
+    () => [...new Set(services.map((service) => service.code))].sort(),
+    [services],
+  );
+
+  function serviceCodesFor(managementId: string | null) {
+    if (!managementId) return allServiceCodes;
+    return [
+      ...new Set(
+        services
+          .filter((service) => service.managementId === managementId)
+          .map((service) => service.code),
+      ),
+    ].sort();
+  }
+
+  function updateScope(
+    key: string,
+    patch: Partial<UserAccessScopeInput>,
+  ) {
+    setAccessScopes((current) =>
+      current.map((scope) =>
+        scope.key === key ? { ...scope, ...patch } : scope,
+      ),
+    );
+  }
+
+  function normalizedScopes(): UserAccessScopeInput[] | null {
+    const scopes = accessScopes.map(({ managementId, serviceCode }) => ({
+      managementId: managementId || null,
+      serviceCode: serviceCode || null,
+    }));
+    if (scopes.some((scope) => !scope.managementId && !scope.serviceCode)) {
+      setError('Для кожної області виберіть управління або службу. Глобальний доступ менеджеру не дозволено.');
+      return null;
+    }
+    const keys = scopes.map(
+      (scope) => `${scope.managementId ?? ''}\u0000${scope.serviceCode ?? ''}`,
+    );
+    if (new Set(keys).size !== keys.length) {
+      setError('Однакові області доступу не можна додавати двічі.');
+      return null;
+    }
+    return scopes;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError('');
-    const selectedRole = resolveUserFormRole(mode, role);
     const selectedResponsiblePersonId = requiresResponsiblePerson(selectedRole)
       ? responsiblePersonId || null
       : null;
+    const scopes = isManager ? normalizedScopes() : [];
+    if (isManager && !scopes) {
+      setSaving(false);
+      return;
+    }
     try {
       if (user) {
         await usersService.updateUser(user.id, { username: username.trim(), role: selectedRole, responsiblePersonId: selectedResponsiblePersonId, mustChangePassword });
+        if (isManager) {
+          await usersService.replaceUserAccessScopes(user.id, scopes ?? []);
+        }
         onSaved();
       } else {
         const response = await usersService.createUser({
@@ -48,6 +137,9 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
           role: selectedRole,
           responsiblePersonId: selectedResponsiblePersonId ?? undefined,
         });
+        if (isManager) {
+          await usersService.replaceUserAccessScopes(response.user.id, scopes ?? []);
+        }
         onSaved(response.temporaryPassword);
       }
     } catch (reason) {
@@ -59,7 +151,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
 
   const footer = <><Button variant="outline" type="button" onClick={onClose}>Скасувати</Button><Button disabled={saving || loadingPersons} form="user-form" type="submit">{saving ? 'Збереження…' : 'Зберегти'}</Button></>;
   return (
-    <Modal closeOnEscape={!saving} footer={footer} title={user ? 'Редагування користувача' : 'Новий користувач'} onClose={onClose}>
+    <Modal closeOnEscape={!saving} footer={footer} size={isManager ? 'large' : 'medium'} title={user ? 'Редагування користувача' : 'Новий користувач'} onClose={onClose}>
       <form className="grid gap-4" id="user-form" onSubmit={submit}>
         {error ? <ErrorState message={error} /> : null}
         {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
@@ -77,6 +169,97 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
             {persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
           </Select>
         </FormField>
+        {isManager ? (
+          <section aria-labelledby="access-scopes-title" className="user-access-scopes">
+            <div className="user-access-scopes__header">
+              <div>
+                <h3 id="access-scopes-title">Області доступу</h3>
+                <p>Менеджер має право переглядати дані МВО лише в зазначених областях доступу.</p>
+              </div>
+              <Button
+                size="compact"
+                type="button"
+                variant="outline"
+                onClick={() => setAccessScopes((current) => [...current, scopeDraft()])}
+              >
+                + Додати область
+              </Button>
+            </div>
+            {accessScopes.length ? (
+              <div className="user-access-scopes__list">
+                {accessScopes.map((scope, index) => {
+                  const management = managements.find(
+                    (item) => item.id === scope.managementId,
+                  );
+                  const serviceCodes = serviceCodesFor(scope.managementId);
+                  const description = scope.managementId
+                    ? scope.serviceCode
+                      ? `${scope.serviceCode} — ${management?.name ?? 'обране управління'}`
+                      : `Усі служби — ${management?.name ?? 'обране управління'}`
+                    : scope.serviceCode
+                      ? `${scope.serviceCode} — усі управління`
+                      : 'Виберіть управління або службу';
+                  return (
+                    <div className="user-access-scope-row" key={scope.key}>
+                      <FormField label="Управління" hint={description}>
+                        <Select
+                          value={scope.managementId ?? ''}
+                          onChange={(event) => {
+                            const managementId = event.target.value || null;
+                            const nextServiceCodes = serviceCodesFor(managementId);
+                            updateScope(scope.key, {
+                              managementId,
+                              serviceCode:
+                                scope.serviceCode &&
+                                !nextServiceCodes.includes(scope.serviceCode)
+                                  ? null
+                                  : scope.serviceCode,
+                            });
+                          }}
+                        >
+                          <option value="">Усі управління</option>
+                          {managements.map((item) => (
+                            <option key={item.id} value={item.id}>{item.name}</option>
+                          ))}
+                        </Select>
+                      </FormField>
+                      <FormField label="Служба">
+                        <Select
+                          value={scope.serviceCode ?? ''}
+                          onChange={(event) =>
+                            updateScope(scope.key, {
+                              serviceCode: event.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">Усі служби</option>
+                          {serviceCodes.map((code) => (
+                            <option key={code} value={code}>{code}</option>
+                          ))}
+                        </Select>
+                      </FormField>
+                      <Button
+                        aria-label={`Видалити область ${index + 1}`}
+                        size="compact"
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          setAccessScopes((current) =>
+                            current.filter((item) => item.key !== scope.key),
+                          )
+                        }
+                      >
+                        Видалити
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="user-access-scopes__empty">Області доступу ще не додано.</p>
+            )}
+          </section>
+        ) : null}
         <FormField label="Пароль"><Checkbox checked={mustChangePassword} label="Вимагати зміну пароля під час наступного входу" onChange={(event) => setMustChangePassword(event.target.checked)} /></FormField>
       </form>
     </Modal>

@@ -75,6 +75,14 @@
 .users-table__person,
 .users-table__management { min-width: 180px; max-width: 280px; overflow-wrap: anywhere; word-break: normal; }
 .users-table__actions { width: 54px; padding-inline: var(--space-1) !important; white-space: nowrap; }
+.user-access-scopes { display: grid; min-width: 0; gap: var(--space-3); border: 1px solid var(--color-border-light); border-radius: var(--radius-md); background: var(--color-surface-muted); padding: var(--space-3); }
+.user-access-scopes__header { display: flex; min-width: 0; align-items: start; justify-content: space-between; gap: var(--space-3); }
+.user-access-scopes__header h3 { margin: 0; font-size: var(--text-md); }
+.user-access-scopes__header p, .user-access-scopes__empty { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font-size: var(--text-sm); }
+.user-access-scopes__list { display: grid; min-width: 0; gap: var(--space-3); }
+.user-access-scope-row { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: var(--space-3); border-top: 1px solid var(--color-border-light); padding-top: var(--space-3); }
+.user-access-scope-row .form-field { min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.user-access-scope-row .form-field__hint { grid-column: 1; }
 .data-table__footer { border-top: 1px solid var(--color-border-light); background: var(--color-surface-muted); padding: 0.4rem 0.65rem; color: var(--color-text-secondary); font-size: var(--text-xs); }
 .data-table-state { max-width: 100%; }
 .stock-source-picker { display: grid; min-width: 0; gap: var(--space-3); }

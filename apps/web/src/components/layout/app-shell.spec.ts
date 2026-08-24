@@ -74,6 +74,7 @@ describe('AppShell presentation model', () => {
     expect(canAccessPath(user('MVO'), '/accounting', 'accounting')).toBe(false);
     expect(requiresResponsiblePerson('ACCOUNTANT')).toBe(false);
     expect(getAssignableUserRoles('users')).toContain('ACCOUNTANT');
+    expect(getAssignableUserRoles('users')).toContain('ORG_MANAGER');
   });
 
   it('зберігає AUDITOR у read-only режимі та не відкриває користувачів для MVO', () => {

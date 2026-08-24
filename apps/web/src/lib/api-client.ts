@@ -60,6 +60,8 @@ import type {
   UpdateServiceDto,
   UpdateUnitDto,
   UserRole,
+  UserAccessScope,
+  UserAccessScopeInput,
   UserSummary,
 } from './types';
 
@@ -211,7 +213,7 @@ async function uploadRequest<T>(path: string, body: FormData): Promise<T> {
 }
 
 function mutation<TBody>(
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body: TBody,
 ): RequestInit {
   return {
@@ -300,6 +302,13 @@ export const apiClient = {
       mustChangePassword?: boolean;
     },
   ) => request<UserSummary>(`/users/${id}`, mutation('PATCH', body)),
+  userAccessScopes: (id: string) =>
+    request<UserAccessScope[]>(`/users/${id}/access-scopes`),
+  replaceUserAccessScopes: (id: string, scopes: UserAccessScopeInput[]) =>
+    request<UserAccessScope[]>(
+      `/users/${id}/access-scopes`,
+      mutation('PUT', { scopes }),
+    ),
   resetUserPassword: (id: string) =>
     request<{ user: UserSummary; temporaryPassword: string }>(
       `/users/${id}/reset-password`,

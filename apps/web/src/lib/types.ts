@@ -1,6 +1,24 @@
 export type EntityStatus = boolean;
 
-export type UserRole = 'OWNER' | 'AUDITOR' | 'ACCOUNTANT' | 'DPP_ADMIN' | 'MVO';
+export type UserRole =
+  | 'OWNER'
+  | 'AUDITOR'
+  | 'ACCOUNTANT'
+  | 'DPP_ADMIN'
+  | 'MVO'
+  | 'ORG_MANAGER';
+
+export type UserAccessScopeInput = {
+  managementId: string | null;
+  serviceCode: string | null;
+};
+
+export type UserAccessScope = UserAccessScopeInput & {
+  id: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type AuthUser = {
   id: string;
@@ -9,6 +27,7 @@ export type AuthUser = {
   isActive: boolean;
   mustChangePassword: boolean;
   responsiblePersonId: string | null;
+  accessScopes?: UserAccessScopeInput[];
   lastLoginAt?: string | null;
 };
 

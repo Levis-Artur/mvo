@@ -9,6 +9,10 @@ import { Prisma, SecurityEventType, User, UserRole } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { AuthService } from '../auth/auth.service';
 import type { CurrentUser } from '../auth/auth.types';
+import {
+  type CreateUserAccessScopeInput,
+  UserAccessScopesService,
+} from '../auth/user-access-scopes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -51,6 +55,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly userAccessScopesService: UserAccessScopesService,
   ) {}
 
   async findAll(actor: CurrentUser) {
@@ -79,6 +84,23 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async findAccessScopes(actor: CurrentUser, id: string) {
+    this.assertOwner(actor);
+    return this.userAccessScopesService.listForUser(id);
+  }
+
+  async replaceAccessScopes(
+    actor: CurrentUser,
+    id: string,
+    scopes: CreateUserAccessScopeInput[],
+    context: RequestContext,
+  ) {
+    this.assertOwner(actor);
+    const result = await this.userAccessScopesService.replaceForUser(id, scopes);
+    await this.recordEvent(SecurityEventType.USER_UPDATED, actor, id, context);
+    return result;
   }
 
   async create(actor: CurrentUser, dto: CreateUserDto, context: RequestContext) {
@@ -166,6 +188,11 @@ export class UsersService {
           role,
           responsiblePersonId,
           mustChangePassword: dto.mustChangePassword,
+          accessScopes:
+            existing.role === UserRole.ORG_MANAGER &&
+            role !== UserRole.ORG_MANAGER
+              ? { deleteMany: {} }
+              : undefined,
         },
         select: userSelect,
       });
@@ -275,6 +302,12 @@ export class UsersService {
 
   private assertCanAccessUsers(actor: CurrentUser): void {
     if (actor.role !== UserRole.OWNER && actor.role !== UserRole.DPP_ADMIN) {
+      throw new ForbiddenException('Доступ заборонено.');
+    }
+  }
+
+  private assertOwner(actor: CurrentUser): void {
+    if (actor.role !== UserRole.OWNER) {
       throw new ForbiddenException('Доступ заборонено.');
     }
   }

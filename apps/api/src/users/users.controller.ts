@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Req } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
 import { getRequestContext } from '../auth/request-context';
 import { CreateUserDto } from './dto/create-user.dto';
+import { ReplaceUserAccessScopesDto } from './dto/replace-user-access-scopes.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -16,6 +17,31 @@ export class UsersController {
   @Get()
   findAll(@CurrentUserParam() actor: CurrentUser) {
     return this.usersService.findAll(actor);
+  }
+
+  @Get(':id/access-scopes')
+  @Roles(UserRole.OWNER)
+  findAccessScopes(
+    @CurrentUserParam() actor: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.findAccessScopes(actor, id);
+  }
+
+  @Put(':id/access-scopes')
+  @Roles(UserRole.OWNER)
+  replaceAccessScopes(
+    @CurrentUserParam() actor: CurrentUser,
+    @Param('id') id: string,
+    @Body() dto: ReplaceUserAccessScopesDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.usersService.replaceAccessScopes(
+      actor,
+      id,
+      dto.scopes,
+      getRequestContext(request),
+    );
   }
 
   @Get(':id')
@@ -104,4 +130,3 @@ export class UsersController {
     return this.usersService.activate(actor, id, getRequestContext(request));
   }
 }
-

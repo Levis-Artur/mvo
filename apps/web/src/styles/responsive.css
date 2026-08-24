@@ -51,6 +51,10 @@
   .detail-list > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
 }
 @media (max-width: 768px) {
+  .user-access-scopes__header { align-items: stretch; flex-direction: column; }
+  .user-access-scopes__header .btn { width: 100%; }
+  .user-access-scope-row { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .user-access-scope-row > .btn { justify-self: start; }
   .ui-modal-backdrop { padding: 0; }
   .ui-modal[data-size='fullscreen'] { width: 100vw; height: 100dvh; max-height: none; border-width: 0; border-radius: 0; }
   .ui-modal[data-size='fullscreen'] .ui-modal__body { padding: var(--space-3); }
