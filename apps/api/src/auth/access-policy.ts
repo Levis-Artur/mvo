@@ -12,7 +12,8 @@ export type AccessCapability =
   | 'ACCOUNTING_WORKSPACE_READ'
   | 'USER_ADMINISTRATION'
   | 'OWNER_DESTRUCTIVE_ADMINISTRATION'
-  | 'MVO_SCOPED_ACCESS';
+  | 'MVO_SCOPED_ACCESS'
+  | 'ORG_SCOPED_ACCESS';
 
 export const roleCapabilities = {
   [UserRole.OWNER]: [
@@ -57,6 +58,12 @@ export const roleCapabilities = {
     'STOCK_DOCUMENT_WRITE',
     'MVO_SCOPED_ACCESS',
   ],
+  [UserRole.ORG_MANAGER]: [
+    'REFERENCE_DATA_READ',
+    'STOCK_READ',
+    'STOCK_DOCUMENT_READ',
+    'ORG_SCOPED_ACCESS',
+  ],
 } satisfies Record<UserRole, readonly AccessCapability[]>;
 
 export const REFERENCE_DATA_READ_ROLES = [
@@ -68,6 +75,18 @@ export const REFERENCE_DATA_READ_ROLES = [
 export const REFERENCE_DATA_WRITE_ROLES = [
   UserRole.OWNER,
   UserRole.DPP_ADMIN,
+];
+
+export const RESPONSIBLE_PERSON_READ_ROLES = [
+  ...REFERENCE_DATA_READ_ROLES,
+  UserRole.MVO,
+  UserRole.ORG_MANAGER,
+];
+
+export const STOCK_BALANCE_READ_ROLES = [
+  ...REFERENCE_DATA_READ_ROLES,
+  UserRole.MVO,
+  UserRole.ORG_MANAGER,
 ];
 
 export const STOCK_READ_ROLES = [

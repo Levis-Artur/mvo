@@ -11,6 +11,7 @@ import {
   StockTransactionType,
   UserRole,
 } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
@@ -90,7 +91,10 @@ const legacyCustodyInclude = {
 
 @Injectable()
 export class StockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService,
+  ) {}
 
   async listBalances(query: ListStockBalancesQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
@@ -118,12 +122,15 @@ export class StockService {
   }
 
   async findBalance(id: string, user?: CurrentUser) {
+    const authorizationWhere = user
+      ? this.accessControl.responsiblePersonFilter(user)
+      : {};
     const balance = await this.prisma.stockBalance.findFirst({
       where: {
         id,
-        responsiblePersonId:
-          user?.role === UserRole.MVO
-            ? (user.responsiblePersonId ?? '__no_mvo_person__')
+        responsiblePerson:
+          Object.keys(authorizationWhere).length > 0
+            ? authorizationWhere
             : undefined,
       },
       include: balanceInclude,
@@ -518,19 +525,24 @@ export class StockService {
     user?: CurrentUser,
   ): Prisma.StockBalanceWhereInput {
     const search = query.search?.trim();
+    const authorizationWhere = user
+      ? this.accessControl.responsiblePersonFilter(user)
+      : {};
+    const queryResponsiblePersonWhere: Prisma.ResponsiblePersonWhereInput = {
+      managementId: query.managementId,
+      serviceId: query.serviceId,
+      service: query.serviceCode ? { code: query.serviceCode } : undefined,
+      unitId: query.unitId,
+    };
 
     return {
-      responsiblePersonId:
-        user?.role === UserRole.MVO
-          ? (user.responsiblePersonId ?? '__no_mvo_person__')
-          : query.responsiblePersonId,
+      responsiblePersonId: query.responsiblePersonId,
       inventoryItemId: query.inventoryItemId,
       quantity: query.onlyPositive ? { gt: 0 } : undefined,
-      responsiblePerson: {
-        managementId: query.managementId,
-        serviceId: query.serviceId,
-        unitId: query.unitId,
-      },
+      responsiblePerson:
+        Object.keys(authorizationWhere).length > 0
+          ? { AND: [authorizationWhere, queryResponsiblePersonWhere] }
+          : queryResponsiblePersonWhere,
       OR: search
         ? [
             {

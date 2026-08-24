@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { SecurityEventType, UserRole } from '@prisma/client';
+import { Prisma, SecurityEventType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentUser } from './auth.types';
 
@@ -50,7 +50,46 @@ export class AccessControlService {
   }
 
   isGlobalReader(user: CurrentUser): boolean {
-    return user.role !== UserRole.MVO;
+    return (
+      user.role === UserRole.OWNER ||
+      user.role === UserRole.DPP_ADMIN ||
+      user.role === UserRole.AUDITOR ||
+      user.role === UserRole.ACCOUNTANT
+    );
+  }
+
+  responsiblePersonFilter(
+    user: CurrentUser,
+  ): Prisma.ResponsiblePersonWhereInput {
+    if (this.isGlobalReader(user)) return {};
+
+    if (user.role === UserRole.MVO) {
+      return user.responsiblePersonId
+        ? { id: user.responsiblePersonId }
+        : { id: { in: [] } };
+    }
+
+    if (user.role !== UserRole.ORG_MANAGER) {
+      return { id: { in: [] } };
+    }
+
+    const scopedFilters = (user.accessScopes ?? []).flatMap(
+      (scope): Prisma.ResponsiblePersonWhereInput[] => {
+        const serviceCode = scope.serviceCode?.trim() ?? null;
+        if (scope.serviceCode !== null && !serviceCode) return [];
+        if (!scope.managementId && !serviceCode) return [];
+
+        if (scope.managementId && serviceCode) {
+          return [{ managementId: scope.managementId, service: { code: serviceCode } }];
+        }
+        if (scope.managementId) return [{ managementId: scope.managementId }];
+        return [{ service: { code: serviceCode! } }];
+      },
+    );
+
+    return scopedFilters.length > 0
+      ? { OR: scopedFilters }
+      : { id: { in: [] } };
   }
 
   ownResponsiblePersonId(user: CurrentUser): string | undefined {

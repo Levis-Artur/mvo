@@ -3,6 +3,7 @@ import { AdminController } from '../admin/admin.controller';
 import { ManagementsController } from '../managements/managements.controller';
 import { ResponsiblePersonsController } from '../responsible-persons/responsible-persons.controller';
 import { ServicesController } from '../services/services.controller';
+import { StockController } from '../stock/stock.controller';
 import { StockDocumentsController } from '../stock-documents/stock-documents.controller';
 import { UnitsController } from '../units/units.controller';
 import { UsersController } from '../users/users.controller';
@@ -16,6 +17,8 @@ import {
   IMPORT_WRITE_ROLES,
   INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES,
   REFERENCE_DATA_READ_ROLES,
+  RESPONSIBLE_PERSON_READ_ROLES,
+  STOCK_BALANCE_READ_ROLES,
   STOCK_DOCUMENT_WRITE_ROLES,
   STOCK_DOCUMENT_READ_ROLES,
   STOCK_READ_ROLES,
@@ -23,7 +26,58 @@ import {
   TRANSACTION_READ_ROLES,
 } from './access-policy';
 
-describe('ACCOUNTANT access policy', () => {
+describe('role access policy', () => {
+  it('gives ORG_MANAGER scoped read capabilities only', () => {
+    expect(hasCapability(UserRole.ORG_MANAGER, 'REFERENCE_DATA_READ')).toBe(true);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'STOCK_READ')).toBe(true);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'STOCK_DOCUMENT_READ')).toBe(true);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'ORG_SCOPED_ACCESS')).toBe(true);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'REFERENCE_DATA_WRITE')).toBe(false);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'STOCK_DOCUMENT_WRITE')).toBe(false);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'IMPORT_READ')).toBe(false);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'IMPORT_WRITE')).toBe(false);
+    expect(hasCapability(UserRole.ORG_MANAGER, 'USER_ADMINISTRATION')).toBe(false);
+    expect(
+      hasCapability(UserRole.ORG_MANAGER, 'OWNER_DESTRUCTIVE_ADMINISTRATION'),
+    ).toBe(false);
+  });
+
+  it('opens ORG_MANAGER only scoped responsible-person and balance reads', () => {
+    const roles = (target: object) =>
+      Reflect.getMetadata(ROLES_KEY, target) as UserRole[] | undefined;
+
+    expect(RESPONSIBLE_PERSON_READ_ROLES).toContain(UserRole.ORG_MANAGER);
+    expect(STOCK_BALANCE_READ_ROLES).toContain(UserRole.ORG_MANAGER);
+    expect(roles(ResponsiblePersonsController)).toContain(UserRole.ORG_MANAGER);
+    expect(roles(ResponsiblePersonsController.prototype.findOne)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(
+      roles(ResponsiblePersonsController.prototype.stockBalances),
+    ).toContain(UserRole.ORG_MANAGER);
+    expect(
+      roles(ResponsiblePersonsController.prototype.accountingCard),
+    ).not.toContain(UserRole.ORG_MANAGER);
+    expect(
+      roles(ResponsiblePersonsController.prototype.stockTransactions),
+    ).not.toContain(UserRole.ORG_MANAGER);
+    expect(
+      roles(ResponsiblePersonsController.prototype.transferTargets),
+    ).not.toContain(UserRole.ORG_MANAGER);
+    expect(roles(StockController.prototype.listBalances)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockController.prototype.findBalance)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockController.prototype.myProperty)).not.toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockController.prototype.listTransactions)).not.toContain(
+      UserRole.ORG_MANAGER,
+    );
+  });
+
   it('allows only the production import workflow and the simple accounting entry point', () => {
     expect(IMPORT_READ_ROLES).toContain(UserRole.ACCOUNTANT);
     expect(IMPORT_WRITE_ROLES).toContain(UserRole.ACCOUNTANT);

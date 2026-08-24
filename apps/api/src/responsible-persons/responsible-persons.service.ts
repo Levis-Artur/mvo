@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
@@ -32,7 +33,10 @@ const transferTargetSelect = {
 
 @Injectable()
 export class ResponsiblePersonsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService,
+  ) {}
 
   async findAll(query: ListResponsiblePersonsQueryDto, user?: CurrentUser) {
     const page = query.page ?? 1;
@@ -62,13 +66,14 @@ export class ResponsiblePersonsService {
   }
 
   async findOne(id: string, user?: CurrentUser) {
+    const authorizationWhere = user
+      ? this.accessControl.responsiblePersonFilter(user)
+      : {};
     const responsiblePerson = await this.prisma.responsiblePerson.findFirst({
-      where: {
-        id,
-        ...(user?.role === UserRole.MVO
-          ? { id: user.responsiblePersonId ?? '__no_mvo_person__' }
-          : {}),
-      },
+      where:
+        Object.keys(authorizationWhere).length > 0
+          ? { AND: [{ id }, authorizationWhere] }
+          : { id },
       include: responsiblePersonInclude,
     });
 
@@ -195,14 +200,11 @@ export class ResponsiblePersonsService {
           }
         : undefined;
 
-    return {
+    const queryWhere: Prisma.ResponsiblePersonWhereInput = {
       managementId: query.managementId,
       serviceId: query.serviceId,
+      service: query.serviceCode ? { code: query.serviceCode } : undefined,
       unitId: query.unitId,
-      id:
-        user?.role === UserRole.MVO
-          ? (user.responsiblePersonId ?? '__no_mvo_person__')
-          : undefined,
       isActive: query.isActive,
       OR: search
         ? [
@@ -229,6 +231,14 @@ export class ResponsiblePersonsService {
           ]
         : undefined,
     };
+
+    if (!user) return queryWhere;
+    const authorizationWhere =
+      this.accessControl.responsiblePersonFilter(user);
+
+    return Object.keys(authorizationWhere).length > 0
+      ? { AND: [authorizationWhere, queryWhere] }
+      : queryWhere;
   }
 
   private async validateOrganization(

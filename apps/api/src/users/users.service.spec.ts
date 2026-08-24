@@ -149,6 +149,30 @@ describe('UsersService', () => {
     );
   });
 
+  it('creates ORG_MANAGER without a ResponsiblePerson link', async () => {
+    const { service, prisma } = createService();
+    prisma.user.create.mockResolvedValue(user(UserRole.ORG_MANAGER));
+
+    await service.create(
+      owner,
+      {
+        username: 'org-manager',
+        role: UserRole.ORG_MANAGER,
+      },
+      context,
+    );
+
+    expect(prisma.responsiblePerson.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: UserRole.ORG_MANAGER,
+          responsiblePersonId: null,
+        }),
+      }),
+    );
+  });
+
   it('clears a ResponsiblePerson link when changing a user to ACCOUNTANT', async () => {
     const { service, prisma } = createService();
     prisma.user.findFirst.mockResolvedValue(

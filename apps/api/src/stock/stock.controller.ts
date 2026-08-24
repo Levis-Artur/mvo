@@ -4,7 +4,11 @@ import type { Response } from 'express';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
-import { STOCK_READ_ROLES, TRANSACTION_READ_ROLES } from '../auth/access-policy';
+import {
+  STOCK_BALANCE_READ_ROLES,
+  STOCK_READ_ROLES,
+  TRANSACTION_READ_ROLES,
+} from '../auth/access-policy';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { ManualReceiptDto } from './dto/manual-receipt.dto';
@@ -24,6 +28,7 @@ export class StockController {
   ) {}
 
   @Get('stock-balances')
+  @Roles(...STOCK_BALANCE_READ_ROLES)
   listBalances(
     @Query() query: ListStockBalancesQueryDto,
     @CurrentUserParam() user: CurrentUser,
@@ -63,6 +68,7 @@ export class StockController {
   }
 
   @Get('stock-balances/:id')
+  @Roles(...STOCK_BALANCE_READ_ROLES)
   findBalance(@Param('id') id: string, @CurrentUserParam() user: CurrentUser) {
     return this.stockService.findBalance(id, user);
   }

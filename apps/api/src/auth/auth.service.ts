@@ -22,6 +22,31 @@ import {
 } from './auth.constants';
 import type { CurrentUser } from './auth.types';
 
+const currentUserInclude = {
+  accessScopes: {
+    select: {
+      managementId: true,
+      serviceCode: true,
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+} satisfies Prisma.UserInclude;
+
+type CurrentUserSource = Pick<
+  User,
+  | 'id'
+  | 'username'
+  | 'role'
+  | 'isActive'
+  | 'mustChangePassword'
+  | 'responsiblePersonId'
+> & {
+  accessScopes?: Array<{
+    managementId: string | null;
+    serviceCode: string | null;
+  }>;
+};
+
 const INVALID_CREDENTIALS_MESSAGE = 'Невірний логін або пароль.';
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = 20;
@@ -112,6 +137,7 @@ export class AuthService {
           lockedUntil: null,
           lastLoginAt: now,
         },
+        include: currentUserInclude,
       }),
       this.prisma.userSession.create({
         data: {
@@ -148,7 +174,7 @@ export class AuthService {
   } | null> {
     const session = await this.prisma.userSession.findUnique({
       where: { tokenHash: this.hashSessionToken(token) },
-      include: { user: true },
+      include: { user: { include: currentUserInclude } },
     });
 
     if (!session || session.revokedAt || session.expiresAt <= new Date()) {
@@ -242,6 +268,7 @@ export class AuthService {
           mustChangePassword: false,
           passwordChangedAt: now,
         },
+        include: currentUserInclude,
       }),
       this.prisma.userSession.updateMany({
         where: {
@@ -275,15 +302,7 @@ export class AuthService {
     return randomBytes(32).toString('base64url');
   }
 
-  toCurrentUser(user: Pick<
-    User,
-    | 'id'
-    | 'username'
-    | 'role'
-    | 'isActive'
-    | 'mustChangePassword'
-    | 'responsiblePersonId'
-  >): CurrentUser {
+  toCurrentUser(user: CurrentUserSource): CurrentUser {
     return {
       id: user.id,
       username: user.username,
@@ -291,6 +310,10 @@ export class AuthService {
       isActive: user.isActive,
       mustChangePassword: user.mustChangePassword,
       responsiblePersonId: user.responsiblePersonId,
+      accessScopes: (user.accessScopes ?? []).map((scope) => ({
+        managementId: scope.managementId,
+        serviceCode: scope.serviceCode,
+      })),
     };
   }
 

@@ -1,15 +1,196 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   Prisma,
   StockAccountingModel,
   StockTransactionType,
   UserRole,
 } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
+import type { CurrentUser } from '../auth/auth.types';
+import type { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { StockService } from './stock.service';
 
+function createService(prisma: unknown = {}) {
+  return new StockService(
+    prisma as never,
+    new AccessControlService(prisma as never),
+  );
+}
+
+const scopeIds = {
+  management: '11111111-1111-4111-8111-111111111111',
+  otherManagement: '22222222-2222-4222-8222-222222222222',
+  responsiblePerson: '33333333-3333-4333-8333-333333333333',
+};
+
+function actor(
+  role: UserRole,
+  options: Pick<CurrentUser, 'responsiblePersonId' | 'accessScopes'> = {
+    responsiblePersonId: null,
+    accessScopes: [],
+  },
+): CurrentUser {
+  return {
+    id: '44444444-4444-4444-8444-444444444444',
+    username: role.toLowerCase(),
+    role,
+    isActive: true,
+    mustChangePassword: false,
+    responsiblePersonId: options.responsiblePersonId,
+    accessScopes: options.accessScopes,
+  };
+}
+
+async function stockBalanceWhere(
+  user: CurrentUser,
+  query: ListStockBalancesQueryDto = { page: 1, limit: 20 },
+) {
+  const prisma = {
+    stockBalance: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    },
+  };
+  await createService(prisma).listBalances(query, user);
+  return prisma.stockBalance.findMany.mock.calls[0][0].where;
+}
+
 describe('StockService', () => {
+  it('keeps OWNER stock-balance listing global', async () => {
+    const where = await stockBalanceWhere(actor(UserRole.OWNER));
+    expect(where.responsiblePerson).not.toHaveProperty('AND');
+  });
+
+  it('limits MVO stock balances to its linked responsible person', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.MVO, {
+        responsiblePersonId: scopeIds.responsiblePerson,
+        accessScopes: [],
+      }),
+    );
+    expect(where.responsiblePerson.AND[0]).toEqual({
+      id: scopeIds.responsiblePerson,
+    });
+  });
+
+  it('returns no stock balances for ORG_MANAGER without scopes', async () => {
+    const where = await stockBalanceWhere(actor(UserRole.ORG_MANAGER));
+    expect(where.responsiblePerson.AND[0]).toEqual({ id: { in: [] } });
+  });
+
+  it('scopes stock balances through ResponsiblePerson management', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: scopeIds.management, serviceCode: null },
+        ],
+      }),
+    );
+    expect(where.responsiblePerson.AND[0]).toEqual({
+      OR: [{ managementId: scopeIds.management }],
+    });
+  });
+
+  it('scopes stock balances by service code across managements', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+      }),
+    );
+    expect(where.responsiblePerson.AND[0]).toEqual({
+      OR: [{ service: { code: 'IT' } }],
+    });
+  });
+
+  it('intersects management and service code for stock balances', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: scopeIds.management, serviceCode: 'IT' },
+        ],
+      }),
+    );
+    expect(where.responsiblePerson.AND[0]).toEqual({
+      OR: [
+        {
+          managementId: scopeIds.management,
+          service: { code: 'IT' },
+        },
+      ],
+    });
+  });
+
+  it('uses the union of manager scopes for stock balances', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: scopeIds.management, serviceCode: 'IT' },
+          { managementId: scopeIds.otherManagement, serviceCode: 'MTZ' },
+        ],
+      }),
+    );
+    expect(where.responsiblePerson.AND[0].OR).toHaveLength(2);
+  });
+
+  it('cannot expand stock scope with a client responsible-person filter', async () => {
+    const where = await stockBalanceWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: scopeIds.management, serviceCode: null },
+        ],
+      }),
+      {
+        page: 1,
+        limit: 20,
+        responsiblePersonId: '55555555-5555-4555-8555-555555555555',
+        managementId: scopeIds.otherManagement,
+      },
+    );
+    expect(where.responsiblePersonId).toBe(
+      '55555555-5555-4555-8555-555555555555',
+    );
+    expect(where.responsiblePerson.AND).toEqual([
+      { OR: [{ managementId: scopeIds.management }] },
+      expect.objectContaining({ managementId: scopeIds.otherManagement }),
+    ]);
+  });
+
+  it('does not return a stock balance outside manager scope by ID', async () => {
+    const prisma = {
+      stockBalance: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const manager = actor(UserRole.ORG_MANAGER, {
+      responsiblePersonId: null,
+      accessScopes: [{ managementId: scopeIds.management, serviceCode: 'IT' }],
+    });
+
+    await expect(
+      createService(prisma).findBalance('outside-balance', manager),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.stockBalance.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'outside-balance',
+          responsiblePerson: {
+            OR: [
+              {
+                managementId: scopeIds.management,
+                service: { code: 'IT' },
+              },
+            ],
+          },
+        },
+      }),
+    );
+  });
+
   it('forbids manual receipt with non-positive quantity', async () => {
-    const service = new StockService({} as never);
+    const service = createService();
 
     await expect(
       service.manualReceipt({
@@ -22,7 +203,7 @@ describe('StockService', () => {
   });
 
   it('creates a manual receipt transaction in a transaction client', async () => {
-    const service = new StockService({} as never);
+    const service = createService();
     const tx = {
       responsiblePerson: {
         findUnique: jest.fn().mockResolvedValue({ id: 'rp' }),
@@ -60,7 +241,7 @@ describe('StockService', () => {
   });
 
   it('decreases the source balance and records the resulting balance', async () => {
-    const service = new StockService({} as never);
+    const service = createService();
     const tx = {
       stockBalance: { update: jest.fn().mockResolvedValue({}) },
       stockTransaction: {
@@ -100,7 +281,7 @@ describe('StockService', () => {
   });
 
   it('rejects a decreasing transaction when stock is insufficient', async () => {
-    const service = new StockService({} as never);
+    const service = createService();
     const tx = {
       stockBalance: { update: jest.fn() },
       stockTransaction: { create: jest.fn() },
@@ -152,7 +333,7 @@ describe('StockService', () => {
         ]),
       },
     };
-    const service = new StockService(prisma as never);
+    const service = createService(prisma);
 
     const result = await service.availableToMe({
       id: 'user-id',
@@ -204,7 +385,7 @@ describe('StockService', () => {
       },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new StockService(prisma as never);
+    const service = createService(prisma);
 
     const result = await service.responsiblePersonAccountingCard(person.id, {
       id: 'user-id',
@@ -232,7 +413,7 @@ describe('StockService', () => {
       custodyBalance: { findMany: jest.fn().mockResolvedValue([]) },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new StockService(prisma as never);
+    const service = createService(prisma);
 
     await service.responsiblePersonAccountingCard(personId, {
       id: 'user-id',
@@ -286,7 +467,7 @@ describe('StockService', () => {
         count: jest.fn().mockResolvedValue(1),
       },
     };
-    const service = new StockService(prisma as never);
+    const service = createService(prisma);
 
     const result = await service.listBalances({ page: 1, limit: 20 });
 
@@ -300,7 +481,7 @@ describe('StockService', () => {
 
   it('marks manual receipts as direct-balance movements', async () => {
     const createIncreasingTransaction = jest.fn().mockResolvedValue({});
-    const service = new StockService({} as never);
+    const service = createService();
     service.createIncreasingTransaction = createIncreasingTransaction;
 
     await service.manualReceipt({

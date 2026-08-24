@@ -86,6 +86,20 @@ async function activeUser(overrides: Record<string, unknown> = {}) {
 }
 
 describe('AuthService', () => {
+  it('maps lightweight access scopes into the authenticated user context', async () => {
+    const service = createService(createPrismaMock());
+    const user = await activeUser({ role: UserRole.ORG_MANAGER });
+
+    expect(
+      service.toCurrentUser({
+        ...user,
+        accessScopes: [
+          { managementId: 'management-1', serviceCode: 'IT' },
+        ],
+      }).accessScopes,
+    ).toEqual([{ managementId: 'management-1', serviceCode: 'IT' }]);
+  });
+
   it('logs in with a valid username and password', async () => {
     const prisma = createPrismaMock();
     const service = createService(prisma);

@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { parseBooleanQuery } from '../../common/dto/active-query.dto';
 
@@ -23,6 +29,14 @@ export class ListStockBalancesQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   serviceId?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  serviceCode?: string;
 
   @IsOptional()
   @IsUUID()

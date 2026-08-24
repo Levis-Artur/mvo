@@ -5,6 +5,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RequireAuthMiddleware } from './require-auth.middleware';
 import { RolesGuard } from './roles.guard';
+import { UserAccessScopesService } from './user-access-scopes.service';
 import { WriteAccessGuard } from './write-access.guard';
 
 @Module({
@@ -14,6 +15,7 @@ import { WriteAccessGuard } from './write-access.guard';
     AuthService,
     RequireAuthMiddleware,
     AccessControlService,
+    UserAccessScopesService,
     RolesGuard,
     WriteAccessGuard,
   ],
@@ -21,6 +23,7 @@ import { WriteAccessGuard } from './write-access.guard';
     AuthService,
     RequireAuthMiddleware,
     AccessControlService,
+    UserAccessScopesService,
     RolesGuard,
     WriteAccessGuard,
   ],

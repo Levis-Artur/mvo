@@ -13,7 +13,8 @@ import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
 import {
   ACCOUNTING_CARD_READ_ROLES,
-  REFERENCE_DATA_READ_ROLES,
+  RESPONSIBLE_PERSON_READ_ROLES,
+  STOCK_BALANCE_READ_ROLES,
   TRANSACTION_READ_ROLES,
   TRANSFER_TARGET_READ_ROLES,
 } from '../auth/access-policy';
@@ -26,7 +27,7 @@ import { ListStockTransactionsQueryDto } from '../stock/dto/list-stock-transacti
 import { StockService } from '../stock/stock.service';
 
 @Controller('responsible-persons')
-@Roles(...REFERENCE_DATA_READ_ROLES)
+@Roles(...RESPONSIBLE_PERSON_READ_ROLES)
 export class ResponsiblePersonsController {
   constructor(
     private readonly responsiblePersonsService: ResponsiblePersonsService,
@@ -51,7 +52,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id')
-  @Roles(...ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...RESPONSIBLE_PERSON_READ_ROLES)
   findOne(@Param('id') id: string, @CurrentUserParam() user: CurrentUser) {
     return this.responsiblePersonsService.findOne(id, user);
   }
@@ -79,7 +80,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id/stock-balances')
-  @Roles(...ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...STOCK_BALANCE_READ_ROLES)
   stockBalances(
     @Param('id') id: string,
     @Query() query: ListStockBalancesQueryDto,

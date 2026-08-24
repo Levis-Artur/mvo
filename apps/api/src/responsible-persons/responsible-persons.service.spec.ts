@@ -2,10 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { AccessControlService } from '../auth/access-control.service';
+import type { CurrentUser } from '../auth/auth.types';
 import { ListResponsiblePersonsQueryDto } from './dto/list-responsible-persons-query.dto';
 import { CreateResponsiblePersonDto } from './dto/create-responsible-person.dto';
 import { UpdateResponsiblePersonDto } from './dto/update-responsible-person.dto';
@@ -50,7 +53,10 @@ function createPrismaMock(): MockPrisma {
 }
 
 function createService(prisma: MockPrisma): ResponsiblePersonsService {
-  return new ResponsiblePersonsService(prisma as never);
+  return new ResponsiblePersonsService(
+    prisma as never,
+    new AccessControlService(prisma as never),
+  );
 }
 
 function arrangeValidOrganization(prisma: MockPrisma) {
@@ -77,7 +83,146 @@ function validDto() {
   };
 }
 
+function actor(
+  role: UserRole,
+  options: Pick<CurrentUser, 'responsiblePersonId' | 'accessScopes'> = {
+    responsiblePersonId: null,
+    accessScopes: [],
+  },
+): CurrentUser {
+  return {
+    id: '88888888-8888-4888-8888-888888888888',
+    username: role.toLowerCase(),
+    role,
+    isActive: true,
+    mustChangePassword: false,
+    responsiblePersonId: options.responsiblePersonId,
+    accessScopes: options.accessScopes,
+  };
+}
+
+async function responsiblePersonListWhere(
+  user: CurrentUser,
+  query: ListResponsiblePersonsQueryDto = { page: 1, limit: 20 },
+) {
+  const prisma = createPrismaMock();
+  prisma.responsiblePerson.findMany.mockResolvedValue([]);
+  prisma.responsiblePerson.count.mockResolvedValue(0);
+  await createService(prisma).findAll(query, user);
+  return prisma.responsiblePerson.findMany.mock.calls[0][0].where;
+}
+
 describe('ResponsiblePersonsService', () => {
+  it('keeps OWNER responsible-person listing global', async () => {
+    const where = await responsiblePersonListWhere(actor(UserRole.OWNER));
+    expect(where).not.toHaveProperty('AND');
+  });
+
+  it('limits MVO responsible-person listing to self', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.MVO, {
+        responsiblePersonId: '77777777-7777-4777-8777-777777777777',
+        accessScopes: [],
+      }),
+    );
+    expect(where.AND[0]).toEqual({
+      id: '77777777-7777-4777-8777-777777777777',
+    });
+  });
+
+  it('returns no responsible persons for ORG_MANAGER without scopes', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER),
+    );
+    expect(where.AND[0]).toEqual({ id: { in: [] } });
+  });
+
+  it('applies an ORG_MANAGER management scope', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: ids.management, serviceCode: null }],
+      }),
+    );
+    expect(where.AND[0]).toEqual({ OR: [{ managementId: ids.management }] });
+  });
+
+  it('applies an ORG_MANAGER service code across managements', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+      }),
+    );
+    expect(where.AND[0]).toEqual({ OR: [{ service: { code: 'IT' } }] });
+  });
+
+  it('intersects ORG_MANAGER management and service scopes', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: ids.management, serviceCode: 'IT' }],
+      }),
+    );
+    expect(where.AND[0]).toEqual({
+      OR: [{ managementId: ids.management, service: { code: 'IT' } }],
+    });
+  });
+
+  it('combines several ORG_MANAGER scopes as a union', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: ids.management, serviceCode: 'IT' },
+          { managementId: ids.otherManagement, serviceCode: 'MTZ' },
+        ],
+      }),
+    );
+    expect(where.AND[0].OR).toHaveLength(2);
+  });
+
+  it('ANDs client filters with the server authorization scope', async () => {
+    const where = await responsiblePersonListWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: ids.management, serviceCode: null }],
+      }),
+      { page: 1, limit: 20, managementId: ids.otherManagement },
+    );
+    expect(where.AND).toEqual([
+      { OR: [{ managementId: ids.management }] },
+      expect.objectContaining({ managementId: ids.otherManagement }),
+    ]);
+  });
+
+  it('does not return responsible-person details outside manager scope', async () => {
+    const prisma = createPrismaMock();
+    prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+    const manager = actor(UserRole.ORG_MANAGER, {
+      responsiblePersonId: null,
+      accessScopes: [{ managementId: ids.management, serviceCode: 'IT' }],
+    });
+
+    await expect(
+      createService(prisma).findOne('outside-id', manager),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.responsiblePerson.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { id: 'outside-id' },
+            {
+              OR: [
+                { managementId: ids.management, service: { code: 'IT' } },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  });
+
   it('keeps a four-digit accounting code as a string with leading zeroes', async () => {
     const dto = plainToInstance(CreateResponsiblePersonDto, {
       ...validDto(),
