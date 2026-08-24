@@ -227,17 +227,25 @@ describe('AccountingService', () => {
       ],
     };
     const h = harness([exportDocument([transferLine])]);
-    const result = await h.service.listTransfers({
-      page: 1,
-      limit: 20,
-      documentNumber: '№ 7',
-    });
+    const result = await h.service.listTransfers(
+      {
+        page: 1,
+        limit: 20,
+        documentNumber: '№ 7',
+      },
+      actor,
+    );
     expect(h.prisma.stockDocument.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          type: StockDocumentType.MVO_TRANSFER,
-          displayNumber: 7,
-        }),
+        where: {
+          AND: [
+            {},
+            expect.objectContaining({
+              type: StockDocumentType.MVO_TRANSFER,
+              displayNumber: 7,
+            }),
+          ],
+        },
       }),
     );
     expect(result.items[0]).toEqual(
@@ -250,6 +258,38 @@ describe('AccountingService', () => {
       }),
     );
     expect(result.items[0]).not.toHaveProperty('documentNumber');
+  });
+
+  it('scopes the accounting transfer register for ORG_MANAGER', async () => {
+    const h = harness([]);
+    const managementId = '88888888-8888-4888-8888-888888888888';
+
+    await h.service.listTransfers(
+      {
+        page: 1,
+        limit: 20,
+        destinationResponsiblePersonId: destinationId,
+      },
+      {
+        ...actor,
+        role: UserRole.ORG_MANAGER,
+        accessScopes: [{ managementId, serviceCode: null }],
+      },
+    );
+
+    const where = h.prisma.stockDocument.findMany.mock.calls[0][0].where;
+    expect(where.AND[0]).toEqual({
+      OR: [
+        { sourceResponsiblePerson: { OR: [{ managementId }] } },
+        { destinationResponsiblePerson: { OR: [{ managementId }] } },
+      ],
+    });
+    expect(where.AND[1]).toEqual(
+      expect.objectContaining({
+        type: StockDocumentType.MVO_TRANSFER,
+        destinationResponsiblePersonId: destinationId,
+      }),
+    );
   });
 
   it('claims only POSTED, NOT_EXPORTED MVO_TRANSFER documents atomically', async () => {

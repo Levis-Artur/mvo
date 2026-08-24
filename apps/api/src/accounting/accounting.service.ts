@@ -14,6 +14,7 @@ import {
   StockDocumentType,
 } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -79,12 +80,24 @@ class ExportSetChangedError extends Error {
 export class AccountingService {
   private readonly logger = new Logger(AccountingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService =
+      new AccessControlService(prisma),
+  ) {}
 
-  async listTransfers(query: ListAccountingTransfersQueryDto) {
+  async listTransfers(
+    query: ListAccountingTransfersQueryDto,
+    actor: CurrentUser,
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = this.transferWhere(query);
+    const where: Prisma.StockDocumentWhereInput = {
+      AND: [
+        this.accessControl.stockDocumentFilter(actor),
+        this.transferWhere(query),
+      ],
+    };
     const [items, total] = await Promise.all([
       this.prisma.stockDocument.findMany({
         where,

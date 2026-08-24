@@ -3,13 +3,21 @@ import { IssueHistoryService } from './issue-history.service';
 
 const sourceId = '11111111-1111-4111-8111-111111111111';
 
-const actor = (role: UserRole, responsiblePersonId: string | null = null) => ({
+const actor = (
+  role: UserRole,
+  responsiblePersonId: string | null = null,
+  accessScopes: Array<{
+    managementId: string | null;
+    serviceCode: string | null;
+  }> = [],
+) => ({
   id: '22222222-2222-4222-8222-222222222222',
   username: role.toLowerCase(),
   role,
   isActive: true,
   mustChangePassword: false,
   responsiblePersonId,
+  accessScopes,
 });
 
 const issue = {
@@ -64,7 +72,12 @@ describe('IssueHistoryService', () => {
     );
 
     const where = h.prisma.stockDocument.findMany.mock.calls[0][0].where;
-    expect(where.sourceResponsiblePersonId).toBe(sourceId);
+    expect(where.AND[0]).toEqual({
+      sourceResponsiblePerson: { id: sourceId },
+    });
+    expect(where.AND[1].sourceResponsiblePersonId).toBe(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    );
     expect(result.items[0]).toEqual(
       expect.objectContaining({
         displayNumber: 12,
@@ -107,7 +120,38 @@ describe('IssueHistoryService', () => {
     expect(JSON.stringify(call.where)).toContain(
       '2026-08-10T23:59:59.999Z',
     );
-    expect(call.where.sourceResponsiblePersonId).toBe(sourceId);
+    expect(call.where.AND[0]).toEqual({});
+    expect(call.where.AND[1].sourceResponsiblePersonId).toBe(sourceId);
+  });
+
+  it('scopes ISSUE history to the manager source MVO', async () => {
+    const h = harness([]);
+    const managementId = '44444444-4444-4444-8444-444444444444';
+
+    await h.service.list(
+      { page: 1, limit: 25 },
+      actor(UserRole.ORG_MANAGER, null, [
+        { managementId, serviceCode: 'IT' },
+      ]),
+    );
+
+    expect(h.prisma.stockDocument.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: [
+        {
+          sourceResponsiblePerson: {
+            OR: [{ managementId, service: { code: 'IT' } }],
+          },
+        },
+        {
+          destinationResponsiblePerson: {
+            OR: [{ managementId, service: { code: 'IT' } }],
+          },
+        },
+      ],
+    });
+    expect(h.prisma.stockDocument.findMany.mock.calls[0][0].where.AND[1].type).toBe(
+      'ISSUE',
+    );
   });
 
   it('exports one safe CSV row per ISSUE and realization line without changing stock', async () => {

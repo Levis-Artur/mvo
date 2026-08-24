@@ -92,6 +92,56 @@ export class AccessControlService {
       : { id: { in: [] } };
   }
 
+  stockDocumentFilter(user: CurrentUser): Prisma.StockDocumentWhereInput {
+    if (this.isGlobalReader(user)) return {};
+
+    const responsiblePerson = this.responsiblePersonFilter(user);
+    if (user.role === UserRole.MVO) {
+      return { sourceResponsiblePerson: responsiblePerson };
+    }
+
+    if (user.role === UserRole.ORG_MANAGER) {
+      return {
+        OR: [
+          { sourceResponsiblePerson: responsiblePerson },
+          { destinationResponsiblePerson: responsiblePerson },
+        ],
+      };
+    }
+
+    return { id: { in: [] } };
+  }
+
+  stockTransactionFilter(user: CurrentUser): Prisma.StockTransactionWhereInput {
+    if (this.isGlobalReader(user)) return {};
+
+    const responsiblePerson = this.responsiblePersonFilter(user);
+    if (user.role === UserRole.MVO) {
+      return { responsiblePerson };
+    }
+
+    if (user.role === UserRole.ORG_MANAGER) {
+      return {
+        OR: [
+          { responsiblePerson },
+          { accountingOwnerResponsiblePerson: responsiblePerson },
+          { sourceCustodianResponsiblePerson: responsiblePerson },
+          { destinationCustodianResponsiblePerson: responsiblePerson },
+          {
+            document: {
+              OR: [
+                { sourceResponsiblePerson: responsiblePerson },
+                { destinationResponsiblePerson: responsiblePerson },
+              ],
+            },
+          },
+        ],
+      };
+    }
+
+    return { id: { in: [] } };
+  }
+
   ownResponsiblePersonId(user: CurrentUser): string | undefined {
     return user.role === UserRole.MVO
       ? (user.responsiblePersonId ?? undefined)

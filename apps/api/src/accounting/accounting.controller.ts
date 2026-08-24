@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import {
   ACCOUNTING_TRANSFER_EXPORT_ROLES,
@@ -73,8 +74,12 @@ export class AccountingController {
   }
 
   @Get('mvo-transfers')
-  list(@Query() query: ListAccountingTransfersQueryDto) {
-    return this.service.listTransfers(query);
+  @Roles(...ACCOUNTING_TRANSFER_READ_ROLES, UserRole.ORG_MANAGER)
+  list(
+    @Query() query: ListAccountingTransfersQueryDto,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.service.listTransfers(query, actor);
   }
 
   @Get('issues/export.csv')

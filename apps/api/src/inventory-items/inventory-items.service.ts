@@ -13,6 +13,7 @@ import {
   StockTransactionType,
   UserRole,
 } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
@@ -98,7 +99,11 @@ const CURRENT_MOVEMENT_TYPES = [
 
 @Injectable()
 export class InventoryItemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService =
+      new AccessControlService(prisma),
+  ) {}
 
   async findAll(query: ListInventoryItemsQueryDto) {
     const page = query.page ?? 1;
@@ -267,8 +272,19 @@ export class InventoryItemsService {
     };
   }
 
-  async transferHistory(id: string, query: TransferHistoryQuery) {
-    const history = await this.transferHistoryData(id, query);
+  async transferHistory(
+    id: string,
+    query: TransferHistoryQuery,
+    actor: CurrentUser,
+  ) {
+    const inventoryItem = await this.inventoryItemForScopedHistory(id, actor);
+    const history = await this.transferHistoryData(
+      id,
+      query,
+      undefined,
+      this.accessControl.stockDocumentFilter(actor),
+      inventoryItem,
+    );
 
     return {
       inventoryItem: history.inventoryItem,
@@ -518,16 +534,24 @@ export class InventoryItemsService {
     inventoryItemId: string,
     query: TransferHistoryQuery,
     sourceResponsiblePersonId?: string,
+    authorizationWhere: Prisma.StockDocumentWhereInput = {},
+    accessibleInventoryItem?: Awaited<ReturnType<InventoryItemsService['findOne']>>,
   ) {
-    const inventoryItem = await this.findOne(inventoryItemId);
+    const inventoryItem =
+      accessibleInventoryItem ?? (await this.findOne(inventoryItemId));
     const { page, limit } = this.transferHistoryPagination(query);
     const where: Prisma.StockDocumentWhereInput = {
-      type: StockDocumentType.MVO_TRANSFER,
-      status: {
-        in: [StockDocumentStatus.POSTED, StockDocumentStatus.CANCELLED],
-      },
-      sourceResponsiblePersonId,
-      lines: { some: { inventoryItemId } },
+      AND: [
+        authorizationWhere,
+        {
+          type: StockDocumentType.MVO_TRANSFER,
+          status: {
+            in: [StockDocumentStatus.POSTED, StockDocumentStatus.CANCELLED],
+          },
+          sourceResponsiblePersonId,
+          lines: { some: { inventoryItemId } },
+        },
+      ],
     };
     const personSelect = {
       id: true,
@@ -575,6 +599,28 @@ export class InventoryItemsService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  private async inventoryItemForScopedHistory(id: string, actor: CurrentUser) {
+    if (actor.role !== UserRole.ORG_MANAGER) return this.findOne(id);
+
+    const responsiblePerson = this.accessControl.responsiblePersonFilter(actor);
+    const transaction = this.accessControl.stockTransactionFilter(actor);
+    const document = this.accessControl.stockDocumentFilter(actor);
+    const inventoryItem = await this.prisma.inventoryItem.findFirst({
+      where: {
+        id,
+        OR: [
+          { stockBalances: { some: { responsiblePerson } } },
+          { stockTransactions: { some: transaction } },
+          { stockDocumentLines: { some: { document } } },
+        ],
+      },
+    });
+    if (!inventoryItem) {
+      throw new NotFoundException('Номенклатурну позицію не знайдено');
+    }
+    return inventoryItem;
   }
 
   private transferHistoryPagination(query: TransferHistoryQuery) {

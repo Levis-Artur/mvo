@@ -61,12 +61,13 @@ export class InventoryItemsController {
   }
 
   @Get(':id/transfer-history')
-  @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES, UserRole.ORG_MANAGER)
   transferHistory(
     @Param('id') id: string,
     @Query() query: TransferHistoryQuery,
+    @CurrentUserParam() actor: CurrentUser,
   ) {
-    return this.inventoryItemsService.transferHistory(id, query);
+    return this.inventoryItemsService.transferHistory(id, query, actor);
   }
 
   @Get(':id')

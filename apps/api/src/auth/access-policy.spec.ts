@@ -1,5 +1,7 @@
 import { UserRole } from '@prisma/client';
+import { AccountingController } from '../accounting/accounting.controller';
 import { AdminController } from '../admin/admin.controller';
+import { InventoryItemsController } from '../inventory-items/inventory-items.controller';
 import { ManagementsController } from '../managements/managements.controller';
 import { ResponsiblePersonsController } from '../responsible-persons/responsible-persons.controller';
 import { ServicesController } from '../services/services.controller';
@@ -42,7 +44,7 @@ describe('role access policy', () => {
     ).toBe(false);
   });
 
-  it('opens ORG_MANAGER only scoped responsible-person and balance reads', () => {
+  it('opens ORG_MANAGER only explicitly scoped read endpoints', () => {
     const roles = (target: object) =>
       Reflect.getMetadata(ROLES_KEY, target) as UserRole[] | undefined;
 
@@ -60,7 +62,7 @@ describe('role access policy', () => {
     ).not.toContain(UserRole.ORG_MANAGER);
     expect(
       roles(ResponsiblePersonsController.prototype.stockTransactions),
-    ).not.toContain(UserRole.ORG_MANAGER);
+    ).toContain(UserRole.ORG_MANAGER);
     expect(
       roles(ResponsiblePersonsController.prototype.transferTargets),
     ).not.toContain(UserRole.ORG_MANAGER);
@@ -73,9 +75,40 @@ describe('role access policy', () => {
     expect(roles(StockController.prototype.myProperty)).not.toContain(
       UserRole.ORG_MANAGER,
     );
-    expect(roles(StockController.prototype.listTransactions)).not.toContain(
+    expect(roles(StockController.prototype.listTransactions)).toContain(
       UserRole.ORG_MANAGER,
     );
+    expect(roles(StockController.prototype.findTransaction)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockDocumentsController.prototype.list)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockDocumentsController.prototype.findOne)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockDocumentsController.prototype.issueHistory)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(AccountingController.prototype.list)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(InventoryItemsController.prototype.transferHistory)).toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockDocumentsController.prototype.create)).not.toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(
+      roles(StockDocumentsController.prototype.createAndPostMvoTransfer),
+    ).not.toContain(UserRole.ORG_MANAGER);
+    expect(
+      roles(StockDocumentsController.prototype.createAndPostIssue),
+    ).not.toContain(UserRole.ORG_MANAGER);
+    expect(roles(StockDocumentsController.prototype.cancel)).not.toContain(
+      UserRole.ORG_MANAGER,
+    );
+    expect(roles(StockDocumentsController.prototype.attachments)).toBeUndefined();
   });
 
   it('allows only the production import workflow and the simple accounting entry point', () => {

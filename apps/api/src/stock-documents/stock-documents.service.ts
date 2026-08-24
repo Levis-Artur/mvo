@@ -17,6 +17,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
@@ -162,29 +163,27 @@ export class StockDocumentsService {
     private readonly prisma: PrismaService,
     private readonly stockService: StockService,
     private readonly attachmentStorage: StockDocumentAttachmentStorageService,
+    private readonly accessControl: AccessControlService =
+      new AccessControlService(prisma),
   ) {}
 
   async list(query: ListStockDocumentsQueryDto, actor: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const mvoId =
-      actor.role === UserRole.MVO
-        ? (actor.responsiblePersonId ?? '__no_mvo_person__')
-        : undefined;
-    const where: Prisma.StockDocumentWhereInput = {
+    const queryWhere: Prisma.StockDocumentWhereInput = {
       type: query.type,
       status: query.status,
-      sourceResponsiblePersonId: mvoId ?? query.sourceResponsiblePersonId,
-      destinationResponsiblePersonId:
-        actor.role === UserRole.MVO
-          ? undefined
-          : query.destinationResponsiblePersonId,
+      sourceResponsiblePersonId: query.sourceResponsiblePersonId,
+      destinationResponsiblePersonId: query.destinationResponsiblePersonId,
       documentDate: {
         gte: query.documentDateFrom
           ? new Date(query.documentDateFrom)
           : undefined,
         lte: query.documentDateTo ? new Date(query.documentDateTo) : undefined,
       },
+    };
+    const where: Prisma.StockDocumentWhereInput = {
+      AND: [this.accessControl.stockDocumentFilter(actor), queryWhere],
     };
     const [items, total] = await Promise.all([
       this.prisma.stockDocument.findMany({
@@ -203,14 +202,15 @@ export class StockDocumentsService {
   }
 
   async findOne(id: string, actor: CurrentUser) {
-    const document = await this.prisma.stockDocument.findUnique({
-      where: { id },
+    const document = await this.prisma.stockDocument.findFirst({
+      where: {
+        AND: [{ id }, this.accessControl.stockDocumentFilter(actor)],
+      },
       include: documentInclude,
     });
     if (!document) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
-    this.assertReadAccess(actor, document);
     return this.serialize(document);
   }
 
@@ -1233,21 +1233,6 @@ export class StockDocumentsService {
       throw new ForbiddenException(
         'МВО може створювати документи лише від свого імені',
       );
-    }
-  }
-
-  private assertReadAccess(
-    actor: CurrentUser,
-    document: {
-      sourceResponsiblePersonId: string;
-    },
-  ) {
-    const responsiblePersonId = actor.responsiblePersonId;
-    if (
-      actor.role === UserRole.MVO &&
-      responsiblePersonId !== document.sourceResponsiblePersonId
-    ) {
-      throw new NotFoundException('Документ руху майна не знайдено');
     }
   }
 

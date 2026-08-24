@@ -143,10 +143,13 @@ export class StockService {
     return this.serializeBalance(balance);
   }
 
-  async listTransactions(query: ListStockTransactionsQueryDto) {
+  async listTransactions(
+    query: ListStockTransactionsQueryDto,
+    user: CurrentUser,
+  ) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where: Prisma.StockTransactionWhereInput = {
+    const queryWhere: Prisma.StockTransactionWhereInput = {
       responsiblePersonId: query.responsiblePersonId,
       inventoryItemId: query.inventoryItemId,
       type: query.type,
@@ -155,6 +158,9 @@ export class StockService {
         gte: query.dateFrom ? new Date(query.dateFrom) : undefined,
         lte: query.dateTo ? new Date(query.dateTo) : undefined,
       },
+    };
+    const where: Prisma.StockTransactionWhereInput = {
+      AND: [this.accessControl.stockTransactionFilter(user), queryWhere],
     };
 
     const [items, total] = await Promise.all([
@@ -179,9 +185,11 @@ export class StockService {
     };
   }
 
-  async findTransaction(id: string) {
+  async findTransaction(id: string, user: CurrentUser) {
     const transaction = await this.prisma.stockTransaction.findFirst({
-      where: { id },
+      where: {
+        AND: [{ id }, this.accessControl.stockTransactionFilter(user)],
+      },
       include: transactionInclude,
     });
 

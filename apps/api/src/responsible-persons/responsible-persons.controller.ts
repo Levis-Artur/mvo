@@ -93,14 +93,15 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id/stock-transactions')
-  @Roles(...TRANSACTION_READ_ROLES)
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
   stockTransactions(
     @Param('id') id: string,
     @Query() query: ListStockTransactionsQueryDto,
+    @CurrentUserParam() user: CurrentUser,
   ) {
     return this.stockService.listTransactions({
       ...query,
       responsiblePersonId: id,
-    });
+    }, user);
   }
 }

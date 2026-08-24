@@ -55,6 +55,7 @@ export class StockDocumentsController {
   ) {}
 
   @Get()
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   list(
     @Query() query: ListStockDocumentsQueryDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -69,6 +70,7 @@ export class StockDocumentsController {
   }
 
   @Get('issues')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   issueHistory(
     @Query() query: ListIssueHistoryQueryDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -339,6 +341,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   findOne(@Param('id') id: string, @CurrentUserParam() actor: CurrentUser) {
     return this.service.findOne(id, actor);
   }

@@ -116,4 +116,63 @@ describe('AccessControlService responsible person scope', () => {
       ),
     ).toEqual({ id: { in: [] } });
   });
+
+  it('composes document scope from source or destination responsible person', () => {
+    const manager = currentUser(UserRole.ORG_MANAGER, {
+      responsiblePersonId: null,
+      accessScopes: [{ managementId: managementA, serviceCode: 'IT' }],
+    });
+    const responsiblePerson = {
+      OR: [{ managementId: managementA, service: { code: 'IT' } }],
+    };
+
+    expect(service.stockDocumentFilter(manager)).toEqual({
+      OR: [
+        { sourceResponsiblePerson: responsiblePerson },
+        { destinationResponsiblePerson: responsiblePerson },
+      ],
+    });
+  });
+
+  it('composes transaction scope from movement and document relations', () => {
+    const manager = currentUser(UserRole.ORG_MANAGER, {
+      responsiblePersonId: null,
+      accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+    });
+    const responsiblePerson = { OR: [{ service: { code: 'IT' } }] };
+
+    expect(service.stockTransactionFilter(manager)).toEqual({
+      OR: [
+        { responsiblePerson },
+        { accountingOwnerResponsiblePerson: responsiblePerson },
+        { sourceCustodianResponsiblePerson: responsiblePerson },
+        { destinationCustodianResponsiblePerson: responsiblePerson },
+        {
+          document: {
+            OR: [
+              { sourceResponsiblePerson: responsiblePerson },
+              { destinationResponsiblePerson: responsiblePerson },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it('never treats an ORG_MANAGER without scopes as global', () => {
+    const manager = currentUser(UserRole.ORG_MANAGER);
+    const noResponsiblePerson = { id: { in: [] } };
+
+    expect(service.stockDocumentFilter(manager)).toEqual({
+      OR: [
+        { sourceResponsiblePerson: noResponsiblePerson },
+        { destinationResponsiblePerson: noResponsiblePerson },
+      ],
+    });
+    expect(service.stockTransactionFilter(manager)).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([{ responsiblePerson: noResponsiblePerson }]),
+      }),
+    );
+  });
 });

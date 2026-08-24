@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import {
   Prisma,
   StockDocumentStatus,
@@ -376,5 +377,83 @@ describe('InventoryItemsService accounting card', () => {
         attachments: [expect.objectContaining({ originalFileName: 'накладна.pdf' })],
       }),
     );
+  });
+
+  it('scopes inventory transfer history by manager source or destination', async () => {
+    const prisma = prismaMock();
+    const service = new InventoryItemsService(prisma as never);
+    const managementId = '44444444-4444-4444-8444-444444444444';
+
+    await service.transferHistory(
+      item.id,
+      { page: 1, limit: 25 },
+      {
+        id: 'manager-user',
+        username: 'manager',
+        role: UserRole.ORG_MANAGER,
+        isActive: true,
+        mustChangePassword: false,
+        responsiblePersonId: null,
+        accessScopes: [{ managementId, serviceCode: 'IT' }],
+      },
+    );
+
+    const responsiblePerson = {
+      OR: [{ managementId, service: { code: 'IT' } }],
+    };
+    expect(prisma.inventoryItem.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: item.id,
+        OR: [
+          { stockBalances: { some: { responsiblePerson } } },
+          {
+            stockTransactions: {
+              some: expect.objectContaining({ OR: expect.any(Array) }),
+            },
+          },
+          {
+            stockDocumentLines: {
+              some: {
+                document: {
+                  OR: [
+                    { sourceResponsiblePerson: responsiblePerson },
+                    { destinationResponsiblePerson: responsiblePerson },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+    expect(prisma.stockDocument.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: [
+        { sourceResponsiblePerson: responsiblePerson },
+        { destinationResponsiblePerson: responsiblePerson },
+      ],
+    });
+  });
+
+  it('does not expose an inventory item to a manager without scopes', async () => {
+    const prisma = prismaMock();
+    prisma.inventoryItem.findFirst.mockResolvedValue(null);
+    const service = new InventoryItemsService(prisma as never);
+
+    await expect(
+      service.transferHistory(
+        item.id,
+        { page: 1, limit: 25 },
+        {
+          id: 'manager-user',
+          username: 'manager',
+          role: UserRole.ORG_MANAGER,
+          isActive: true,
+          mustChangePassword: false,
+          responsiblePersonId: null,
+          accessScopes: [],
+        },
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.stockDocument.findMany).not.toHaveBeenCalled();
   });
 });

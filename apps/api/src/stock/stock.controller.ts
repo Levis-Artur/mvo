@@ -74,15 +74,21 @@ export class StockController {
   }
 
   @Get('stock-transactions')
-  @Roles(...TRANSACTION_READ_ROLES)
-  listTransactions(@Query() query: ListStockTransactionsQueryDto) {
-    return this.stockService.listTransactions(query);
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
+  listTransactions(
+    @Query() query: ListStockTransactionsQueryDto,
+    @CurrentUserParam() user: CurrentUser,
+  ) {
+    return this.stockService.listTransactions(query, user);
   }
 
   @Get('stock-transactions/:id')
-  @Roles(...TRANSACTION_READ_ROLES)
-  findTransaction(@Param('id') id: string) {
-    return this.stockService.findTransaction(id);
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
+  findTransaction(
+    @Param('id') id: string,
+    @CurrentUserParam() user: CurrentUser,
+  ) {
+    return this.stockService.findTransaction(id, user);
   }
 
   @Post('stock-transactions/manual-receipt')

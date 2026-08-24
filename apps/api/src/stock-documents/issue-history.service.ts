@@ -4,8 +4,8 @@ import {
   Prisma,
   SecurityEventType,
   StockDocumentType,
-  UserRole,
 } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -92,7 +92,11 @@ type IssueListDocument = Prisma.StockDocumentGetPayload<{
 
 @Injectable()
 export class IssueHistoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService =
+      new AccessControlService(prisma),
+  ) {}
 
   async list(query: ListIssueHistoryQueryDto, actor: CurrentUser) {
     const page = query.page ?? 1;
@@ -238,13 +242,9 @@ export class IssueHistoryService {
     const displayNumberFromSearch = search
       ? Number(search.replace(/^№\s*/, ''))
       : Number.NaN;
-    const mvoScope =
-      actor.role === UserRole.MVO
-        ? (actor.responsiblePersonId ?? '__no_mvo_person__')
-        : filters.sourceResponsiblePersonId;
-    return {
+    const queryWhere: Prisma.StockDocumentWhereInput = {
       type: StockDocumentType.ISSUE,
-      sourceResponsiblePersonId: mvoScope,
+      sourceResponsiblePersonId: filters.sourceResponsiblePersonId,
       status: filters.status,
       displayNumber: filters.displayNumber,
       documentDate: {
@@ -348,6 +348,9 @@ export class IssueHistoryService {
             }
           : {},
       ],
+    };
+    return {
+      AND: [this.accessControl.stockDocumentFilter(actor), queryWhere],
     };
   }
 

@@ -8,6 +8,7 @@ import {
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import type { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
+import type { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { StockService } from './stock.service';
 
 function createService(prisma: unknown = {}) {
@@ -53,6 +54,20 @@ async function stockBalanceWhere(
   };
   await createService(prisma).listBalances(query, user);
   return prisma.stockBalance.findMany.mock.calls[0][0].where;
+}
+
+async function stockTransactionWhere(
+  user: CurrentUser,
+  query: ListStockTransactionsQueryDto = { page: 1, limit: 20 },
+) {
+  const prisma = {
+    stockTransaction: {
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    },
+  };
+  await createService(prisma).listTransactions(query, user);
+  return prisma.stockTransaction.findMany.mock.calls[0][0].where;
 }
 
 describe('StockService', () => {
@@ -184,6 +199,81 @@ describe('StockService', () => {
               },
             ],
           },
+        },
+      }),
+    );
+  });
+
+  it('limits manager transactions to its organization scope', async () => {
+    const where = await stockTransactionWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [
+          { managementId: scopeIds.management, serviceCode: 'IT' },
+        ],
+      }),
+    );
+
+    expect(where.AND[0]).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          {
+            responsiblePerson: {
+              OR: [
+                {
+                  managementId: scopeIds.management,
+                  service: { code: 'IT' },
+                },
+              ],
+            },
+          },
+        ]),
+      }),
+    );
+  });
+
+  it('does not let transaction query filters expand manager scope', async () => {
+    const foreignResponsiblePersonId =
+      '55555555-5555-4555-8555-555555555555';
+    const where = await stockTransactionWhere(
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+      }),
+      {
+        page: 1,
+        limit: 20,
+        responsiblePersonId: foreignResponsiblePersonId,
+      },
+    );
+
+    expect(where.AND[0]).toEqual(
+      expect.objectContaining({ OR: expect.any(Array) }),
+    );
+    expect(where.AND[1]).toEqual(
+      expect.objectContaining({ responsiblePersonId: foreignResponsiblePersonId }),
+    );
+  });
+
+  it('does not return a transaction outside manager scope by ID', async () => {
+    const prisma = {
+      stockTransaction: { findFirst: jest.fn().mockResolvedValue(null) },
+    };
+    const manager = actor(UserRole.ORG_MANAGER, {
+      responsiblePersonId: null,
+      accessScopes: [{ managementId: scopeIds.management, serviceCode: null }],
+    });
+
+    await expect(
+      createService(prisma).findTransaction('foreign-transaction', manager),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.stockTransaction.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { id: 'foreign-transaction' },
+            expect.objectContaining({ OR: expect.any(Array) }),
+          ],
         },
       }),
     );

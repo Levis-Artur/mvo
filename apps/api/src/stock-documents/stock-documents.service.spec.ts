@@ -24,7 +24,14 @@ const secondBalanceId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const documentId = '66666666-6666-4666-8666-666666666666';
 const lineId = '77777777-7777-4777-8777-777777777777';
 
-function user(role: UserRole, responsiblePersonId: string | null) {
+function user(
+  role: UserRole,
+  responsiblePersonId: string | null,
+  accessScopes: Array<{
+    managementId: string | null;
+    serviceCode: string | null;
+  }> = [],
+) {
   return {
     id:
       role === UserRole.MVO
@@ -35,6 +42,7 @@ function user(role: UserRole, responsiblePersonId: string | null) {
     isActive: true,
     mustChangePassword: false,
     responsiblePersonId,
+    accessScopes,
   };
 }
 
@@ -219,6 +227,7 @@ function harness() {
   const prisma = {
     stockDocument: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn().mockResolvedValue(0),
       create: jest.fn(),
@@ -294,10 +303,87 @@ function prepareIssueCreate(
       inventoryItemId: secondItemId,
     });
   });
-  h.prisma.stockDocument.findUnique.mockResolvedValue(
+  h.prisma.stockDocument.findFirst.mockResolvedValue(
     viewDocument(StockDocumentStatus.POSTED, StockDocumentType.ISSUE, lines),
   );
 }
+
+describe('StockDocumentsService ORG_MANAGER read scope', () => {
+  const managementId = '12121212-1212-4121-8121-121212121212';
+  const manager = user(UserRole.ORG_MANAGER, null, [
+    { managementId, serviceCode: 'IT' },
+  ]);
+
+  it('combines source/destination scope with document query filters', async () => {
+    const h = harness();
+
+    await h.service.list(
+      {
+        page: 1,
+        limit: 20,
+        type: StockDocumentType.MVO_TRANSFER,
+        sourceResponsiblePersonId: sourceId,
+      },
+      manager,
+    );
+
+    const where = h.prisma.stockDocument.findMany.mock.calls[0][0].where;
+    expect(where.AND[0]).toEqual({
+      OR: [
+        {
+          sourceResponsiblePerson: {
+            OR: [{ managementId, service: { code: 'IT' } }],
+          },
+        },
+        {
+          destinationResponsiblePerson: {
+            OR: [{ managementId, service: { code: 'IT' } }],
+          },
+        },
+      ],
+    });
+    expect(where.AND[1]).toEqual(
+      expect.objectContaining({
+        type: StockDocumentType.MVO_TRANSFER,
+        sourceResponsiblePersonId: sourceId,
+      }),
+    );
+  });
+
+  it('returns NotFound for a document outside manager scope', async () => {
+    const h = harness();
+
+    await expect(h.service.findOne(documentId, manager)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(h.prisma.stockDocument.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { id: documentId },
+            expect.objectContaining({ OR: expect.any(Array) }),
+          ],
+        },
+      }),
+    );
+  });
+
+  it('returns no global documents when manager has no scopes', async () => {
+    const h = harness();
+
+    await h.service.list(
+      { page: 1, limit: 20 },
+      user(UserRole.ORG_MANAGER, null),
+    );
+
+    expect(h.prisma.stockDocument.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: [
+        { sourceResponsiblePerson: { id: { in: [] } } },
+        { destinationResponsiblePerson: { id: { in: [] } } },
+      ],
+    });
+  });
+});
 
 describe('StockDocumentsService standalone ISSUE', () => {
   it('creates a POSTED ISSUE from the authenticated MVO direct balance', async () => {
@@ -526,7 +612,7 @@ describe('StockDocumentsService standalone ISSUE', () => {
           [issuedLine],
         ),
       );
-    h.prisma.stockDocument.findUnique.mockResolvedValue(
+    h.prisma.stockDocument.findFirst.mockResolvedValue(
       viewDocument(
         StockDocumentStatus.CANCELLED,
         StockDocumentType.ISSUE,
@@ -557,7 +643,7 @@ describe('StockDocumentsService standalone ISSUE', () => {
       sourceResponsiblePersonId: sourceId,
       sourceTransferId: null,
     });
-    h.prisma.stockDocument.findUnique.mockResolvedValue(
+    h.prisma.stockDocument.findFirst.mockResolvedValue(
       viewDocument(StockDocumentStatus.CANCELLED),
     );
 
@@ -601,7 +687,7 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
       responsiblePersonId: sourceId,
       inventoryItemId: itemId,
     });
-    h.prisma.stockDocument.findUnique.mockResolvedValue(
+    h.prisma.stockDocument.findFirst.mockResolvedValue(
       viewDocument(
         StockDocumentStatus.POSTED,
         StockDocumentType.MVO_TRANSFER,
@@ -630,16 +716,21 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
 
   it('does not expose the sender transfer to its recipient MVO', async () => {
     const h = harness();
-    h.prisma.stockDocument.findUnique.mockResolvedValue(
-      viewDocument(
-        StockDocumentStatus.POSTED,
-        StockDocumentType.MVO_TRANSFER,
-      ),
-    );
+    h.prisma.stockDocument.findFirst.mockResolvedValue(null);
 
     await expect(
       h.service.findOne(documentId, user(UserRole.MVO, destinationId)),
     ).rejects.toBeInstanceOf(NotFoundException);
+    expect(h.prisma.stockDocument.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          AND: [
+            { id: documentId },
+            { sourceResponsiblePerson: { id: destinationId } },
+          ],
+        },
+      }),
+    );
   });
 
   it('rejects a transfer to the sender before starting a transaction', async () => {
@@ -725,7 +816,7 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
           [transferLine],
         ),
       );
-    h.prisma.stockDocument.findUnique.mockResolvedValue(
+    h.prisma.stockDocument.findFirst.mockResolvedValue(
       viewDocument(
         StockDocumentStatus.CANCELLED,
         StockDocumentType.MVO_TRANSFER,
