@@ -1,5 +1,9 @@
 import { UnauthorizedException } from '@nestjs/common';
-import { SecurityEventType, UserRole } from '@prisma/client';
+import {
+  PreAuthChallengeStage,
+  SecurityEventType,
+  UserRole,
+} from '@prisma/client';
 import { AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
 
 type MockPrisma = ReturnType<typeof createPrismaMock>;
@@ -45,6 +49,9 @@ function createPrismaMock() {
     lockedUntil: null,
     lastLoginAt: null,
     passwordChangedAt: null,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+    twoFactorConfirmedAt: null,
     responsiblePersonId: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -59,8 +66,20 @@ function createPrismaMock() {
   return prisma;
 }
 
-function createService(prisma: MockPrisma) {
-  return new AuthService(prisma as never);
+function createPreAuthChallengeMock() {
+  return {
+    create: jest.fn().mockResolvedValue({
+      token: 'pre-auth-token',
+      expiresAt: new Date('2026-01-01T00:10:00.000Z'),
+    }),
+  };
+}
+
+function createService(
+  prisma: MockPrisma,
+  preAuthChallenges = createPreAuthChallengeMock(),
+) {
+  return new AuthService(prisma as never, preAuthChallenges as never);
 }
 
 async function activeUser(overrides: Record<string, unknown> = {}) {
@@ -77,6 +96,9 @@ async function activeUser(overrides: Record<string, unknown> = {}) {
     lockedUntil: null,
     lastLoginAt: null,
     passwordChangedAt: null,
+    twoFactorEnabled: false,
+    twoFactorSecretEncrypted: null,
+    twoFactorConfirmedAt: null,
     responsiblePersonId: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -100,22 +122,30 @@ describe('AuthService', () => {
     ).toEqual([{ managementId: 'management-1', serviceCode: 'IT' }]);
   });
 
-  it('logs in with a valid username and password', async () => {
+  it('routes a valid password to CHANGE_PASSWORD when required', async () => {
     const prisma = createPrismaMock();
-    const service = createService(prisma);
-    prisma.user.findUnique.mockResolvedValue(await activeUser());
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ mustChangePassword: true }),
+    );
 
     const result = await service.login(' Owner ', password, context);
 
-    expect(result.token).toHaveLength(43);
-    expect(result.user).toEqual(
-      expect.objectContaining({
+    expect(result).toEqual({
+      requiresPreAuth: true,
+      stage: PreAuthChallengeStage.CHANGE_PASSWORD,
+      preAuthToken: 'pre-auth-token',
+      user: {
         id: userId,
         username: 'owner',
         role: UserRole.OWNER,
-      }),
+      },
+    });
+    expect(preAuthChallenges.create).toHaveBeenCalledWith(
+      userId,
+      PreAuthChallengeStage.CHANGE_PASSWORD,
     );
-    expect(result.user).not.toHaveProperty('passwordHash');
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { username: 'owner' },
     });
@@ -128,15 +158,7 @@ describe('AuthService', () => {
         }),
       }),
     );
-    expect(prisma.userSession.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          userId,
-          tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-          expiresAt: expect.any(Date),
-        }),
-      }),
-    );
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
     expect(prisma.securityEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -145,6 +167,57 @@ describe('AuthService', () => {
         }),
       }),
     );
+  });
+
+  it('routes a valid password to ENROLL_2FA when 2FA is disabled', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({
+        mustChangePassword: false,
+        twoFactorEnabled: false,
+      }),
+    );
+
+    const result = await service.login('owner', password, context);
+
+    expect(result.stage).toBe(PreAuthChallengeStage.ENROLL_2FA);
+    expect(preAuthChallenges.create).toHaveBeenCalledWith(
+      userId,
+      PreAuthChallengeStage.ENROLL_2FA,
+    );
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('routes a valid password to VERIFY_2FA without exposing secrets', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    const encryptedSecret = 'v1:encrypted-secret';
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({
+        mustChangePassword: false,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptedSecret,
+      }),
+    );
+
+    const result = await service.login('owner', password, context);
+
+    expect(result.stage).toBe(PreAuthChallengeStage.VERIFY_2FA);
+    expect(preAuthChallenges.create).toHaveBeenCalledWith(
+      userId,
+      PreAuthChallengeStage.VERIFY_2FA,
+    );
+    expect(result.user).toEqual({
+      id: userId,
+      username: 'owner',
+      role: UserRole.OWNER,
+    });
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+    expect(JSON.stringify(result)).not.toContain(encryptedSecret);
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid password with a generic message', async () => {
@@ -208,13 +281,30 @@ describe('AuthService', () => {
 
   it('rejects inactive users', async () => {
     const prisma = createPrismaMock();
-    const service = createService(prisma);
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
     prisma.user.findUnique.mockResolvedValue(await activeUser({ isActive: false }));
 
     await expect(service.login('owner', password, context)).rejects.toThrow(
       INVALID_CREDENTIALS_MESSAGE,
     );
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(preAuthChallenges.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects locked users without creating a pre-auth challenge', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ lockedUntil: new Date(Date.now() + 60_000) }),
+    );
+
+    await expect(service.login('owner', password, context)).rejects.toThrow(
+      INVALID_CREDENTIALS_MESSAGE,
+    );
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(preAuthChallenges.create).not.toHaveBeenCalled();
   });
 
   it('revokes the current session on logout', async () => {

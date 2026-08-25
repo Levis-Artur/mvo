@@ -54,15 +54,13 @@ describe('public routes', () => {
     jest.clearAllMocks();
     queryRaw.mockResolvedValue([{ '?column?': 1 }]);
     login.mockResolvedValue({
-      token: 'session-token',
-      expiresAt: new Date('2026-07-17T00:00:00.000Z'),
+      requiresPreAuth: true,
+      stage: 'VERIFY_2FA',
+      preAuthToken: 'pre-auth-token',
       user: {
         id: 'owner-id',
         username: 'owner',
         role: 'OWNER',
-        isActive: true,
-        mustChangePassword: false,
-        responsiblePersonId: null,
       },
     });
   });
@@ -98,6 +96,17 @@ describe('public routes', () => {
       'correct-password-123',
       expect.objectContaining({ ipAddress: '127.0.0.1' }),
     );
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await response.json()).toEqual({
+      requiresPreAuth: true,
+      stage: 'VERIFY_2FA',
+      preAuthToken: 'pre-auth-token',
+      user: {
+        id: 'owner-id',
+        username: 'owner',
+        role: 'OWNER',
+      },
+    });
   });
 
   it('rejects a protected endpoint without a session', async () => {

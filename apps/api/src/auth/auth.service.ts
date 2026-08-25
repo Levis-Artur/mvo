@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  PreAuthChallengeStage,
   Prisma,
   SecurityEventType,
   User,
@@ -18,9 +19,9 @@ import {
   MAX_FAILED_LOGIN_ATTEMPTS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
-  SESSION_TTL_MS,
 } from './auth.constants';
 import type { CurrentUser } from './auth.types';
+import { PreAuthChallengeService } from './pre-auth-challenge.service';
 
 const currentUserInclude = {
   accessScopes: {
@@ -58,9 +59,10 @@ type RequestContext = {
 };
 
 type LoginResult = {
-  token: string;
-  expiresAt: Date;
-  user: CurrentUser;
+  requiresPreAuth: true;
+  stage: PreAuthChallengeStage;
+  preAuthToken: string;
+  user: Pick<User, 'id' | 'username' | 'role'>;
 };
 
 type RateLimitBucket = {
@@ -72,7 +74,10 @@ type RateLimitBucket = {
 export class AuthService {
   private readonly rateLimitBuckets = new Map<string, RateLimitBucket>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly preAuthChallenges: PreAuthChallengeService,
+  ) {}
 
   normalizeUsername(username: string): string {
     return username.trim().toLowerCase();
@@ -126,26 +131,19 @@ export class AuthService {
     }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
-    const token = this.createSessionToken();
+    const stage = user.mustChangePassword
+      ? PreAuthChallengeStage.CHANGE_PASSWORD
+      : user.twoFactorEnabled
+        ? PreAuthChallengeStage.VERIFY_2FA
+        : PreAuthChallengeStage.ENROLL_2FA;
 
-    const [updatedUser] = await this.prisma.$transaction([
+    await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.id },
         data: {
           failedLoginAttempts: 0,
           lockedUntil: null,
           lastLoginAt: now,
-        },
-        include: currentUserInclude,
-      }),
-      this.prisma.userSession.create({
-        data: {
-          userId: user.id,
-          tokenHash: this.hashSessionToken(token),
-          ipAddress: context.ipAddress,
-          userAgent: context.userAgent,
-          expiresAt,
         },
       }),
       this.prisma.securityEvent.create({
@@ -160,11 +158,17 @@ export class AuthService {
         },
       }),
     ]);
+    const challenge = await this.preAuthChallenges.create(user.id, stage);
 
     return {
-      token,
-      expiresAt,
-      user: this.toCurrentUser(updatedUser),
+      requiresPreAuth: true,
+      stage,
+      preAuthToken: challenge.token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
     };
   }
 
