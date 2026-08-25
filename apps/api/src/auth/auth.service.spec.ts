@@ -6,6 +6,7 @@ import {
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
+import { InvalidTwoFactorTokenException } from './two-factor/two-factor.service';
 
 type MockPrisma = ReturnType<typeof createPrismaMock>;
 
@@ -42,10 +43,13 @@ function createPrismaMock() {
     async (
       input:
         | Promise<unknown>[]
-        | ((client: { user: typeof prisma.user }) => Promise<unknown>),
+        | ((client: {
+            user: typeof prisma.user;
+            userSession: typeof prisma.userSession;
+          }) => Promise<unknown>),
     ) =>
       typeof input === 'function'
-        ? input({ user: prisma.user })
+        ? input({ user: prisma.user, userSession: prisma.userSession })
         : Promise.all(input),
   );
 
@@ -91,14 +95,36 @@ function createPreAuthChallengeMock() {
       token: 'next-pre-auth-token',
       expiresAt: new Date('2026-01-01T00:20:00.000Z'),
     }),
+    consume: jest.fn().mockResolvedValue(undefined),
+    recordFailure: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createTwoFactorMock() {
+  return {
+    beginEnrollment: jest.fn().mockResolvedValue({
+      otpauthUrl: 'otpauth://totp/MVO%20Inventory%3Aowner',
+      manualKey: 'MANUALKEY',
+    }),
+    confirmEnrollment: jest.fn().mockResolvedValue({
+      recoveryCodes: Array.from(
+        { length: 10 },
+        (_, index) => `CODE-${index + 1}`,
+      ),
+    }),
   };
 }
 
 function createService(
   prisma: MockPrisma,
   preAuthChallenges = createPreAuthChallengeMock(),
+  twoFactor = createTwoFactorMock(),
 ) {
-  return new AuthService(prisma as never, preAuthChallenges as never);
+  return new AuthService(
+    prisma as never,
+    preAuthChallenges as never,
+    twoFactor as never,
+  );
 }
 
 async function activeUser(overrides: Record<string, unknown> = {}) {
@@ -429,6 +455,91 @@ describe('AuthService', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
     expect(preAuthChallenges.advance).not.toHaveBeenCalled();
+  });
+
+  it('begins 2FA enrollment without creating a session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(await activeUser());
+
+    const result = await service.beginTwoFactorEnrollment('enroll-token');
+
+    expect(preAuthChallenges.validate).toHaveBeenCalledWith(
+      'enroll-token',
+      PreAuthChallengeStage.ENROLL_2FA,
+    );
+    expect(twoFactor.beginEnrollment).toHaveBeenCalledWith(userId);
+    expect(result).toEqual({
+      otpauthUrl: 'otpauth://totp/MVO%20Inventory%3Aowner',
+      manualKey: 'MANUALKEY',
+    });
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(preAuthChallenges.consume).not.toHaveBeenCalled();
+  });
+
+  it('records a failed challenge attempt for an invalid TOTP', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    twoFactor.confirmEnrollment.mockRejectedValue(
+      new InvalidTwoFactorTokenException(),
+    );
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(await activeUser());
+
+    await expect(
+      service.confirmTwoFactorEnrollment('enroll-token', '000000', context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(preAuthChallenges.recordFailure).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+    );
+    expect(preAuthChallenges.consume).not.toHaveBeenCalled();
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('confirms 2FA, consumes pre-auth, and creates exactly one session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(await activeUser());
+
+    const result = await service.confirmTwoFactorEnrollment(
+      'enroll-token',
+      '123456',
+      context,
+    );
+
+    expect(twoFactor.confirmEnrollment).toHaveBeenCalledWith(
+      userId,
+      '123456',
+      expect.any(Object),
+    );
+    expect(preAuthChallenges.consume).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+      expect.any(Object),
+    );
+    expect(result.authenticated).toBe(true);
+    expect(result.recoveryCodes).toHaveLength(10);
+    expect(result.user).toEqual({
+      id: userId,
+      username: 'owner',
+      role: UserRole.OWNER,
+    });
+    expect(prisma.userSession.create).toHaveBeenCalledTimes(1);
+    expect(prisma.userSession.create).toHaveBeenCalledWith({
+      data: {
+        userId,
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        expiresAt: expect.any(Date),
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+    expect(JSON.stringify(result)).not.toContain('twoFactorSecret');
   });
 
   it('revokes the current session on logout', async () => {

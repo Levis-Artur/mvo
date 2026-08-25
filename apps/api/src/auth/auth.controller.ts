@@ -2,9 +2,11 @@ import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import type { AuthenticatedRequest } from './auth.types';
-import { clearSessionCookie } from './cookies';
+import { clearSessionCookie, setSessionCookie } from './cookies';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { PreAuthTwoFactorConfirmDto } from './dto/pre-auth-2fa-confirm.dto';
+import { PreAuthTwoFactorEnrollDto } from './dto/pre-auth-2fa-enroll.dto';
 import { PreAuthChangePasswordDto } from './dto/pre-auth-change-password.dto';
 import { Public } from './public.decorator';
 import { getRequestContext } from './request-context';
@@ -33,6 +35,33 @@ export class AuthController {
       dto.preAuthToken,
       dto.newPassword,
     );
+  }
+
+  @Public()
+  @Post('pre-auth/2fa/enroll')
+  beginTwoFactorEnrollment(@Body() dto: PreAuthTwoFactorEnrollDto) {
+    return this.authService.beginTwoFactorEnrollment(dto.preAuthToken);
+  }
+
+  @Public()
+  @Post('pre-auth/2fa/confirm')
+  async confirmTwoFactorEnrollment(
+    @Body() dto: PreAuthTwoFactorConfirmDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.confirmTwoFactorEnrollment(
+      dto.preAuthToken,
+      dto.token,
+      getRequestContext(request),
+    );
+    setSessionCookie(response, result.session.token, result.session.expiresAt);
+
+    return {
+      authenticated: result.authenticated,
+      recoveryCodes: result.recoveryCodes,
+      user: result.user,
+    };
   }
 
   @Post('logout')

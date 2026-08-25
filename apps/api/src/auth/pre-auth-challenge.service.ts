@@ -125,10 +125,19 @@ export class PreAuthChallengeService {
     return { token: issued.token, expiresAt: issued.expiresAt };
   }
 
-  async consume(challengeId: string): Promise<void> {
-    await this.prisma.preAuthChallenge.deleteMany({
-      where: { id: challengeId },
-    });
+  async consume(
+    challengeId: string,
+    transaction?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const deleted = transaction
+      ? await transaction.preAuthChallenge.deleteMany({
+          where: { id: challengeId },
+        })
+      : await this.prisma.preAuthChallenge.deleteMany({
+          where: { id: challengeId },
+        });
+
+    if (deleted.count !== 1) this.reject();
   }
 
   private issueToken(): IssuedChallenge & { tokenHash: string } {

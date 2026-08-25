@@ -3,7 +3,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashRecoveryCode } from './recovery-code';
@@ -20,6 +22,12 @@ type EnrollmentUser = {
   twoFactorEnabled: boolean;
   twoFactorSecretEncrypted: string | null;
 };
+
+export class InvalidTwoFactorTokenException extends UnauthorizedException {
+  constructor() {
+    super('Невірний код автентифікатора.');
+  }
+}
 
 @Injectable()
 export class TwoFactorService {
@@ -58,6 +66,7 @@ export class TwoFactorService {
   async confirmEnrollment(
     userId: string,
     token: string,
+    transaction?: Prisma.TransactionClient,
   ): Promise<{ recoveryCodes: string[] }> {
     const user = await this.findActiveUser(userId);
     this.assertNotEnabled(user);
@@ -67,14 +76,14 @@ export class TwoFactorService {
 
     const secret = decryptTotpSecret(user.twoFactorSecretEncrypted);
     if (!(await verifyToken(secret, token))) {
-      throw new BadRequestException('Невірний код автентифікатора.');
+      throw new InvalidTwoFactorTokenException();
     }
 
     const recoveryCodes = this.generateRecoveryCodes();
     const confirmedAt = new Date();
 
-    await this.prisma.$transaction(async (transaction) => {
-      const updated = await transaction.user.updateMany({
+    const confirmWith = async (client: Prisma.TransactionClient) => {
+      const updated = await client.user.updateMany({
         where: {
           id: user.id,
           isActive: true,
@@ -91,16 +100,19 @@ export class TwoFactorService {
         throw new ConflictException('Налаштування 2FA вже було підтверджено.');
       }
 
-      await transaction.twoFactorRecoveryCode.deleteMany({
+      await client.twoFactorRecoveryCode.deleteMany({
         where: { userId: user.id },
       });
-      await transaction.twoFactorRecoveryCode.createMany({
+      await client.twoFactorRecoveryCode.createMany({
         data: recoveryCodes.map((code) => ({
           userId: user.id,
           codeHash: hashRecoveryCode(code),
         })),
       });
-    });
+    };
+
+    if (transaction) await confirmWith(transaction);
+    else await this.prisma.$transaction(confirmWith);
 
     return { recoveryCodes };
   }

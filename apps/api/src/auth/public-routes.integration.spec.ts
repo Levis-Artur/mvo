@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
 import type { AddressInfo } from 'node:net';
@@ -11,6 +11,8 @@ describe('public routes', () => {
 
   const login = jest.fn();
   const changePasswordPreAuth = jest.fn();
+  const beginTwoFactorEnrollment = jest.fn();
+  const confirmTwoFactorEnrollment = jest.fn();
   const authenticateSession = jest.fn();
   const queryRaw = jest.fn();
 
@@ -32,7 +34,9 @@ describe('public routes', () => {
       .overrideProvider(AuthService)
       .useValue({
         authenticateSession,
+        beginTwoFactorEnrollment,
         changePasswordPreAuth,
+        confirmTwoFactorEnrollment,
         login,
       })
       .compile();
@@ -69,6 +73,26 @@ describe('public routes', () => {
       requiresPreAuth: true,
       stage: 'ENROLL_2FA',
       preAuthToken: 'next-pre-auth-token',
+    });
+    beginTwoFactorEnrollment.mockResolvedValue({
+      otpauthUrl: 'otpauth://totp/MVO%20Inventory%3Aowner',
+      manualKey: 'MANUALKEY',
+    });
+    confirmTwoFactorEnrollment.mockResolvedValue({
+      authenticated: true,
+      recoveryCodes: Array.from(
+        { length: 10 },
+        (_, index) => `CODE-${index + 1}`,
+      ),
+      user: {
+        id: 'owner-id',
+        username: 'owner',
+        role: 'OWNER',
+      },
+      session: {
+        token: 'authenticated-session-token',
+        expiresAt: new Date('2026-07-17T00:00:00.000Z'),
+      },
     });
   });
 
@@ -146,6 +170,76 @@ describe('public routes', () => {
       stage: 'ENROLL_2FA',
       preAuthToken: 'next-pre-auth-token',
     });
+  });
+
+  it('begins 2FA enrollment without setting a session cookie', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/pre-auth/2fa/enroll`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ preAuthToken: 'enroll-token' }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(beginTwoFactorEnrollment).toHaveBeenCalledWith('enroll-token');
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await response.json()).toEqual({
+      otpauthUrl: 'otpauth://totp/MVO%20Inventory%3Aowner',
+      manualKey: 'MANUALKEY',
+    });
+  });
+
+  it('confirms 2FA and sets the authenticated session cookie', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/pre-auth/2fa/confirm`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        preAuthToken: 'enroll-token',
+        token: '123456',
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(confirmTwoFactorEnrollment).toHaveBeenCalledWith(
+      'enroll-token',
+      '123456',
+      expect.objectContaining({ ipAddress: '127.0.0.1' }),
+    );
+    expect(response.headers.get('set-cookie')).toContain(
+      'mvo_session=authenticated-session-token',
+    );
+    const body = await response.json();
+    expect(body).toEqual({
+      authenticated: true,
+      recoveryCodes: Array.from(
+        { length: 10 },
+        (_, index) => `CODE-${index + 1}`,
+      ),
+      user: {
+        id: 'owner-id',
+        username: 'owner',
+        role: 'OWNER',
+      },
+    });
+    expect(body).not.toHaveProperty('session');
+    expect(JSON.stringify(body)).not.toContain('authenticated-session-token');
+  });
+
+  it('does not set a session cookie when TOTP confirmation fails', async () => {
+    confirmTwoFactorEnrollment.mockRejectedValueOnce(
+      new UnauthorizedException(),
+    );
+
+    const response = await fetch(`${baseUrl}/api/auth/pre-auth/2fa/confirm`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        preAuthToken: 'enroll-token',
+        token: '000000',
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('set-cookie')).toBeNull();
   });
 
   it('@Public() does not expose other routes', async () => {

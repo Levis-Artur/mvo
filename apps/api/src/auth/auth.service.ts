@@ -19,9 +19,14 @@ import {
   MAX_FAILED_LOGIN_ATTEMPTS,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  SESSION_TTL_MS,
 } from './auth.constants';
 import type { CurrentUser } from './auth.types';
 import { PreAuthChallengeService } from './pre-auth-challenge.service';
+import {
+  InvalidTwoFactorTokenException,
+  TwoFactorService,
+} from './two-factor/two-factor.service';
 
 const currentUserInclude = {
   accessScopes: {
@@ -77,6 +82,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly preAuthChallenges: PreAuthChallengeService,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   normalizeUsername(username: string): string {
@@ -265,6 +271,68 @@ export class AuthService {
     };
   }
 
+  async beginTwoFactorEnrollment(preAuthToken: string): Promise<{
+    otpauthUrl: string;
+    manualKey: string;
+  }> {
+    const challenge = await this.preAuthChallenges.validate(
+      preAuthToken,
+      PreAuthChallengeStage.ENROLL_2FA,
+    );
+    await this.assertActivePreAuthUser(challenge.userId);
+    return this.twoFactor.beginEnrollment(challenge.userId);
+  }
+
+  async confirmTwoFactorEnrollment(
+    preAuthToken: string,
+    token: string,
+    context: RequestContext,
+  ): Promise<{
+    authenticated: true;
+    recoveryCodes: string[];
+    user: Pick<User, 'id' | 'username' | 'role'>;
+    session: { token: string; expiresAt: Date };
+  }> {
+    const challenge = await this.preAuthChallenges.validate(
+      preAuthToken,
+      PreAuthChallengeStage.ENROLL_2FA,
+    );
+    const user = await this.assertActivePreAuthUser(challenge.userId);
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const confirmation = await this.twoFactor.confirmEnrollment(
+          user.id,
+          token,
+          transaction,
+        );
+        await this.preAuthChallenges.consume(challenge.id, transaction);
+        const session = await this.createAuthenticatedSession(
+          user.id,
+          context,
+          transaction,
+        );
+
+        return {
+          authenticated: true,
+          recoveryCodes: confirmation.recoveryCodes,
+          user: {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+          },
+          session,
+        };
+      });
+    } catch (error) {
+      if (error instanceof InvalidTwoFactorTokenException) {
+        await this.preAuthChallenges.recordFailure(challenge.id);
+        throw new UnauthorizedException('Невірні дані підтвердження.');
+      }
+      throw error;
+    }
+  }
+
   async logout(
     sessionId: string | undefined,
     user: CurrentUser | undefined,
@@ -369,6 +437,43 @@ export class AuthService {
 
   createSessionToken(): string {
     return randomBytes(32).toString('base64url');
+  }
+
+  private async assertActivePreAuthUser(
+    userId: string,
+  ): Promise<Pick<User, 'id' | 'username' | 'role'>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        isActive: true,
+      },
+    });
+    if (!user?.isActive) throw new UnauthorizedException();
+    return user;
+  }
+
+  private async createAuthenticatedSession(
+    userId: string,
+    context: RequestContext,
+    transaction: Prisma.TransactionClient,
+  ): Promise<{ token: string; expiresAt: Date }> {
+    const token = this.createSessionToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+    await transaction.userSession.create({
+      data: {
+        userId,
+        tokenHash: this.hashSessionToken(token),
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        expiresAt,
+      },
+    });
+
+    return { token, expiresAt };
   }
 
   toCurrentUser(user: CurrentUserSource): CurrentUser {
