@@ -15,6 +15,8 @@ import { generateOtpAuthUrl, generateSecret, verifyToken } from './totp';
 const RECOVERY_CODE_COUNT = 10;
 const RECOVERY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const RECOVERY_CODE_LENGTH = 16;
+const RECOVERY_CODE_PATTERN =
+  /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}(?:-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{4}){3}$/;
 
 type EnrollmentUser = {
   id: string;
@@ -26,6 +28,12 @@ type EnrollmentUser = {
 export class InvalidTwoFactorTokenException extends UnauthorizedException {
   constructor() {
     super('Невірний код автентифікатора.');
+  }
+}
+
+export class InvalidRecoveryCodeException extends UnauthorizedException {
+  constructor() {
+    super('Невірні дані підтвердження.');
   }
 }
 
@@ -127,6 +135,31 @@ export class TwoFactorService {
     if (!(await verifyToken(secret, token))) {
       throw new InvalidTwoFactorTokenException();
     }
+  }
+
+  async consumeRecoveryCode(
+    userId: string,
+    recoveryCode: string,
+    transaction: Prisma.TransactionClient,
+  ): Promise<void> {
+    const user = await this.findActiveUser(userId);
+    if (!user.twoFactorEnabled) throw new UnauthorizedException();
+
+    const normalizedCode = recoveryCode.trim().toUpperCase();
+    if (!RECOVERY_CODE_PATTERN.test(normalizedCode)) {
+      throw new InvalidRecoveryCodeException();
+    }
+
+    const consumed = await transaction.twoFactorRecoveryCode.updateMany({
+      where: {
+        userId: user.id,
+        codeHash: hashRecoveryCode(normalizedCode),
+        usedAt: null,
+      },
+      data: { usedAt: new Date() },
+    });
+
+    if (consumed.count !== 1) throw new InvalidRecoveryCodeException();
   }
 
   private async findActiveUser(userId: string): Promise<EnrollmentUser> {

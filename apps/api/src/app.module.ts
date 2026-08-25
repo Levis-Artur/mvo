@@ -72,6 +72,10 @@ export class AppModule implements NestModule {
           path: 'auth/pre-auth/2fa/verify',
           method: RequestMethod.POST,
         },
+        {
+          path: 'auth/pre-auth/2fa/recovery',
+          method: RequestMethod.POST,
+        },
       )
       .forRoutes('*');
   }

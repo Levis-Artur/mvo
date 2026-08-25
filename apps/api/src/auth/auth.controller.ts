@@ -7,6 +7,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { PreAuthTwoFactorConfirmDto } from './dto/pre-auth-2fa-confirm.dto';
 import { PreAuthTwoFactorEnrollDto } from './dto/pre-auth-2fa-enroll.dto';
+import { PreAuthTwoFactorRecoveryDto } from './dto/pre-auth-2fa-recovery.dto';
 import { PreAuthChangePasswordDto } from './dto/pre-auth-change-password.dto';
 import { Public } from './public.decorator';
 import { getRequestContext } from './request-context';
@@ -74,6 +75,26 @@ export class AuthController {
     const result = await this.authService.verifyTwoFactor(
       dto.preAuthToken,
       dto.token,
+      getRequestContext(request),
+    );
+    setSessionCookie(response, result.session.token, result.session.expiresAt);
+
+    return {
+      authenticated: result.authenticated,
+      user: result.user,
+    };
+  }
+
+  @Public()
+  @Post('pre-auth/2fa/recovery')
+  async verifyTwoFactorRecoveryCode(
+    @Body() dto: PreAuthTwoFactorRecoveryDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.verifyTwoFactorRecoveryCode(
+      dto.preAuthToken,
+      dto.recoveryCode,
       getRequestContext(request),
     );
     setSessionCookie(response, result.session.token, result.session.expiresAt);

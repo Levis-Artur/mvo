@@ -4,6 +4,7 @@ import { hashRecoveryCode } from './recovery-code';
 import { encryptTotpSecret } from './totp-secret-crypto';
 import { generateSecret } from './totp';
 import {
+  InvalidRecoveryCodeException,
   InvalidTwoFactorTokenException,
   TwoFactorService,
 } from './two-factor.service';
@@ -30,6 +31,7 @@ function createPrismaMock() {
     twoFactorRecoveryCode: {
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       createMany: jest.fn().mockResolvedValue({ count: 10 }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
   const prisma = {
@@ -263,5 +265,82 @@ describe('TwoFactorService', () => {
     await expect(
       service.verifyEnabledToken(userId, token),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('normalizes and atomically consumes an unused recovery code', async () => {
+    const { prisma, transaction } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(user({ twoFactorEnabled: true }));
+    const service = new TwoFactorService(prisma as never);
+
+    await service.consumeRecoveryCode(
+      userId,
+      '  abcd-efgh-jklm-npqr  ',
+      transaction as never,
+    );
+
+    expect(transaction.twoFactorRecoveryCode.updateMany).toHaveBeenCalledWith({
+      where: {
+        userId,
+        codeHash: hashRecoveryCode('ABCD-EFGH-JKLM-NPQR'),
+        usedAt: null,
+      },
+      data: { usedAt: expect.any(Date) },
+    });
+  });
+
+  it('rejects a missing or already used recovery code', async () => {
+    const { prisma, transaction } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(user({ twoFactorEnabled: true }));
+    transaction.twoFactorRecoveryCode.updateMany.mockResolvedValue({ count: 0 });
+    const service = new TwoFactorService(prisma as never);
+
+    await expect(
+      service.consumeRecoveryCode(
+        userId,
+        'ABCD-EFGH-JKLM-NPQR',
+        transaction as never,
+      ),
+    ).rejects.toBeInstanceOf(InvalidRecoveryCodeException);
+  });
+
+  it('rejects a malformed recovery code without querying stored hashes', async () => {
+    const { prisma, transaction } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(user({ twoFactorEnabled: true }));
+    const service = new TwoFactorService(prisma as never);
+
+    await expect(
+      service.consumeRecoveryCode(userId, 'not-a-code', transaction as never),
+    ).rejects.toBeInstanceOf(InvalidRecoveryCodeException);
+    expect(transaction.twoFactorRecoveryCode.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('allows only one concurrent consume of the same recovery code', async () => {
+    const { prisma, transaction } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(user({ twoFactorEnabled: true }));
+    let available = true;
+    transaction.twoFactorRecoveryCode.updateMany.mockImplementation(async () => {
+      if (!available) return { count: 0 };
+      available = false;
+      return { count: 1 };
+    });
+    const service = new TwoFactorService(prisma as never);
+
+    const outcomes = await Promise.allSettled([
+      service.consumeRecoveryCode(
+        userId,
+        'ABCD-EFGH-JKLM-NPQR',
+        transaction as never,
+      ),
+      service.consumeRecoveryCode(
+        userId,
+        'ABCD-EFGH-JKLM-NPQR',
+        transaction as never,
+      ),
+    ]);
+
+    expect(outcomes.map(({ status }) => status).sort()).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
   });
 });

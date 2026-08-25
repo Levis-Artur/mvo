@@ -6,7 +6,10 @@ import {
 } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
-import { InvalidTwoFactorTokenException } from './two-factor/two-factor.service';
+import {
+  InvalidRecoveryCodeException,
+  InvalidTwoFactorTokenException,
+} from './two-factor/two-factor.service';
 
 type MockPrisma = ReturnType<typeof createPrismaMock>;
 
@@ -113,6 +116,7 @@ function createTwoFactorMock() {
       ),
     }),
     verifyEnabledToken: jest.fn().mockResolvedValue(undefined),
+    consumeRecoveryCode: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -598,6 +602,109 @@ describe('AuthService', () => {
     );
     expect(preAuthChallenges.consume).not.toHaveBeenCalled();
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('consumes a recovery code and challenge before creating one session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ twoFactorEnabled: true }),
+    );
+
+    const result = await service.verifyTwoFactorRecoveryCode(
+      'verify-token',
+      'ABCD-EFGH-JKLM-NPQR',
+      context,
+    );
+
+    expect(preAuthChallenges.validate).toHaveBeenCalledWith(
+      'verify-token',
+      PreAuthChallengeStage.VERIFY_2FA,
+    );
+    expect(twoFactor.consumeRecoveryCode).toHaveBeenCalledWith(
+      userId,
+      'ABCD-EFGH-JKLM-NPQR',
+      expect.any(Object),
+    );
+    expect(preAuthChallenges.consume).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+      expect.any(Object),
+    );
+    expect(prisma.userSession.create).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      authenticated: true,
+      user: {
+        id: userId,
+        username: 'owner',
+        role: UserRole.OWNER,
+      },
+      session: expect.objectContaining({ token: expect.any(String) }),
+    });
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+    expect(JSON.stringify(result)).not.toContain('twoFactorSecretEncrypted');
+  });
+
+  it('records an invalid recovery-code attempt without creating a session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    twoFactor.consumeRecoveryCode.mockRejectedValue(
+      new InvalidRecoveryCodeException(),
+    );
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ twoFactorEnabled: true }),
+    );
+
+    await expect(
+      service.verifyTwoFactorRecoveryCode(
+        'verify-token',
+        'ABCD-EFGH-JKLM-NPQR',
+        context,
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(preAuthChallenges.recordFailure).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+    );
+    expect(preAuthChallenges.consume).not.toHaveBeenCalled();
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('creates only one session for concurrent use of one recovery code', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    let available = true;
+    twoFactor.consumeRecoveryCode.mockImplementation(async () => {
+      if (!available) throw new InvalidRecoveryCodeException();
+      available = false;
+    });
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ twoFactorEnabled: true }),
+    );
+
+    const outcomes = await Promise.allSettled([
+      service.verifyTwoFactorRecoveryCode(
+        'verify-token',
+        'ABCD-EFGH-JKLM-NPQR',
+        context,
+      ),
+      service.verifyTwoFactorRecoveryCode(
+        'verify-token',
+        'ABCD-EFGH-JKLM-NPQR',
+        context,
+      ),
+    ]);
+
+    expect(outcomes.map(({ status }) => status).sort()).toEqual([
+      'fulfilled',
+      'rejected',
+    ]);
+    expect(prisma.userSession.create).toHaveBeenCalledTimes(1);
+    expect(preAuthChallenges.consume).toHaveBeenCalledTimes(1);
   });
 
   it('revokes the current session on logout', async () => {
