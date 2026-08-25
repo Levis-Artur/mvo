@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { SecurityEventType, UserRole } from '@prisma/client';
 import { UsersService } from './users.service';
@@ -29,12 +30,14 @@ const context = {
 };
 
 function createPrismaMock() {
-  return {
+  const prisma = {
     user: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     responsiblePerson: {
       findUnique: jest.fn(),
@@ -42,10 +45,24 @@ function createPrismaMock() {
     userSession: {
       updateMany: jest.fn(),
     },
+    preAuthChallenge: {
+      deleteMany: jest.fn(),
+    },
+    twoFactorRecoveryCode: {
+      deleteMany: jest.fn(),
+    },
     securityEvent: {
       create: jest.fn(),
     },
+    $transaction: jest.fn(),
   };
+
+  prisma.$transaction.mockImplementation(
+    async (callback: (client: typeof prisma) => Promise<unknown>) =>
+      callback(prisma),
+  );
+
+  return prisma;
 }
 
 function createService(prisma = createPrismaMock()) {
@@ -378,6 +395,105 @@ describe('UsersService', () => {
         }),
       }),
     );
+  });
+
+  it('allows OWNER to atomically reset 2FA for a non-OWNER user', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'mvo-id',
+      role: UserRole.MVO,
+    });
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.twoFactorRecoveryCode.deleteMany.mockResolvedValue({ count: 10 });
+    prisma.preAuthChallenge.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.userSession.updateMany.mockResolvedValue({ count: 2 });
+
+    await expect(service.resetTwoFactor(owner, 'mvo-id')).resolves.toEqual({
+      success: true,
+    });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'mvo-id', role: { not: UserRole.OWNER } },
+      data: {
+        twoFactorEnabled: false,
+        twoFactorSecretEncrypted: null,
+        twoFactorConfirmedAt: null,
+      },
+    });
+    expect(prisma.twoFactorRecoveryCode.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'mvo-id' },
+    });
+    expect(prisma.preAuthChallenge.deleteMany).toHaveBeenCalledWith({
+      where: { userId: 'mvo-id' },
+    });
+    expect(prisma.userSession.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'mvo-id', revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+
+    const updateData = prisma.user.updateMany.mock.calls[0][0].data;
+    expect(updateData).not.toHaveProperty('passwordHash');
+    expect(updateData).not.toHaveProperty('mustChangePassword');
+    expect(updateData).not.toHaveProperty('role');
+    expect(updateData).not.toHaveProperty('responsiblePersonId');
+    expect(updateData).not.toHaveProperty('isActive');
+  });
+
+  it.each([
+    UserRole.DPP_ADMIN,
+    UserRole.ORG_MANAGER,
+    UserRole.ACCOUNTANT,
+    UserRole.AUDITOR,
+    UserRole.MVO,
+  ])('rejects 2FA reset by %s', async (role) => {
+    const { service, prisma } = createService();
+
+    await expect(
+      service.resetTwoFactor({ ...owner, role }, 'mvo-id'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects resetting 2FA for an OWNER target', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'another-owner-id',
+      role: UserRole.OWNER,
+    });
+
+    await expect(
+      service.resetTwoFactor(owner, 'another-owner-id'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for an unknown 2FA reset target', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.resetTwoFactor(owner, 'unknown-id'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('keeps the reset inside one transaction when a mutation fails', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'mvo-id',
+      role: UserRole.MVO,
+    });
+    prisma.user.updateMany.mockResolvedValue({ count: 1 });
+    prisma.twoFactorRecoveryCode.deleteMany.mockResolvedValue({ count: 10 });
+    prisma.preAuthChallenge.deleteMany.mockRejectedValue(
+      new Error('transaction failed'),
+    );
+
+    await expect(service.resetTwoFactor(owner, 'mvo-id')).rejects.toThrow(
+      'transaction failed',
+    );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.userSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('deactivate revokes sessions', async () => {

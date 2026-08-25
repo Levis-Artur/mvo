@@ -237,6 +237,52 @@ export class UsersService {
     return { user, temporaryPassword };
   }
 
+  async resetTwoFactor(
+    actor: CurrentUser,
+    id: string,
+  ): Promise<{ success: true }> {
+    this.assertOwner(actor);
+
+    await this.prisma.$transaction(async (transaction) => {
+      const target = await transaction.user.findUnique({
+        where: { id },
+        select: { id: true, role: true },
+      });
+
+      if (!target) {
+        throw new NotFoundException('Користувача не знайдено');
+      }
+      if (target.role === UserRole.OWNER) {
+        throw new ForbiddenException('Скидання 2FA для OWNER через API заборонено');
+      }
+
+      const reset = await transaction.user.updateMany({
+        where: { id: target.id, role: { not: UserRole.OWNER } },
+        data: {
+          twoFactorEnabled: false,
+          twoFactorSecretEncrypted: null,
+          twoFactorConfirmedAt: null,
+        },
+      });
+      if (reset.count !== 1) {
+        throw new ForbiddenException('Скидання 2FA для OWNER через API заборонено');
+      }
+
+      await transaction.twoFactorRecoveryCode.deleteMany({
+        where: { userId: target.id },
+      });
+      await transaction.preAuthChallenge.deleteMany({
+        where: { userId: target.id },
+      });
+      await transaction.userSession.updateMany({
+        where: { userId: target.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    return { success: true };
+  }
+
   async block(actor: CurrentUser, id: string, context: RequestContext) {
     await this.getEditableTarget(actor, id);
     const user = await this.prisma.user.update({

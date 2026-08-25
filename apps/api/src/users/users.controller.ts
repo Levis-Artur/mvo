@@ -81,6 +81,15 @@ export class UsersController {
     );
   }
 
+  @Post(':id/reset-2fa')
+  @Roles(UserRole.OWNER)
+  resetTwoFactor(
+    @CurrentUserParam() actor: CurrentUser,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.resetTwoFactor(actor, id);
+  }
+
   @Post(':id/block')
   block(
     @CurrentUserParam() actor: CurrentUser,
