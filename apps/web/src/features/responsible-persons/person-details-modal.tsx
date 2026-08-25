@@ -124,18 +124,6 @@ export function PersonDetailsModal({
                   label="Підрозділ"
                   value={person.unit?.name ?? 'Без підрозділу'}
                 />
-                <Detail
-                  label="Наказ про призначення"
-                  value={person.appointmentOrderNumber}
-                />
-                <Detail
-                  label="Дата призначення"
-                  value={
-                    person.appointmentDate
-                      ? new Date(person.appointmentDate).toLocaleDateString('uk-UA')
-                      : null
-                  }
-                />
               </dl>
             </Card>
           </div>

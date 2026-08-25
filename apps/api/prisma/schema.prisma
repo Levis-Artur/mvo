@@ -185,8 +185,6 @@ model ResponsiblePerson {
   managementId           String             @db.Uuid
   serviceId              String             @db.Uuid
   unitId                 String?            @db.Uuid
-  appointmentOrderNumber String?
-  appointmentDate        DateTime?
   isActive               Boolean            @default(true)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt

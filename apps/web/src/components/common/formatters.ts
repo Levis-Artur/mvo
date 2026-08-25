@@ -37,8 +37,6 @@ export function normalizePersonForm(form: CreateResponsiblePersonDto): CreateRes
     phone: form.phone || null,
     email: form.email || null,
     unitId: form.unitId || null,
-    appointmentOrderNumber: form.appointmentOrderNumber || null,
-    appointmentDate: form.appointmentDate || null,
   };
 }
 

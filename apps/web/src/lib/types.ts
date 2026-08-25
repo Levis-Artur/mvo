@@ -100,8 +100,6 @@ export type ResponsiblePerson = {
   managementId: string;
   serviceId: string;
   unitId: string | null;
-  appointmentOrderNumber: string | null;
-  appointmentDate: string | null;
   isActive: EntityStatus;
   createdAt: string;
   updatedAt: string;
@@ -1026,8 +1024,6 @@ export type CreateResponsiblePersonDto = {
   managementId: string;
   serviceId: string;
   unitId?: string | null;
-  appointmentOrderNumber?: string | null;
-  appointmentDate?: string | null;
   isActive?: boolean;
 };
 

@@ -33,8 +33,6 @@ const emptyPersonForm: CreateResponsiblePersonDto = {
   managementId: '',
   serviceId: '',
   unitId: '',
-  appointmentOrderNumber: '',
-  appointmentDate: '',
   isActive: true,
 };
 
@@ -61,8 +59,6 @@ export function PersonForm({
           managementId: person.managementId,
           serviceId: person.serviceId,
           unitId: person.unitId ?? '',
-          appointmentOrderNumber: person.appointmentOrderNumber ?? '',
-          appointmentDate: person.appointmentDate?.slice(0, 10) ?? '',
           isActive: person.isActive,
         }
       : emptyPersonForm,
@@ -318,29 +314,6 @@ export function PersonForm({
                 </option>
               ))}
             </Select>
-          </FormField>
-          <FormField label="Номер наказу">
-            <Input
-              value={form.appointmentOrderNumber ?? ''}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  appointmentOrderNumber: event.target.value,
-                }))
-              }
-            />
-          </FormField>
-          <FormField label="Дата призначення">
-            <Input
-              type="date"
-              value={form.appointmentDate ?? ''}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  appointmentDate: event.target.value,
-                }))
-              }
-            />
           </FormField>
         </div>
         <Checkbox

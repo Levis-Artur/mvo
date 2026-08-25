@@ -300,9 +300,6 @@ export class ResponsiblePersonsService {
         dto.externalAccountingCode === undefined
           ? undefined
           : this.normalizeAccountingCode(dto.externalAccountingCode),
-      appointmentDate: dto.appointmentDate
-        ? new Date(dto.appointmentDate)
-        : dto.appointmentDate,
     } as Prisma.ResponsiblePersonUncheckedCreateInput;
   }
 

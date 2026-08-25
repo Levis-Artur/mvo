@@ -69,8 +69,6 @@ const person: ResponsiblePerson = {
   managementId: management.id,
   serviceId: service.id,
   unitId: unit.id,
-  appointmentOrderNumber: null,
-  appointmentDate: null,
   isActive: true,
   createdAt: '2026-07-29T00:00:00.000Z',
   updatedAt: '2026-07-29T00:00:00.000Z',
@@ -101,6 +99,14 @@ afterEach(() => {
 });
 
 describe('MVO accounting code form', () => {
+  it('does not render appointment order or appointment date fields', async () => {
+    render(<PersonForm person={person} onClose={jest.fn()} onSaved={jest.fn()} />);
+
+    await screen.findByLabelText(/Код МВО/);
+    expect(screen.queryByLabelText('Номер наказу')).toBeNull();
+    expect(screen.queryByLabelText('Дата призначення')).toBeNull();
+  });
+
   it('reloads and shows only services of the selected management', async () => {
     const user = userEvent.setup();
     const baseServices = [

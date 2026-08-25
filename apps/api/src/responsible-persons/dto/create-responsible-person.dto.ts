@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsDateString,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -68,15 +67,6 @@ export class CreateResponsiblePersonDto {
   @IsOptional()
   @IsUUID()
   unitId?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
-  appointmentOrderNumber?: string;
-
-  @IsOptional()
-  @IsDateString()
-  appointmentDate?: string | null;
 
   @IsOptional()
   @IsBoolean()
