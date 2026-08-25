@@ -103,6 +103,12 @@ enum UserRole {
   ORG_MANAGER
 }
 
+enum PreAuthChallengeStage {
+  CHANGE_PASSWORD
+  ENROLL_2FA
+  VERIFY_2FA
+}
+
 enum SecurityEventType {
   LOGIN_SUCCESS
   LOGIN_FAILURE
@@ -237,6 +243,7 @@ model User {
   createdBy            User?              @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers         User[]             @relation("UserCreatedBy")
   sessions             UserSession[]
+  preAuthChallenges    PreAuthChallenge[]
   twoFactorRecoveryCodes TwoFactorRecoveryCode[]
   actorSecurityEvents  SecurityEvent[]    @relation("SecurityEventActor")
   targetSecurityEvents SecurityEvent[]    @relation("SecurityEventTarget")
@@ -287,6 +294,20 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
   @@index([revokedAt])
+}
+
+model PreAuthChallenge {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String                @db.Uuid
+  tokenHash      String                @unique
+  stage          PreAuthChallengeStage
+  expiresAt      DateTime
+  failedAttempts Int                   @default(0)
+  createdAt      DateTime              @default(now())
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model TwoFactorRecoveryCode {
