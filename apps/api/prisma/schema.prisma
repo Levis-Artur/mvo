@@ -226,6 +226,9 @@ model User {
   lockedUntil          DateTime?
   lastLoginAt          DateTime?
   passwordChangedAt    DateTime?
+  twoFactorEnabled     Boolean            @default(false)
+  twoFactorSecretEncrypted String?
+  twoFactorConfirmedAt DateTime?
   responsiblePersonId  String?            @unique @db.Uuid
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
@@ -234,6 +237,7 @@ model User {
   createdBy            User?              @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers         User[]             @relation("UserCreatedBy")
   sessions             UserSession[]
+  twoFactorRecoveryCodes TwoFactorRecoveryCode[]
   actorSecurityEvents  SecurityEvent[]    @relation("SecurityEventActor")
   targetSecurityEvents SecurityEvent[]    @relation("SecurityEventTarget")
   createdStockDocuments   StockDocument[]  @relation("StockDocumentCreatedBy")
@@ -283,6 +287,17 @@ model UserSession {
   @@index([userId])
   @@index([expiresAt])
   @@index([revokedAt])
+}
+
+model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model SecurityEvent {
