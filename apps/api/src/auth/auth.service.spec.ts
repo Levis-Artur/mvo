@@ -4,6 +4,7 @@ import {
   SecurityEventType,
   UserRole,
 } from '@prisma/client';
+import * as argon2 from 'argon2';
 import { AuthService, INVALID_CREDENTIALS_MESSAGE } from './auth.service';
 
 type MockPrisma = ReturnType<typeof createPrismaMock>;
@@ -23,6 +24,7 @@ function createPrismaMock() {
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     userSession: {
       create: jest.fn(),
@@ -33,10 +35,19 @@ function createPrismaMock() {
     securityEvent: {
       create: jest.fn(),
     },
-    $transaction: jest.fn(async (operations: Promise<unknown>[]) =>
-      Promise.all(operations),
-    ),
+    $transaction: jest.fn(),
   };
+
+  prisma.$transaction.mockImplementation(
+    async (
+      input:
+        | Promise<unknown>[]
+        | ((client: { user: typeof prisma.user }) => Promise<unknown>),
+    ) =>
+      typeof input === 'function'
+        ? input({ user: prisma.user })
+        : Promise.all(input),
+  );
 
   prisma.user.update.mockImplementation(async ({ data }) => ({
     id: userId,
@@ -71,6 +82,14 @@ function createPreAuthChallengeMock() {
     create: jest.fn().mockResolvedValue({
       token: 'pre-auth-token',
       expiresAt: new Date('2026-01-01T00:10:00.000Z'),
+    }),
+    validate: jest.fn().mockResolvedValue({
+      id: 'change-password-challenge-id',
+      userId,
+    }),
+    advance: jest.fn().mockResolvedValue({
+      token: 'next-pre-auth-token',
+      expiresAt: new Date('2026-01-01T00:20:00.000Z'),
     }),
   };
 }
@@ -305,6 +324,111 @@ describe('AuthService', () => {
     );
     expect(prisma.userSession.create).not.toHaveBeenCalled();
     expect(preAuthChallenges.create).not.toHaveBeenCalled();
+  });
+
+  it('changes a temporary password and advances to ENROLL_2FA', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({
+        mustChangePassword: true,
+        twoFactorEnabled: false,
+      }),
+    );
+    const newPassword = 'new-secure-password-123';
+
+    const result = await service.changePasswordPreAuth(
+      'change-password-token',
+      newPassword,
+    );
+    const updateData = prisma.user.updateMany.mock.calls[0][0].data;
+
+    expect(preAuthChallenges.validate).toHaveBeenCalledWith(
+      'change-password-token',
+      PreAuthChallengeStage.CHANGE_PASSWORD,
+    );
+    expect(updateData).toEqual({
+      passwordHash: expect.any(String),
+      mustChangePassword: false,
+      passwordChangedAt: expect.any(Date),
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    });
+    await expect(
+      argon2.verify(updateData.passwordHash, newPassword),
+    ).resolves.toBe(true);
+    expect(preAuthChallenges.advance).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+      PreAuthChallengeStage.ENROLL_2FA,
+      expect.any(Object),
+    );
+    expect(result).toEqual({
+      requiresPreAuth: true,
+      stage: PreAuthChallengeStage.ENROLL_2FA,
+      preAuthToken: 'next-pre-auth-token',
+    });
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+    expect(JSON.stringify(result)).not.toContain('twoFactorSecret');
+  });
+
+  it('advances to VERIFY_2FA when 2FA is already enabled', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({
+        mustChangePassword: true,
+        twoFactorEnabled: true,
+      }),
+    );
+
+    const result = await service.changePasswordPreAuth(
+      'change-password-token',
+      'new-secure-password-123',
+    );
+
+    expect(result.stage).toBe(PreAuthChallengeStage.VERIFY_2FA);
+    expect(preAuthChallenges.advance).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+      PreAuthChallengeStage.VERIFY_2FA,
+      expect.any(Object),
+    );
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid pre-auth challenge without changing the password', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    preAuthChallenges.validate.mockRejectedValue(new UnauthorizedException());
+    const service = createService(prisma, preAuthChallenges);
+
+    await expect(
+      service.changePasswordPreAuth(
+        'invalid-change-password-token',
+        'new-secure-password-123',
+      ),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(preAuthChallenges.advance).not.toHaveBeenCalled();
+  });
+
+  it('rejects a password that violates the existing password policy', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const service = createService(prisma, preAuthChallenges);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ mustChangePassword: true }),
+    );
+
+    await expect(
+      service.changePasswordPreAuth('change-password-token', 'short'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    expect(preAuthChallenges.advance).not.toHaveBeenCalled();
   });
 
   it('revokes the current session on logout', async () => {

@@ -5,6 +5,7 @@ import type { AuthenticatedRequest } from './auth.types';
 import { clearSessionCookie } from './cookies';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { PreAuthChangePasswordDto } from './dto/pre-auth-change-password.dto';
 import { Public } from './public.decorator';
 import { getRequestContext } from './request-context';
 
@@ -22,6 +23,15 @@ export class AuthController {
       dto.username,
       dto.password,
       getRequestContext(request),
+    );
+  }
+
+  @Public()
+  @Post('pre-auth/change-password')
+  changePasswordPreAuth(@Body() dto: PreAuthChangePasswordDto) {
+    return this.authService.changePasswordPreAuth(
+      dto.preAuthToken,
+      dto.newPassword,
     );
   }
 

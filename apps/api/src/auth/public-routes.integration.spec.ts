@@ -10,6 +10,7 @@ describe('public routes', () => {
   let baseUrl: string;
 
   const login = jest.fn();
+  const changePasswordPreAuth = jest.fn();
   const authenticateSession = jest.fn();
   const queryRaw = jest.fn();
 
@@ -31,6 +32,7 @@ describe('public routes', () => {
       .overrideProvider(AuthService)
       .useValue({
         authenticateSession,
+        changePasswordPreAuth,
         login,
       })
       .compile();
@@ -62,6 +64,11 @@ describe('public routes', () => {
         username: 'owner',
         role: 'OWNER',
       },
+    });
+    changePasswordPreAuth.mockResolvedValue({
+      requiresPreAuth: true,
+      stage: 'ENROLL_2FA',
+      preAuthToken: 'next-pre-auth-token',
     });
   });
 
@@ -113,6 +120,32 @@ describe('public routes', () => {
     const response = await fetch(`${baseUrl}/api/auth/me`);
 
     expect(response.status).toBe(401);
+  });
+
+  it('changes a pre-auth password without setting a session cookie', async () => {
+    const response = await fetch(
+      `${baseUrl}/api/auth/pre-auth/change-password`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          preAuthToken: 'change-password-token',
+          newPassword: 'new-secure-password-123',
+        }),
+      },
+    );
+
+    expect(response.status).toBe(201);
+    expect(changePasswordPreAuth).toHaveBeenCalledWith(
+      'change-password-token',
+      'new-secure-password-123',
+    );
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(await response.json()).toEqual({
+      requiresPreAuth: true,
+      stage: 'ENROLL_2FA',
+      preAuthToken: 'next-pre-auth-token',
+    });
   });
 
   it('@Public() does not expose other routes', async () => {

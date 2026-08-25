@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PreAuthChallengeStage } from '@prisma/client';
+import { PreAuthChallengeStage, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -80,11 +80,12 @@ export class PreAuthChallengeService {
   async advance(
     challengeId: string,
     nextStage: PreAuthChallengeStage,
+    transaction?: Prisma.TransactionClient,
   ): Promise<IssuedChallenge> {
     const issued = this.issueToken();
 
-    await this.prisma.$transaction(async (transaction) => {
-      const current = await transaction.preAuthChallenge.findUnique({
+    const advanceWith = async (client: Prisma.TransactionClient) => {
+      const current = await client.preAuthChallenge.findUnique({
         where: { id: challengeId },
         select: {
           id: true,
@@ -96,7 +97,7 @@ export class PreAuthChallengeService {
       });
       this.assertValid(current);
 
-      const removed = await transaction.preAuthChallenge.deleteMany({
+      const removed = await client.preAuthChallenge.deleteMany({
         where: {
           id: current.id,
           expiresAt: { gt: new Date() },
@@ -105,10 +106,10 @@ export class PreAuthChallengeService {
       });
       if (removed.count !== 1) this.reject();
 
-      await transaction.preAuthChallenge.deleteMany({
+      await client.preAuthChallenge.deleteMany({
         where: { userId: current.userId },
       });
-      await transaction.preAuthChallenge.create({
+      await client.preAuthChallenge.create({
         data: {
           userId: current.userId,
           tokenHash: issued.tokenHash,
@@ -116,7 +117,10 @@ export class PreAuthChallengeService {
           expiresAt: issued.expiresAt,
         },
       });
-    });
+    };
+
+    if (transaction) await advanceWith(transaction);
+    else await this.prisma.$transaction(advanceWith);
 
     return { token: issued.token, expiresAt: issued.expiresAt };
   }

@@ -200,6 +200,71 @@ export class AuthService {
     };
   }
 
+  async changePasswordPreAuth(
+    preAuthToken: string,
+    newPassword: string,
+  ): Promise<{
+    requiresPreAuth: true;
+    stage: PreAuthChallengeStage;
+    preAuthToken: string;
+  }> {
+    const challenge = await this.preAuthChallenges.validate(
+      preAuthToken,
+      PreAuthChallengeStage.CHANGE_PASSWORD,
+    );
+    const user = await this.prisma.user.findUnique({
+      where: { id: challenge.userId },
+      select: {
+        id: true,
+        isActive: true,
+        mustChangePassword: true,
+        twoFactorEnabled: true,
+      },
+    });
+
+    if (!user?.isActive || !user.mustChangePassword) {
+      throw new UnauthorizedException();
+    }
+
+    const passwordHash = await this.hashPassword(newPassword);
+    const nextStage = user.twoFactorEnabled
+      ? PreAuthChallengeStage.VERIFY_2FA
+      : PreAuthChallengeStage.ENROLL_2FA;
+    const now = new Date();
+
+    const nextChallenge = await this.prisma.$transaction(
+      async (transaction) => {
+        const updated = await transaction.user.updateMany({
+          where: {
+            id: user.id,
+            isActive: true,
+            mustChangePassword: true,
+          },
+          data: {
+            passwordHash,
+            mustChangePassword: false,
+            passwordChangedAt: now,
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+          },
+        });
+
+        if (updated.count !== 1) throw new UnauthorizedException();
+        return this.preAuthChallenges.advance(
+          challenge.id,
+          nextStage,
+          transaction,
+        );
+      },
+    );
+
+    return {
+      requiresPreAuth: true,
+      stage: nextStage,
+      preAuthToken: nextChallenge.token,
+    };
+  }
+
   async logout(
     sessionId: string | undefined,
     user: CurrentUser | undefined,
