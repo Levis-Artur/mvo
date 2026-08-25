@@ -240,6 +240,7 @@ export class UsersService {
   async resetTwoFactor(
     actor: CurrentUser,
     id: string,
+    context: RequestContext,
   ): Promise<{ success: true }> {
     this.assertOwner(actor);
 
@@ -277,6 +278,17 @@ export class UsersService {
       await transaction.userSession.updateMany({
         where: { userId: target.id, revokedAt: null },
         data: { revokedAt: new Date() },
+      });
+      await transaction.securityEvent.create({
+        data: {
+          type: SecurityEventType.TWO_FACTOR_RESET_BY_OWNER,
+          actorUserId: actor.id,
+          targetUserId: target.id,
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+          requestId: context.requestId,
+          success: true,
+        },
       });
     });
 

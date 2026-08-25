@@ -313,6 +313,15 @@ export class AuthService {
           context,
           transaction,
         );
+        await transaction.securityEvent.create({
+          data: this.twoFactorEventData(
+            SecurityEventType.TWO_FACTOR_ENABLED,
+            user,
+            context,
+            true,
+            'TOTP',
+          ),
+        });
 
         return {
           authenticated: true,
@@ -328,6 +337,7 @@ export class AuthService {
     } catch (error) {
       if (error instanceof InvalidTwoFactorTokenException) {
         await this.preAuthChallenges.recordFailure(challenge.id);
+        await this.recordTwoFactorFailure(user, context, 'TOTP');
         throw new UnauthorizedException('Невірні дані підтвердження.');
       }
       throw error;
@@ -354,6 +364,7 @@ export class AuthService {
     } catch (error) {
       if (error instanceof InvalidTwoFactorTokenException) {
         await this.preAuthChallenges.recordFailure(challenge.id);
+        await this.recordTwoFactorFailure(user, context, 'TOTP');
         throw new UnauthorizedException('Невірні дані підтвердження.');
       }
       throw error;
@@ -366,6 +377,15 @@ export class AuthService {
         context,
         transaction,
       );
+      await transaction.securityEvent.create({
+        data: this.twoFactorEventData(
+          SecurityEventType.TWO_FACTOR_VERIFIED,
+          user,
+          context,
+          true,
+          'TOTP',
+        ),
+      });
 
       return {
         authenticated: true,
@@ -407,6 +427,15 @@ export class AuthService {
           context,
           transaction,
         );
+        await transaction.securityEvent.create({
+          data: this.twoFactorEventData(
+            SecurityEventType.TWO_FACTOR_RECOVERY_CODE_USED,
+            user,
+            context,
+            true,
+            'RECOVERY_CODE',
+          ),
+        });
 
         return {
           authenticated: true,
@@ -421,6 +450,7 @@ export class AuthService {
     } catch (error) {
       if (error instanceof InvalidRecoveryCodeException) {
         await this.preAuthChallenges.recordFailure(challenge.id);
+        await this.recordTwoFactorFailure(user, context, 'RECOVERY_CODE');
         throw new UnauthorizedException('Невірні дані підтвердження.');
       }
       throw error;
@@ -673,6 +703,39 @@ export class AuthService {
         success: input.success,
       },
     });
+  }
+
+  private async recordTwoFactorFailure(
+    user: Pick<User, 'id' | 'role'>,
+    context: RequestContext,
+    method: 'TOTP' | 'RECOVERY_CODE',
+  ): Promise<void> {
+    await this.recordSecurityEvent(SecurityEventType.TWO_FACTOR_FAILED, {
+      actorUserId: user.id,
+      targetUserId: user.id,
+      context,
+      metadata: { role: user.role, method },
+      success: false,
+    });
+  }
+
+  private twoFactorEventData(
+    type: SecurityEventType,
+    user: Pick<User, 'id' | 'role'>,
+    context: RequestContext,
+    success: boolean,
+    method: 'TOTP' | 'RECOVERY_CODE',
+  ): Prisma.SecurityEventUncheckedCreateInput {
+    return {
+      type,
+      actorUserId: user.id,
+      targetUserId: user.id,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      requestId: context.requestId,
+      metadata: { role: user.role, method },
+      success,
+    };
   }
 }
 

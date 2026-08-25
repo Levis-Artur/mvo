@@ -86,8 +86,13 @@ export class UsersController {
   resetTwoFactor(
     @CurrentUserParam() actor: CurrentUser,
     @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
   ) {
-    return this.usersService.resetTwoFactor(actor, id);
+    return this.usersService.resetTwoFactor(
+      actor,
+      id,
+      getRequestContext(request),
+    );
   }
 
   @Post(':id/block')

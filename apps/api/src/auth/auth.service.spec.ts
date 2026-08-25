@@ -49,10 +49,15 @@ function createPrismaMock() {
         | ((client: {
             user: typeof prisma.user;
             userSession: typeof prisma.userSession;
+            securityEvent: typeof prisma.securityEvent;
           }) => Promise<unknown>),
     ) =>
       typeof input === 'function'
-        ? input({ user: prisma.user, userSession: prisma.userSession })
+        ? input({
+            user: prisma.user,
+            userSession: prisma.userSession,
+            securityEvent: prisma.securityEvent,
+          })
         : Promise.all(input),
   );
 
@@ -502,6 +507,15 @@ describe('AuthService', () => {
     );
     expect(preAuthChallenges.consume).not.toHaveBeenCalled();
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_FAILED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'TOTP' },
+        success: false,
+      }),
+    });
   });
 
   it('confirms 2FA, consumes pre-auth, and creates exactly one session', async () => {
@@ -543,6 +557,22 @@ describe('AuthService', () => {
         expiresAt: expect.any(Date),
       },
     });
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_ENABLED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'TOTP' },
+        success: true,
+      }),
+    });
+    const auditPayload = JSON.stringify(
+      prisma.securityEvent.create.mock.calls[0][0],
+    );
+    expect(auditPayload).not.toContain('123456');
+    expect(auditPayload).not.toContain('enroll-token');
+    expect(auditPayload).not.toContain('passwordHash');
+    expect(auditPayload).not.toContain('session-token');
     expect(JSON.stringify(result)).not.toContain('passwordHash');
     expect(JSON.stringify(result)).not.toContain('twoFactorSecret');
   });
@@ -578,6 +608,15 @@ describe('AuthService', () => {
       username: 'owner',
       role: UserRole.OWNER,
     });
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_VERIFIED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'TOTP' },
+        success: true,
+      }),
+    });
     expect(JSON.stringify(result)).not.toContain('passwordHash');
     expect(JSON.stringify(result)).not.toContain('twoFactorSecretEncrypted');
   });
@@ -602,6 +641,15 @@ describe('AuthService', () => {
     );
     expect(preAuthChallenges.consume).not.toHaveBeenCalled();
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_FAILED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'TOTP' },
+        success: false,
+      }),
+    });
   });
 
   it('consumes a recovery code and challenge before creating one session', async () => {
@@ -642,6 +690,18 @@ describe('AuthService', () => {
       },
       session: expect.objectContaining({ token: expect.any(String) }),
     });
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_RECOVERY_CODE_USED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'RECOVERY_CODE' },
+        success: true,
+      }),
+    });
+    expect(
+      JSON.stringify(prisma.securityEvent.create.mock.calls[0][0]),
+    ).not.toContain('ABCD-EFGH-JKLM-NPQR');
     expect(JSON.stringify(result)).not.toContain('passwordHash');
     expect(JSON.stringify(result)).not.toContain('twoFactorSecretEncrypted');
   });
@@ -670,6 +730,15 @@ describe('AuthService', () => {
     );
     expect(preAuthChallenges.consume).not.toHaveBeenCalled();
     expect(prisma.userSession.create).not.toHaveBeenCalled();
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: SecurityEventType.TWO_FACTOR_FAILED,
+        actorUserId: userId,
+        targetUserId: userId,
+        metadata: { role: UserRole.OWNER, method: 'RECOVERY_CODE' },
+        success: false,
+      }),
+    });
   });
 
   it('creates only one session for concurrent use of one recovery code', async () => {

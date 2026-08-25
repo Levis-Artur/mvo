@@ -408,9 +408,9 @@ describe('UsersService', () => {
     prisma.preAuthChallenge.deleteMany.mockResolvedValue({ count: 1 });
     prisma.userSession.updateMany.mockResolvedValue({ count: 2 });
 
-    await expect(service.resetTwoFactor(owner, 'mvo-id')).resolves.toEqual({
-      success: true,
-    });
+    await expect(
+      service.resetTwoFactor(owner, 'mvo-id', context),
+    ).resolves.toEqual({ success: true });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.user.updateMany).toHaveBeenCalledWith({
@@ -431,6 +431,17 @@ describe('UsersService', () => {
       where: { userId: 'mvo-id', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+    expect(prisma.securityEvent.create).toHaveBeenCalledWith({
+      data: {
+        type: SecurityEventType.TWO_FACTOR_RESET_BY_OWNER,
+        actorUserId: owner.id,
+        targetUserId: 'mvo-id',
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        requestId: context.requestId,
+        success: true,
+      },
+    });
 
     const updateData = prisma.user.updateMany.mock.calls[0][0].data;
     expect(updateData).not.toHaveProperty('passwordHash');
@@ -450,7 +461,7 @@ describe('UsersService', () => {
     const { service, prisma } = createService();
 
     await expect(
-      service.resetTwoFactor({ ...owner, role }, 'mvo-id'),
+      service.resetTwoFactor({ ...owner, role }, 'mvo-id', context),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -463,7 +474,7 @@ describe('UsersService', () => {
     });
 
     await expect(
-      service.resetTwoFactor(owner, 'another-owner-id'),
+      service.resetTwoFactor(owner, 'another-owner-id', context),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.user.updateMany).not.toHaveBeenCalled();
   });
@@ -473,7 +484,7 @@ describe('UsersService', () => {
     prisma.user.findUnique.mockResolvedValue(null);
 
     await expect(
-      service.resetTwoFactor(owner, 'unknown-id'),
+      service.resetTwoFactor(owner, 'unknown-id', context),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -489,9 +500,9 @@ describe('UsersService', () => {
       new Error('transaction failed'),
     );
 
-    await expect(service.resetTwoFactor(owner, 'mvo-id')).rejects.toThrow(
-      'transaction failed',
-    );
+    await expect(
+      service.resetTwoFactor(owner, 'mvo-id', context),
+    ).rejects.toThrow('transaction failed');
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(prisma.userSession.updateMany).not.toHaveBeenCalled();
   });
