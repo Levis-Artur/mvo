@@ -333,6 +333,51 @@ export class AuthService {
     }
   }
 
+  async verifyTwoFactor(
+    preAuthToken: string,
+    token: string,
+    context: RequestContext,
+  ): Promise<{
+    authenticated: true;
+    user: Pick<User, 'id' | 'username' | 'role'>;
+    session: { token: string; expiresAt: Date };
+  }> {
+    const challenge = await this.preAuthChallenges.validate(
+      preAuthToken,
+      PreAuthChallengeStage.VERIFY_2FA,
+    );
+    const user = await this.assertActivePreAuthUser(challenge.userId);
+
+    try {
+      await this.twoFactor.verifyEnabledToken(user.id, token);
+    } catch (error) {
+      if (error instanceof InvalidTwoFactorTokenException) {
+        await this.preAuthChallenges.recordFailure(challenge.id);
+        throw new UnauthorizedException('Невірні дані підтвердження.');
+      }
+      throw error;
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      await this.preAuthChallenges.consume(challenge.id, transaction);
+      const session = await this.createAuthenticatedSession(
+        user.id,
+        context,
+        transaction,
+      );
+
+      return {
+        authenticated: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+        },
+        session,
+      };
+    });
+  }
+
   async logout(
     sessionId: string | undefined,
     user: CurrentUser | undefined,

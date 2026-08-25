@@ -1,9 +1,12 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { authenticator } from 'otplib';
 import { hashRecoveryCode } from './recovery-code';
 import { encryptTotpSecret } from './totp-secret-crypto';
 import { generateSecret } from './totp';
-import { TwoFactorService } from './two-factor.service';
+import {
+  InvalidTwoFactorTokenException,
+  TwoFactorService,
+} from './two-factor.service';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const encryptionKey = Buffer.alloc(32, 7).toString('base64');
@@ -205,5 +208,60 @@ describe('TwoFactorService', () => {
     expect(transaction.user.updateMany).not.toHaveBeenCalled();
     expect(transaction.twoFactorRecoveryCode.deleteMany).not.toHaveBeenCalled();
     expect(transaction.twoFactorRecoveryCode.createMany).not.toHaveBeenCalled();
+  });
+
+  it('verifies a valid token for an enabled user', async () => {
+    const { encryptedSecret, token } = validPendingEnrollment();
+    const { prisma } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(
+      user({
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptedSecret,
+      }),
+    );
+    const service = new TwoFactorService(prisma as never);
+
+    await expect(service.verifyEnabledToken(userId, token)).resolves.toBeUndefined();
+  });
+
+  it('rejects an invalid token for an enabled user', async () => {
+    const { encryptedSecret, token } = validPendingEnrollment();
+    const { prisma } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(
+      user({
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptedSecret,
+      }),
+    );
+    const service = new TwoFactorService(prisma as never);
+    const invalidToken = token === '000000' ? '000001' : '000000';
+
+    await expect(
+      service.verifyEnabledToken(userId, invalidToken),
+    ).rejects.toBeInstanceOf(InvalidTwoFactorTokenException);
+  });
+
+  it('rejects a user without enabled 2FA', async () => {
+    const { encryptedSecret, token } = validPendingEnrollment();
+    const { prisma } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(
+      user({ twoFactorSecretEncrypted: encryptedSecret }),
+    );
+    const service = new TwoFactorService(prisma as never);
+
+    await expect(
+      service.verifyEnabledToken(userId, token),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects an enabled user without an encrypted secret', async () => {
+    const { token } = validPendingEnrollment();
+    const { prisma } = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue(user({ twoFactorEnabled: true }));
+    const service = new TwoFactorService(prisma as never);
+
+    await expect(
+      service.verifyEnabledToken(userId, token),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

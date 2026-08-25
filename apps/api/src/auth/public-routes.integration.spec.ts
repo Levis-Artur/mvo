@@ -13,6 +13,7 @@ describe('public routes', () => {
   const changePasswordPreAuth = jest.fn();
   const beginTwoFactorEnrollment = jest.fn();
   const confirmTwoFactorEnrollment = jest.fn();
+  const verifyTwoFactor = jest.fn();
   const authenticateSession = jest.fn();
   const queryRaw = jest.fn();
 
@@ -38,6 +39,7 @@ describe('public routes', () => {
         changePasswordPreAuth,
         confirmTwoFactorEnrollment,
         login,
+        verifyTwoFactor,
       })
       .compile();
 
@@ -91,6 +93,18 @@ describe('public routes', () => {
       },
       session: {
         token: 'authenticated-session-token',
+        expiresAt: new Date('2026-07-17T00:00:00.000Z'),
+      },
+    });
+    verifyTwoFactor.mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 'owner-id',
+        username: 'owner',
+        role: 'OWNER',
+      },
+      session: {
+        token: 'verified-session-token',
         expiresAt: new Date('2026-07-17T00:00:00.000Z'),
       },
     });
@@ -234,6 +248,54 @@ describe('public routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         preAuthToken: 'enroll-token',
+        token: '000000',
+      }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('verifies enabled 2FA and sets the authenticated session cookie', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/pre-auth/2fa/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        preAuthToken: 'verify-token',
+        token: '123456',
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(verifyTwoFactor).toHaveBeenCalledWith(
+      'verify-token',
+      '123456',
+      expect.objectContaining({ ipAddress: '127.0.0.1' }),
+    );
+    expect(response.headers.get('set-cookie')).toContain(
+      'mvo_session=verified-session-token',
+    );
+    const body = await response.json();
+    expect(body).toEqual({
+      authenticated: true,
+      user: {
+        id: 'owner-id',
+        username: 'owner',
+        role: 'OWNER',
+      },
+    });
+    expect(body).not.toHaveProperty('session');
+    expect(JSON.stringify(body)).not.toContain('verified-session-token');
+  });
+
+  it('does not set a cookie when enabled 2FA verification fails', async () => {
+    verifyTwoFactor.mockRejectedValueOnce(new UnauthorizedException());
+
+    const response = await fetch(`${baseUrl}/api/auth/pre-auth/2fa/verify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        preAuthToken: 'verify-token',
         token: '000000',
       }),
     });

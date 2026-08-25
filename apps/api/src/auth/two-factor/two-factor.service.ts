@@ -117,6 +117,18 @@ export class TwoFactorService {
     return { recoveryCodes };
   }
 
+  async verifyEnabledToken(userId: string, token: string): Promise<void> {
+    const user = await this.findActiveUser(userId);
+    if (!user.twoFactorEnabled || !user.twoFactorSecretEncrypted) {
+      throw new UnauthorizedException();
+    }
+
+    const secret = decryptTotpSecret(user.twoFactorSecretEncrypted);
+    if (!(await verifyToken(secret, token))) {
+      throw new InvalidTwoFactorTokenException();
+    }
+  }
+
   private async findActiveUser(userId: string): Promise<EnrollmentUser> {
     const user = await this.prisma.user.findFirst({
       where: { id: userId, isActive: true },

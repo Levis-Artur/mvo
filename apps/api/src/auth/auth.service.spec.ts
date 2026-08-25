@@ -112,6 +112,7 @@ function createTwoFactorMock() {
         (_, index) => `CODE-${index + 1}`,
       ),
     }),
+    verifyEnabledToken: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -540,6 +541,63 @@ describe('AuthService', () => {
     });
     expect(JSON.stringify(result)).not.toContain('passwordHash');
     expect(JSON.stringify(result)).not.toContain('twoFactorSecret');
+  });
+
+  it('verifies enabled 2FA, consumes pre-auth, and creates one session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ twoFactorEnabled: true }),
+    );
+
+    const result = await service.verifyTwoFactor(
+      'verify-token',
+      '123456',
+      context,
+    );
+
+    expect(preAuthChallenges.validate).toHaveBeenCalledWith(
+      'verify-token',
+      PreAuthChallengeStage.VERIFY_2FA,
+    );
+    expect(twoFactor.verifyEnabledToken).toHaveBeenCalledWith(userId, '123456');
+    expect(preAuthChallenges.consume).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+      expect.any(Object),
+    );
+    expect(prisma.userSession.create).toHaveBeenCalledTimes(1);
+    expect(result.authenticated).toBe(true);
+    expect(result.user).toEqual({
+      id: userId,
+      username: 'owner',
+      role: UserRole.OWNER,
+    });
+    expect(JSON.stringify(result)).not.toContain('passwordHash');
+    expect(JSON.stringify(result)).not.toContain('twoFactorSecretEncrypted');
+  });
+
+  it('records a failed VERIFY_2FA attempt without creating a session', async () => {
+    const prisma = createPrismaMock();
+    const preAuthChallenges = createPreAuthChallengeMock();
+    const twoFactor = createTwoFactorMock();
+    twoFactor.verifyEnabledToken.mockRejectedValue(
+      new InvalidTwoFactorTokenException(),
+    );
+    const service = createService(prisma, preAuthChallenges, twoFactor);
+    prisma.user.findUnique.mockResolvedValue(
+      await activeUser({ twoFactorEnabled: true }),
+    );
+
+    await expect(
+      service.verifyTwoFactor('verify-token', '000000', context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(preAuthChallenges.recordFailure).toHaveBeenCalledWith(
+      'change-password-challenge-id',
+    );
+    expect(preAuthChallenges.consume).not.toHaveBeenCalled();
+    expect(prisma.userSession.create).not.toHaveBeenCalled();
   });
 
   it('revokes the current session on logout', async () => {

@@ -64,6 +64,26 @@ export class AuthController {
     };
   }
 
+  @Public()
+  @Post('pre-auth/2fa/verify')
+  async verifyTwoFactor(
+    @Body() dto: PreAuthTwoFactorConfirmDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.verifyTwoFactor(
+      dto.preAuthToken,
+      dto.token,
+      getRequestContext(request),
+    );
+    setSessionCookie(response, result.session.token, result.session.expiresAt);
+
+    return {
+      authenticated: result.authenticated,
+      user: result.user,
+    };
+  }
+
   @Post('logout')
   async logout(
     @Req() request: AuthenticatedRequest,
