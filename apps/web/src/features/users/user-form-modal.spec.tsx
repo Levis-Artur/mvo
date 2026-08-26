@@ -30,6 +30,7 @@ const manager: UserSummary = {
   role: 'ORG_MANAGER',
   isActive: true,
   mustChangePassword: false,
+  twoFactorEnabled: false,
   responsiblePersonId: null,
   responsiblePerson: null,
   failedLoginAttempts: 0,

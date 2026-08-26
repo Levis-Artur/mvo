@@ -6,15 +6,17 @@ import { UserActionsMenu } from './user-actions-menu';
 
 type UserAction = (user: UserSummary) => void;
 
-export function UsersTable({ users, personsById, canWrite, canResetPassword, canRevokeSessions, canDelete, onEdit, onResetPassword, onBlock, onUnblock, onRevokeSessions, onDeactivate, onActivate, onDelete }: {
+export function UsersTable({ users, personsById, canWrite, canResetPassword, canResetTwoFactor, canRevokeSessions, canDelete, onEdit, onResetPassword, onResetTwoFactor, onBlock, onUnblock, onRevokeSessions, onDeactivate, onActivate, onDelete }: {
   users: UserSummary[];
   personsById: Map<string, ResponsiblePerson>;
   canWrite: boolean;
   canResetPassword: boolean;
+  canResetTwoFactor: boolean;
   canRevokeSessions: boolean;
   canDelete: boolean;
   onEdit: UserAction;
   onResetPassword: UserAction;
+  onResetTwoFactor: UserAction;
   onBlock: UserAction;
   onUnblock: UserAction;
   onRevokeSessions: UserAction;
@@ -32,12 +34,14 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
       person?.management.name ?? '—',
       <StatusBadge key="active" tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Активний' : 'Неактивний'}</StatusBadge>,
       <StatusBadge key="password" tone={item.mustChangePassword ? 'warning' : 'success'}>{item.mustChangePassword ? 'Потрібна зміна' : 'Актуальний'}</StatusBadge>,
+      <StatusBadge key="2fa" tone={item.twoFactorEnabled ? 'success' : 'warning'}>{item.twoFactorEnabled ? 'Увімкнено' : 'Не налаштовано'}</StatusBadge>,
       <span className="tabular-nums" key="attempts">{item.failedLoginAttempts}</span>,
       locked ? <StatusBadge key="locked" tone="danger">До {formatDateTime(item.lockedUntil)}</StatusBadge> : 'Не заблоковано',
       formatDateTime(item.lastLoginAt),
       <UserActionsMenu
         canDelete={canDelete}
         canResetPassword={canResetPassword}
+        canResetTwoFactor={canResetTwoFactor}
         canRevokeSessions={canRevokeSessions}
         canWrite={canWrite}
         key="actions"
@@ -49,6 +53,7 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
         onDelete={onDelete}
         onEdit={onEdit}
         onResetPassword={onResetPassword}
+        onResetTwoFactor={onResetTwoFactor}
         onRevokeSessions={onRevokeSessions}
         onUnblock={onUnblock}
       />,
@@ -57,7 +62,7 @@ export function UsersTable({ users, personsById, canWrite, canResetPassword, can
 
   return <DataTable ariaLabel="Користувачі системи" columns={[
     { label: 'Логін' }, { label: 'Роль' }, { label: 'Пов’язаний МВО', className: 'users-table__person' }, { label: 'Управління', className: 'users-table__management' },
-    { label: 'Активність' }, { label: 'Тимчасовий пароль' }, { label: 'Невдалі входи', numeric: true },
+    { label: 'Активність' }, { label: 'Тимчасовий пароль' }, { label: '2FA' }, { label: 'Невдалі входи', numeric: true },
     { label: 'Блокування' }, { label: 'Останній вхід' }, { label: 'Дії', actions: true, className: 'users-table__actions' },
   ]} emptyMessage="Користувачів не знайдено." responsiveMode="cards-wide" rowKeys={users.map((item) => item.id)} rows={rows} scrollMode="horizontal" tableClassName="users-table" />;
 }

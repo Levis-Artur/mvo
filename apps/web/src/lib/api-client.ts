@@ -63,6 +63,11 @@ import type {
   UserAccessScope,
   UserAccessScopeInput,
   UserSummary,
+  PreAuthAuthenticatedResult,
+  PreAuthContinuationResult,
+  PreAuthLoginResult,
+  TwoFactorEnrollment,
+  TwoFactorEnrollmentConfirmation,
 } from './types';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '/api';
@@ -275,7 +280,32 @@ function responseFilename(contentDisposition: string | null) {
 
 export const apiClient = {
   login: (body: { username: string; password: string }) =>
-    request<{ user: AuthUser }>('/auth/login', mutation('POST', body)),
+    request<PreAuthLoginResult>('/auth/login', mutation('POST', body)),
+  changePasswordPreAuth: (body: { preAuthToken: string; newPassword: string }) =>
+    request<PreAuthContinuationResult>(
+      '/auth/pre-auth/change-password',
+      mutation('POST', body),
+    ),
+  beginTwoFactorEnrollment: (preAuthToken: string) =>
+    request<TwoFactorEnrollment>(
+      '/auth/pre-auth/2fa/enroll',
+      mutation('POST', { preAuthToken }),
+    ),
+  confirmTwoFactorEnrollment: (body: { preAuthToken: string; token: string }) =>
+    request<TwoFactorEnrollmentConfirmation>(
+      '/auth/pre-auth/2fa/confirm',
+      mutation('POST', body),
+    ),
+  verifyTwoFactor: (body: { preAuthToken: string; token: string }) =>
+    request<PreAuthAuthenticatedResult>(
+      '/auth/pre-auth/2fa/verify',
+      mutation('POST', body),
+    ),
+  verifyTwoFactorRecovery: (body: { preAuthToken: string; recoveryCode: string }) =>
+    request<PreAuthAuthenticatedResult>(
+      '/auth/pre-auth/2fa/recovery',
+      mutation('POST', body),
+    ),
   logout: () => request<{ status: 'ok' }>('/auth/logout', { method: 'POST' }),
   me: () => request<{ user: AuthUser }>('/auth/me'),
   changePassword: (body: { oldPassword: string; newPassword: string }) =>
@@ -314,6 +344,8 @@ export const apiClient = {
       `/users/${id}/reset-password`,
       { method: 'POST' },
     ),
+  resetUserTwoFactor: (id: string) =>
+    request<{ success: true }>(`/users/${id}/reset-2fa`, { method: 'POST' }),
   blockUser: (id: string) =>
     request<UserSummary>(`/users/${id}/block`, { method: 'POST' }),
   unblockUser: (id: string) =>

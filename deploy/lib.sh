@@ -55,6 +55,15 @@ require_vars() {
   done
 }
 
+
+validate_totp_encryption_key() {
+  local value="${TOTP_ENCRYPTION_KEY:-}"
+  [[ "$value" =~ ^[A-Za-z0-9+/]{43}=$ ]] || fail "TOTP_ENCRYPTION_KEY має бути canonical base64-ключем рівно 32 bytes. Згенеруйте: openssl rand -base64 32"
+  local decoded_size
+  decoded_size="$(printf '%s' "$value" | base64 -d 2>/dev/null | wc -c | tr -d '[:space:]')"
+  [[ "$decoded_size" == "32" ]] || fail "TOTP_ENCRYPTION_KEY після base64 decode має містити рівно 32 bytes."
+}
+
 validate_production_password() {
   case "${POSTGRES_PASSWORD:-}" in
     '' | CHANGE_ME | CHANGE_ME_TO_A_LONG_RANDOM_PASSWORD)

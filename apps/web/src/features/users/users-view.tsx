@@ -5,7 +5,7 @@ import { useAuth } from '@/app/ui/auth-context';
 import { TemporaryPasswordModal } from '@/components/dialogs/temporary-password-modal';
 import { PageHeader } from '@/components/layout/page-header';
 import { getToolbarDetail, TOOLBAR_EVENT } from '@/components/layout/toolbar-events';
-import { Button, ErrorState, FilterBar, LoadingState, Select, Toast } from '@/components/ui';
+import { Button, ConfirmationDialog, ErrorState, FilterBar, LoadingState, Select, Toast } from '@/components/ui';
 import { getErrorMessage } from '@/components/common';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
@@ -35,6 +35,7 @@ export function UsersView() {
   const [formOpen, setFormOpen] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [deleting, setDeleting] = useState<UserSummary | null>(null);
+  const [resettingTwoFactor, setResettingTwoFactor] = useState<UserSummary | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
   const load = useCallback(async () => {
@@ -77,9 +78,10 @@ export function UsersView() {
       <label className="filter-bar__field"><span>Активність</span><Select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value)}><option value="">Усі</option><option value="active">Активні</option><option value="inactive">Неактивні</option></Select></label>
     </FilterBar>
     {error ? <ErrorState message={error} /> : null}
-    {loading ? <LoadingState label="Завантаження користувачів…" /> : <UsersTable users={visibleUsers} personsById={personsById} canWrite={canWrite} canResetPassword={canReset} canRevokeSessions={canRevoke} canDelete={user?.role === 'OWNER'} onEdit={(item) => { setEditing(item); setFormOpen(true); }} onResetPassword={(item) => void action(async () => { const result = await usersService.resetUserPassword(item.id); setTemporaryPassword(result.temporaryPassword); }, 'Тимчасовий пароль створено.')} onBlock={(item) => void action(() => usersService.blockUser(item.id), 'Користувача заблоковано.')} onUnblock={(item) => void action(() => usersService.unblockUser(item.id), 'Користувача розблоковано.')} onRevokeSessions={(item) => void action(() => usersService.revokeUserSessions(item.id), 'Сесії відкликано.')} onDeactivate={(item) => void action(() => usersService.deactivateUser(item.id), 'Користувача деактивовано.')} onActivate={(item) => void action(() => usersService.activateUser(item.id), 'Користувача активовано.')} onDelete={setDeleting} />}
+    {loading ? <LoadingState label="Завантаження користувачів…" /> : <UsersTable users={visibleUsers} personsById={personsById} canWrite={canWrite} canResetPassword={canReset} canResetTwoFactor={user?.role === 'OWNER'} canRevokeSessions={canRevoke} canDelete={user?.role === 'OWNER'} onEdit={(item) => { setEditing(item); setFormOpen(true); }} onResetPassword={(item) => void action(async () => { const result = await usersService.resetUserPassword(item.id); setTemporaryPassword(result.temporaryPassword); }, 'Тимчасовий пароль створено.')} onResetTwoFactor={setResettingTwoFactor} onBlock={(item) => void action(() => usersService.blockUser(item.id), 'Користувача заблоковано.')} onUnblock={(item) => void action(() => usersService.unblockUser(item.id), 'Користувача розблоковано.')} onRevokeSessions={(item) => void action(() => usersService.revokeUserSessions(item.id), 'Сесії відкликано.')} onDeactivate={(item) => void action(() => usersService.deactivateUser(item.id), 'Користувача деактивовано.')} onActivate={(item) => void action(() => usersService.activateUser(item.id), 'Користувача активовано.')} onDelete={setDeleting} />}
     {formOpen ? <UserFormModal mode={resource} user={editing} onClose={() => setFormOpen(false)} onSaved={(password) => { setFormOpen(false); if (password) setTemporaryPassword(password); void load(); setToast({ message: editing ? 'Користувача оновлено.' : 'Користувача створено.', tone: 'success' }); }} /> : null}
     {temporaryPassword ? <TemporaryPasswordModal temporaryPassword={temporaryPassword} onClose={() => setTemporaryPassword('')} /> : null}
+    {resettingTwoFactor ? <ConfirmationDialog destructive title="Скинути 2FA" message={`Скинути двофакторну автентифікацію для ${resettingTwoFactor.username}? Усі його активні сесії буде відкликано, а під час наступного входу користувач повинен налаштувати Authenticator заново.`} onClose={() => setResettingTwoFactor(null)} onConfirm={() => { const target = resettingTwoFactor; setResettingTwoFactor(null); void action(() => usersService.resetUserTwoFactor(target.id), '2FA скинуто. Користувач налаштує його заново під час наступного входу.'); }} /> : null}
     {deleting ? <DestructiveActionModal entityType={ADMIN_ENTITY_TYPES.user} entityId={deleting.id} onClose={() => setDeleting(null)} onDeleted={async () => { await load(); setToast({ message: 'Користувача видалено.', tone: 'success' }); }} /> : null}
     {toast ? <Toast message={toast.message} tone={toast.tone} onClose={() => setToast(null)} /> : null}
   </section>;

@@ -7,6 +7,7 @@ export const usersService = {
   userAccessScopes: apiClient.userAccessScopes,
   replaceUserAccessScopes: apiClient.replaceUserAccessScopes,
   resetUserPassword: apiClient.resetUserPassword,
+  resetUserTwoFactor: apiClient.resetUserTwoFactor,
   activateUser: apiClient.activateUser,
   deactivateUser: apiClient.deactivateUser,
   blockUser: apiClient.blockUser,

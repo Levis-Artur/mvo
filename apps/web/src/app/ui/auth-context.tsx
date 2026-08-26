@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { getDefaultAppPath, roleLabels } from '@/lib/authz';
-import type { AuthUser } from '@/lib/types';
+import type { AuthUser, PreAuthLoginResult } from '@/lib/types';
 
 type LoginInput = {
   username: string;
@@ -28,7 +28,7 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   refresh: () => Promise<AuthUser | null>;
-  login: (input: LoginInput) => Promise<AuthUser>;
+  login: (input: LoginInput) => Promise<PreAuthLoginResult>;
   logout: () => Promise<void>;
   changePassword: (input: ChangePasswordInput) => Promise<AuthUser>;
   logoutAll: () => Promise<void>;
@@ -76,19 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const login = useCallback(
-    async (input: LoginInput) => {
-      await apiClient.login(input);
-      const currentUser = await refresh();
-
-      if (!currentUser) {
-        throw new ApiError('Не вдалося отримати поточного користувача.', 401);
-      }
-
-      return currentUser;
-    },
-    [refresh],
-  );
+  const login = useCallback(async (input: LoginInput) => {
+    return apiClient.login(input);
+  }, []);
 
   const logout = useCallback(async () => {
     try {

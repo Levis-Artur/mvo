@@ -71,6 +71,7 @@ export function safeUserPresentation(user: UserSummary) {
     role: user.role,
     isActive: user.isActive,
     mustChangePassword: user.mustChangePassword,
+    twoFactorEnabled: user.twoFactorEnabled,
     failedLoginAttempts: user.failedLoginAttempts,
     lockedUntil: user.lockedUntil,
     lastLoginAt: user.lastLoginAt ?? null,

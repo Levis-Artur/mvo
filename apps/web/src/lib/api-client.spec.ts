@@ -333,3 +333,63 @@ describe('owner/custody API URLs', () => {
       .toBe('/api/stock-documents/document-1/attachments/attachment-1/download');
   });
 });
+
+
+describe('mandatory 2FA auth API URLs', () => {
+  beforeEach(() => {
+  jest.spyOn(global, 'fetch').mockImplementation(async () =>
+    new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
+});
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('uses the pre-auth password and 2FA endpoints without storing client tokens', async () => {
+    await apiClient.login({ username: 'owner', password: 'password-value' });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/login',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.changePasswordPreAuth({ preAuthToken: 'challenge', newPassword: 'new-password-value' });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/pre-auth/change-password',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.beginTwoFactorEnrollment('challenge');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/pre-auth/2fa/enroll',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.confirmTwoFactorEnrollment({ preAuthToken: 'challenge', token: '123456' });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/pre-auth/2fa/confirm',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.verifyTwoFactor({ preAuthToken: 'challenge', token: '123456' });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/pre-auth/2fa/verify',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    await apiClient.verifyTwoFactorRecovery({ preAuthToken: 'challenge', recoveryCode: 'ABCD-EFGH-IJKL-MNOP' });
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/auth/pre-auth/2fa/recovery',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('uses the OWNER-only user 2FA reset endpoint', async () => {
+    await apiClient.resetUserTwoFactor('user/id');
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/users/user/id/reset-2fa',
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
+    );
+  });
+});

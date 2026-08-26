@@ -96,6 +96,7 @@ function user(role: UserRole, overrides: Record<string, unknown> = {}) {
     role,
     isActive: true,
     mustChangePassword: true,
+    twoFactorEnabled: false,
     failedLoginAttempts: 0,
     lockedUntil: null,
     lastLoginAt: null,

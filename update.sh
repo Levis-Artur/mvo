@@ -28,8 +28,9 @@ log "Отримання оновлень із GitHub..."
 git pull --ff-only origin main
 
 load_env_file
-require_vars POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL PUBLIC_PORT CORS_ORIGIN
+require_vars POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL PUBLIC_PORT CORS_ORIGIN TOTP_ENCRYPTION_KEY
 validate_production_password
+validate_totp_encryption_key
 require_docker
 
 log "Перевірка production compose..."

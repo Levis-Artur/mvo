@@ -20,6 +20,41 @@ export type UserAccessScope = UserAccessScopeInput & {
   updatedAt: string;
 };
 
+export type PreAuthStage = 'CHANGE_PASSWORD' | 'ENROLL_2FA' | 'VERIFY_2FA';
+
+export type PreAuthUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+};
+
+export type PreAuthLoginResult = {
+  requiresPreAuth: true;
+  stage: PreAuthStage;
+  preAuthToken: string;
+  user: PreAuthUser;
+};
+
+export type PreAuthContinuationResult = {
+  requiresPreAuth: true;
+  stage: Exclude<PreAuthStage, 'CHANGE_PASSWORD'>;
+  preAuthToken: string;
+};
+
+export type TwoFactorEnrollment = {
+  otpauthUrl: string;
+  manualKey: string;
+};
+
+export type PreAuthAuthenticatedResult = {
+  authenticated: true;
+  user: PreAuthUser;
+};
+
+export type TwoFactorEnrollmentConfirmation = PreAuthAuthenticatedResult & {
+  recoveryCodes: string[];
+};
+
 export type AuthUser = {
   id: string;
   username: string;
@@ -32,6 +67,7 @@ export type AuthUser = {
 };
 
 export type UserSummary = AuthUser & {
+  twoFactorEnabled: boolean;
   failedLoginAttempts: number;
   lockedUntil: string | null;
   passwordChangedAt: string | null;

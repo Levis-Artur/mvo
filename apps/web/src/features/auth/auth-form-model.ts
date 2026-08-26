@@ -12,12 +12,11 @@ export function loginValidationMessage(username: string, password: string) {
   return username.trim() && password ? '' : 'Вкажіть логін і пароль.';
 }
 
-export function passwordValidationMessage(
-  oldPassword: string,
+export function newPasswordValidationMessage(
   newPassword: string,
   confirmation: string,
 ) {
-  if (!oldPassword || !newPassword || !confirmation) return 'Заповніть усі поля.';
+  if (!newPassword || !confirmation) return 'Заповніть усі поля.';
   if (newPassword.length < PASSWORD_MIN_LENGTH) {
     return `Новий пароль має містити щонайменше ${PASSWORD_MIN_LENGTH} символів.`;
   }
@@ -26,6 +25,23 @@ export function passwordValidationMessage(
   }
   if (newPassword !== confirmation) return 'Підтвердження пароля не збігається.';
   return '';
+}
+
+export function passwordValidationMessage(
+  oldPassword: string,
+  newPassword: string,
+  confirmation: string,
+) {
+  if (!oldPassword) return 'Заповніть усі поля.';
+  return newPasswordValidationMessage(newPassword, confirmation);
+}
+
+export function twoFactorTokenValidationMessage(token: string) {
+  return /^\d{6}$/.test(token) ? '' : 'Введіть 6-значний код з Authenticator.';
+}
+
+export function recoveryCodeValidationMessage(code: string) {
+  return code.trim() ? '' : 'Введіть резервний код.';
 }
 
 export function authErrorMessage(error: unknown, fallback: string) {

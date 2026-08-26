@@ -8,10 +8,12 @@ export function UserActionsMenu({
   locked,
   canWrite,
   canResetPassword,
+  canResetTwoFactor,
   canRevokeSessions,
   canDelete,
   onEdit,
   onResetPassword,
+  onResetTwoFactor,
   onBlock,
   onUnblock,
   onRevokeSessions,
@@ -23,10 +25,12 @@ export function UserActionsMenu({
   locked: boolean;
   canWrite: boolean;
   canResetPassword: boolean;
+  canResetTwoFactor: boolean;
   canRevokeSessions: boolean;
   canDelete: boolean;
   onEdit: UserAction;
   onResetPassword: UserAction;
+  onResetTwoFactor: UserAction;
   onBlock: UserAction;
   onUnblock: UserAction;
   onRevokeSessions: UserAction;
@@ -46,6 +50,16 @@ export function UserActionsMenu({
             key: 'reset-password',
             label: 'Скинути пароль',
             onSelect: () => onResetPassword(user),
+          },
+        ]
+      : []),
+    ...(canResetTwoFactor && user.role !== 'OWNER' && user.twoFactorEnabled
+      ? [
+          {
+            key: 'reset-2fa',
+            label: 'Скинути 2FA',
+            danger: true,
+            onSelect: () => onResetTwoFactor(user),
           },
         ]
       : []),

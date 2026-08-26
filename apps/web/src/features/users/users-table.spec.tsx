@@ -11,6 +11,7 @@ const baseUser: UserSummary = {
   role: 'OWNER',
   isActive: true,
   mustChangePassword: false,
+  twoFactorEnabled: false,
   responsiblePersonId: null,
   responsiblePerson: null,
   failedLoginAttempts: 0,
@@ -26,6 +27,7 @@ function renderUsers(users: UserSummary[] = [baseUser], permissions = {}) {
   const handlers = {
     onEdit: jest.fn(),
     onResetPassword: jest.fn(),
+    onResetTwoFactor: jest.fn(),
     onBlock: jest.fn(),
     onUnblock: jest.fn(),
     onRevokeSessions: jest.fn(),
@@ -37,6 +39,7 @@ function renderUsers(users: UserSummary[] = [baseUser], permissions = {}) {
     <UsersTable
       canDelete
       canResetPassword
+      canResetTwoFactor
       canRevokeSessions
       canWrite
       personsById={new Map()}
@@ -108,6 +111,36 @@ describe('UsersTable action menu', () => {
 
     expect(handlers[handlerName]).toHaveBeenCalledWith(baseUser);
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('shows 2FA status and allows OWNER to reset enabled 2FA for non-OWNER users', async () => {
+    const user = userEvent.setup();
+    const enabledMvo = {
+      ...baseUser,
+      id: 'user-mvo',
+      username: 'mvo-user',
+      role: 'MVO' as const,
+      twoFactorEnabled: true,
+    };
+    const { handlers } = renderUsers([enabledMvo]);
+
+    expect(screen.getByText('Увімкнено')).not.toBeNull();
+    await user.click(
+      screen.getByRole('button', { name: 'Дії для користувача mvo-user' }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Скинути 2FA' }));
+
+    expect(handlers.onResetTwoFactor).toHaveBeenCalledWith(enabledMvo);
+  });
+
+  it('does not offer 2FA reset for OWNER', async () => {
+    const user = userEvent.setup();
+    renderUsers([{ ...baseUser, twoFactorEnabled: true }]);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Дії для користувача owner' }),
+    );
+    expect(screen.queryByRole('menuitem', { name: 'Скинути 2FA' })).toBeNull();
   });
 
   it('uses lock and activity actions that match the current state', async () => {

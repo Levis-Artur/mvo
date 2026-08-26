@@ -29,6 +29,7 @@ const userSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
+  twoFactorEnabled: true,
   failedLoginAttempts: true,
   lockedUntil: true,
   lastLoginAt: true,

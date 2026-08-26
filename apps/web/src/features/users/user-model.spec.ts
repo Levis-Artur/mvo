@@ -8,7 +8,7 @@ import {
 
 const user = {
   id: 'user-1', username: 'owner', role: 'OWNER', isActive: true,
-  mustChangePassword: false, responsiblePersonId: null, lastLoginAt: null,
+  mustChangePassword: false, twoFactorEnabled: false, responsiblePersonId: null, lastLoginAt: null,
   failedLoginAttempts: 0, lockedUntil: null, passwordChangedAt: null,
   createdAt: '', updatedAt: '', createdById: null, responsiblePerson: null,
 } satisfies UserSummary;
