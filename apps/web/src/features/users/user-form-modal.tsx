@@ -163,8 +163,8 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
           <section aria-labelledby="access-scopes-title" className="user-access-scopes">
             <div className="user-access-scopes__header">
               <div>
-                <h3 id="access-scopes-title">{isManager ? 'Області доступу' : 'Додатковий доступ для перегляду'}</h3>
-                <p>{isManager ? 'Менеджер має право переглядати дані МВО лише в зазначених областях доступу.' : 'Лише перегляд інших МВО. Операції залишаються доступними тільки від імені пов’язаного МВО.'}</p>
+                <h3 id="access-scopes-title">{isManager ? 'Області доступу' : 'Додаткові права менеджера'}</h3>
+                <p>{isManager ? 'Менеджер має право переглядати дані МВО лише в зазначених областях доступу.' : 'Надає лише перегляд даних у вибраних областях доступу. Операції з майном залишаються доступними тільки для власного обліку МВО.'}</p>
               </div>
               <Button
                 size="compact"
