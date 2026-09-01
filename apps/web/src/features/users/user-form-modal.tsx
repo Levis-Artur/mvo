@@ -47,13 +47,14 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
   const ownerMode = mode === 'users';
   const selectedRole = resolveUserFormRole(mode, role);
   const isManager = selectedRole === 'ORG_MANAGER';
+  const hasAccessScopes = ownerMode && (isManager || selectedRole === 'MVO');
 
   useEffect(() => {
     Promise.all([
       fetchAllPages((pagination) => usersService.responsiblePersons({ ...pagination, isActive: true })),
       usersService.managements(),
       usersService.services(),
-      user?.role === 'ORG_MANAGER'
+      ownerMode && (user?.role === 'ORG_MANAGER' || user?.role === 'MVO')
         ? usersService.userAccessScopes(user.id)
         : Promise.resolve([]),
     ])
@@ -108,15 +109,15 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
     const selectedResponsiblePersonId = requiresResponsiblePerson(selectedRole)
       ? responsiblePersonId || null
       : null;
-    const scopes = isManager ? normalizedScopes() : [];
-    if (isManager && !scopes) {
+    const scopes = hasAccessScopes ? normalizedScopes() : [];
+    if (hasAccessScopes && !scopes) {
       setSaving(false);
       return;
     }
     try {
       if (user) {
         await usersService.updateUser(user.id, { username: username.trim(), role: selectedRole, responsiblePersonId: selectedResponsiblePersonId, mustChangePassword });
-        if (isManager) {
+        if (hasAccessScopes) {
           await usersService.replaceUserAccessScopes(user.id, scopes ?? []);
         }
         onSaved();
@@ -126,7 +127,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
           role: selectedRole,
           responsiblePersonId: selectedResponsiblePersonId ?? undefined,
         });
-        if (isManager) {
+        if (hasAccessScopes) {
           await usersService.replaceUserAccessScopes(response.user.id, scopes ?? []);
         }
         onSaved(response.temporaryPassword);
@@ -140,7 +141,7 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
 
   const footer = <><Button variant="outline" type="button" onClick={onClose}>Скасувати</Button><Button disabled={saving || loadingPersons} form="user-form" type="submit">{saving ? 'Збереження…' : 'Зберегти'}</Button></>;
   return (
-    <Modal closeOnEscape={!saving} footer={footer} size={isManager ? 'large' : 'medium'} title={user ? 'Редагування користувача' : 'Новий користувач'} onClose={onClose}>
+    <Modal closeOnEscape={!saving} footer={footer} size={hasAccessScopes ? 'large' : 'medium'} title={user ? 'Редагування користувача' : 'Новий користувач'} onClose={onClose}>
       <form className="grid gap-4" id="user-form" onSubmit={submit}>
         {error ? <ErrorState message={error} /> : null}
         {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
@@ -158,12 +159,12 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
             {persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? 'Не вказано'} — {fullName(person)}</option>)}
           </Select>
         </FormField>
-        {isManager ? (
+        {hasAccessScopes ? (
           <section aria-labelledby="access-scopes-title" className="user-access-scopes">
             <div className="user-access-scopes__header">
               <div>
-                <h3 id="access-scopes-title">Області доступу</h3>
-                <p>Менеджер має право переглядати дані МВО лише в зазначених областях доступу.</p>
+                <h3 id="access-scopes-title">{isManager ? 'Області доступу' : 'Додатковий доступ для перегляду'}</h3>
+                <p>{isManager ? 'Менеджер має право переглядати дані МВО лише в зазначених областях доступу.' : 'Лише перегляд інших МВО. Операції залишаються доступними тільки від імені пов’язаного МВО.'}</p>
               </div>
               <Button
                 size="compact"

@@ -125,10 +125,14 @@ describe('ResponsiblePersonsService', () => {
         accessScopes: [],
       }),
     );
-    expect(where.AND[0]).toEqual({
-      id: '77777777-7777-4777-8777-777777777777',
+   expect(where.AND[0]).toEqual({
+      OR: [
+        {
+          id: '77777777-7777-4777-8777-777777777777',
+        },
+      ],
     });
-  });
+  }); 
 
   it('returns no responsible persons for ORG_MANAGER without scopes', async () => {
     const where = await responsiblePersonListWhere(

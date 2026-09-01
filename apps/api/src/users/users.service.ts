@@ -190,8 +190,10 @@ export class UsersService {
           responsiblePersonId,
           mustChangePassword: dto.mustChangePassword,
           accessScopes:
-            existing.role === UserRole.ORG_MANAGER &&
-            role !== UserRole.ORG_MANAGER
+            (existing.role === UserRole.ORG_MANAGER ||
+              existing.role === UserRole.MVO) &&
+            role !== UserRole.ORG_MANAGER &&
+            role !== UserRole.MVO
               ? { deleteMany: {} }
               : undefined,
         },

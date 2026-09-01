@@ -380,7 +380,16 @@ export class StockService {
   }
 
   async responsiblePersonAccountingCard(id: string, user: CurrentUser) {
-    if (user.role === UserRole.MVO && user.responsiblePersonId !== id) {
+    const permittedPerson =
+      user.role === UserRole.MVO
+        ? await this.prisma.responsiblePerson.findFirst({
+            where: {
+              AND: [{ id }, this.accessControl.responsiblePersonFilter(user)],
+            },
+            select: { id: true },
+          })
+        : { id };
+    if (!permittedPerson) {
       throw new NotFoundException('Картку обліку МВО не знайдено');
     }
 
@@ -406,11 +415,11 @@ export class StockService {
           StockDocumentType.MVO_TRANSFER,
           StockDocumentType.TRANSFER,
           StockDocumentType.ASSIGNMENT,
-        ], user.role === UserRole.MVO),
+        ], user.role === UserRole.MVO && user.responsiblePersonId === id),
         this.recentDocumentsForPerson(
           id,
           [StockDocumentType.ISSUE],
-          user.role === UserRole.MVO,
+          user.role === UserRole.MVO && user.responsiblePersonId === id,
         ),
       ]);
 

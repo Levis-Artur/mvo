@@ -42,7 +42,20 @@ describe('AccessControlService responsible person scope', () => {
           accessScopes: [],
         }),
       ),
-    ).toEqual({ id: responsiblePersonId });
+    ).toEqual({ OR: [{ id: responsiblePersonId }] });
+  });
+
+  it('combines the linked MVO with a service scope across managements', () => {
+    expect(
+      service.responsiblePersonFilter(
+        currentUser(UserRole.MVO, {
+          responsiblePersonId,
+          accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+        }),
+      ),
+    ).toEqual({
+      OR: [{ id: responsiblePersonId }, { service: { code: 'IT' } }],
+    });
   });
 
   it('returns no data for ORG_MANAGER without scopes', () => {
