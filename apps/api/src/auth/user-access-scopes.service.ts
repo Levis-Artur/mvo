@@ -27,7 +27,7 @@ export class UserAccessScopesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listForUser(userId: string) {
-    await this.assertOrgManager(this.prisma, userId);
+    await this.assertScopeEligibleRole(this.prisma, userId);
     return this.prisma.userAccessScope.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
@@ -35,7 +35,7 @@ export class UserAccessScopesService {
   }
 
   async create(userId: string, input: CreateUserAccessScopeInput) {
-    await this.assertOrgManager(this.prisma, userId);
+    await this.assertScopeEligibleRole(this.prisma, userId);
     const { managementId, serviceCode } = await this.validateScope(
       this.prisma,
       input,
@@ -66,7 +66,7 @@ export class UserAccessScopesService {
 
   replaceForUser(userId: string, inputs: CreateUserAccessScopeInput[]) {
     return this.prisma.$transaction(async (transaction) => {
-      await this.assertOrgManager(transaction, userId);
+      await this.assertScopeEligibleRole(transaction, userId);
 
       const scopes: NormalizedUserAccessScope[] = [];
       const uniqueScopes = new Set<string>();
@@ -95,15 +95,15 @@ export class UserAccessScopesService {
     });
   }
 
-  private async assertOrgManager(client: ScopeClient, userId: string) {
+  private async assertScopeEligibleRole(client: ScopeClient, userId: string) {
     const user = await client.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true },
     });
     if (!user) throw new NotFoundException('Користувача не знайдено');
-    if (user.role !== UserRole.ORG_MANAGER) {
+    if (user.role !== UserRole.ORG_MANAGER && user.role !== UserRole.MVO) {
       throw new BadRequestException(
-        'Області доступу можна призначати тільки користувачу з роллю «Менеджер»',
+        'Області доступу можна призначати тільки користувачу з роллю «Менеджер» або «МВО»',
       );
     }
   }

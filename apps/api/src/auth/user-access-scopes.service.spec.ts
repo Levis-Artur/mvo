@@ -51,7 +51,7 @@ describe('UserAccessScopesService', () => {
     ]);
   });
 
-  it('replaces scopes atomically with management-only, service-only and combined scopes', async () => {
+  it('allows an ORG_MANAGER to replace scopes atomically', async () => {
     const prisma = prismaMock();
 
     await createService(prisma).replaceForUser('user-1', [
@@ -132,8 +132,22 @@ describe('UserAccessScopesService', () => {
     });
   });
 
-  it('rejects scopes for a user without the ORG_MANAGER role', async () => {
+  it('allows an MVO to receive access scopes', async () => {
     const prisma = prismaMock(UserRole.MVO);
+
+    await createService(prisma).replaceForUser('user-1', [
+      { managementId: null, serviceCode: 'IT' },
+    ]);
+
+    expect(prisma.userAccessScope.createMany).toHaveBeenCalledWith({
+      data: [
+        { userId: 'user-1', managementId: null, serviceCode: 'IT' },
+      ],
+    });
+  });
+
+  it('rejects scopes for roles outside MVO and ORG_MANAGER', async () => {
+    const prisma = prismaMock(UserRole.AUDITOR);
 
     await expect(
       createService(prisma).replaceForUser('user-1', [

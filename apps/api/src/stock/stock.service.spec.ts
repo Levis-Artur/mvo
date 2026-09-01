@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   Prisma,
   StockAccountingModel,
@@ -84,8 +88,37 @@ describe('StockService', () => {
       }),
     );
     expect(where.responsiblePerson.AND[0]).toEqual({
-      id: scopeIds.responsiblePerson,
+      OR: [{ id: scopeIds.responsiblePerson }],
     });
+  });
+
+  it('allows scoped MVO reads but forbids writes for a foreign responsible person', async () => {
+    const foreignResponsiblePersonId =
+      '55555555-5555-4555-8555-555555555555';
+    const mvo = actor(UserRole.MVO, {
+      responsiblePersonId: scopeIds.responsiblePerson,
+      accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+    });
+    const where = await stockBalanceWhere(mvo);
+
+    expect(where.responsiblePerson.AND[0]).toEqual({
+      OR: [
+        { id: scopeIds.responsiblePerson },
+        { service: { code: 'IT' } },
+      ],
+    });
+
+    const prisma = {
+      securityEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const accessControl = new AccessControlService(prisma as never);
+    await expect(
+      accessControl.assertMvoResponsiblePersonAccess(
+        mvo,
+        foreignResponsiblePersonId,
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('returns no stock balances for ORG_MANAGER without scopes', async () => {
@@ -499,6 +532,9 @@ describe('StockService', () => {
   it('scopes MVO accounting-card documents to outgoing records only', async () => {
     const personId = '11111111-1111-4111-8111-111111111111';
     const prisma = {
+      responsiblePerson: {
+        findFirst: jest.fn().mockResolvedValue({ id: personId }),
+      },
       stockBalance: { findMany: jest.fn().mockResolvedValue([]) },
       custodyBalance: { findMany: jest.fn().mockResolvedValue([]) },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },

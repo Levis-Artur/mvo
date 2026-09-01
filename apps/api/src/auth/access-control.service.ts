@@ -64,16 +64,28 @@ export class AccessControlService {
     if (this.isGlobalReader(user)) return {};
 
     if (user.role === UserRole.MVO) {
-      return user.responsiblePersonId
-        ? { id: user.responsiblePersonId }
-        : { id: { in: [] } };
+      const filters = this.accessScopeResponsiblePersonFilters(user);
+      if (user.responsiblePersonId) {
+        filters.unshift({ id: user.responsiblePersonId });
+      }
+      return filters.length > 0 ? { OR: filters } : { id: { in: [] } };
     }
 
     if (user.role !== UserRole.ORG_MANAGER) {
       return { id: { in: [] } };
     }
 
-    const scopedFilters = (user.accessScopes ?? []).flatMap(
+    const scopedFilters = this.accessScopeResponsiblePersonFilters(user);
+
+    return scopedFilters.length > 0
+      ? { OR: scopedFilters }
+      : { id: { in: [] } };
+  }
+
+  private accessScopeResponsiblePersonFilters(
+    user: CurrentUser,
+  ): Prisma.ResponsiblePersonWhereInput[] {
+    return (user.accessScopes ?? []).flatMap(
       (scope): Prisma.ResponsiblePersonWhereInput[] => {
         const serviceCode = scope.serviceCode?.trim() ?? null;
         if (scope.serviceCode !== null && !serviceCode) return [];
@@ -86,10 +98,6 @@ export class AccessControlService {
         return [{ service: { code: serviceCode! } }];
       },
     );
-
-    return scopedFilters.length > 0
-      ? { OR: scopedFilters }
-      : { id: { in: [] } };
   }
 
   stockDocumentFilter(user: CurrentUser): Prisma.StockDocumentWhereInput {
@@ -97,7 +105,20 @@ export class AccessControlService {
 
     const responsiblePerson = this.responsiblePersonFilter(user);
     if (user.role === UserRole.MVO) {
-      return { sourceResponsiblePerson: responsiblePerson };
+      const scopedFilters = this.accessScopeResponsiblePersonFilters(user);
+      return {
+        OR: [
+          ...(user.responsiblePersonId
+            ? [{ sourceResponsiblePersonId: user.responsiblePersonId }]
+            : []),
+          ...(scopedFilters.length > 0
+            ? [
+                { sourceResponsiblePerson: { OR: scopedFilters } },
+                { destinationResponsiblePerson: { OR: scopedFilters } },
+              ]
+            : []),
+        ],
+      };
     }
 
     if (user.role === UserRole.ORG_MANAGER) {
@@ -117,7 +138,30 @@ export class AccessControlService {
 
     const responsiblePerson = this.responsiblePersonFilter(user);
     if (user.role === UserRole.MVO) {
-      return { responsiblePerson };
+      const scopedFilters = this.accessScopeResponsiblePersonFilters(user);
+      return {
+        OR: [
+          ...(user.responsiblePersonId
+            ? [{ responsiblePersonId: user.responsiblePersonId }]
+            : []),
+          ...(scopedFilters.length > 0
+            ? [
+                { responsiblePerson: { OR: scopedFilters } },
+                { accountingOwnerResponsiblePerson: { OR: scopedFilters } },
+                { sourceCustodianResponsiblePerson: { OR: scopedFilters } },
+                { destinationCustodianResponsiblePerson: { OR: scopedFilters } },
+                {
+                  document: {
+                    OR: [
+                      { sourceResponsiblePerson: { OR: scopedFilters } },
+                      { destinationResponsiblePerson: { OR: scopedFilters } },
+                    ],
+                  },
+                },
+              ]
+            : []),
+        ],
+      };
     }
 
     if (user.role === UserRole.ORG_MANAGER) {
