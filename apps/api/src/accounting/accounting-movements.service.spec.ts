@@ -10,7 +10,6 @@ import { AccountingMovementsService } from './accounting-movements.service';
 
 const person = {
   id: '11111111-1111-4111-8111-111111111111',
-  personnelNumber: '57',
   externalAccountingCode: '0057',
   lastName: 'Жигульський',
   firstName: 'Андрій',
@@ -20,7 +19,6 @@ const person = {
 const destination = {
   ...person,
   id: '22222222-2222-4222-8222-222222222222',
-  personnelNumber: '61',
   externalAccountingCode: '0061',
   lastName: 'Левіс',
 };

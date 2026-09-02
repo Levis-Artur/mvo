@@ -477,10 +477,10 @@ export class AccountingService {
       documentNumber: document.documentNumber,
       displayNumber: document.displayNumber,
       documentDate: document.documentDate,
-      sourcePersonnelNumber: source.personnelNumber,
+      sourceAccountingCode: source.externalAccountingCode ?? '',
       sourceFullName: this.fullName(source),
       sourceManagementName: source.management.name,
-      destinationPersonnelNumber: destination?.personnelNumber ?? '',
+      destinationAccountingCode: destination?.externalAccountingCode ?? '',
       destinationFullName: destination ? this.fullName(destination) : '',
       destinationManagementName: destination?.management.name ?? '',
       inventoryCode: line.inventoryItem.externalCode,
@@ -512,7 +512,6 @@ export class AccountingService {
   ) {
     return {
       id: person.id,
-      personnelNumber: person.personnelNumber,
       externalAccountingCode: person.externalAccountingCode,
       fullName: this.fullName(person),
       management: { id: person.management.id, name: person.management.name },

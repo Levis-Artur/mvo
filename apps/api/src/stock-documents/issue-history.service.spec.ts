@@ -31,7 +31,6 @@ const issue = {
   createdAt: new Date('2026-08-10T09:00:00.000Z'),
   sourceResponsiblePerson: {
     id: sourceId,
-    personnelNumber: '57',
     externalAccountingCode: '0057',
     lastName: 'Жигульський',
     firstName: 'Андрій',

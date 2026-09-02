@@ -57,7 +57,6 @@ export class AccountingOverviewService {
           document: { select: { displayNumber: true } },
           responsiblePerson: {
             select: {
-              personnelNumber: true,
               externalAccountingCode: true,
               lastName: true,
               firstName: true,

@@ -23,7 +23,6 @@ const movement = {
   responsiblePerson: {
     id: 'person-1',
     fullName: 'Левіс Артур',
-    personnelNumber: '001',
     externalAccountingCode: '0057',
     management: { id: 'm-1', name: 'Управління' },
     service: { id: 's-1', name: 'Служба' },

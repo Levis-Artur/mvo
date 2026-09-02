@@ -187,12 +187,11 @@ model ResponsiblePerson {
   lastName               String
   firstName              String
   middleName             String?
-  personnelNumber        String             @unique
   position               String?
   phone                  String?
   email                  String?
   externalAccountingName String?            @unique
-  externalAccountingCode String?            @unique
+  externalAccountingCode String             @unique
   managementId           String             @db.Uuid
   serviceId              String             @db.Uuid
   unitId                 String?            @db.Uuid
@@ -223,7 +222,6 @@ model ResponsiblePerson {
   @@index([lastName])
   @@index([firstName])
   @@index([middleName])
-  @@index([personnelNumber])
 }
 
 model User {
@@ -656,10 +654,10 @@ model AccountingTransferExportRow {
   documentNumber             String
   displayNumber              Int?
   documentDate               DateTime
-  sourcePersonnelNumber      String
+  sourceAccountingCode       String
   sourceFullName             String
   sourceManagementName       String
-  destinationPersonnelNumber String
+  destinationAccountingCode  String
   destinationFullName        String
   destinationManagementName  String
   inventoryCode              String

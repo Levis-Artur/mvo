@@ -12,7 +12,7 @@ describe('profile presentation', () => {
   it('показує дані картки MVO у профілі', () => {
     const user: AuthUser = { id: '1', username: 'mvo', role: 'MVO', isActive: true, mustChangePassword: false, responsiblePersonId: 'person-1' };
     const person = {
-      personnelNumber: '003', externalAccountingCode: '0057', lastName: 'Левіс', firstName: 'Артур', middleName: 'Сергійович',
+      externalAccountingCode: '0057', lastName: 'Левіс', firstName: 'Артур', middleName: 'Сергійович',
       management: { name: 'Управління' }, service: { name: 'Служба' }, unit: { name: 'Підрозділ' },
     } as ResponsiblePerson;
     expect(profilePresentation(user, person)).toMatchObject({

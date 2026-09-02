@@ -140,10 +140,10 @@ export function AccountingMovementsView() {
       </Select></FilterField>
       <FilterField label="Код МВО"><Input value={draft.mvoCode} onChange={(event) => setDraft((current) => ({ ...current, mvoCode: event.target.value }))} /></FilterField>
       <FilterField label="МВО"><Select value={draft.responsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, responsiblePersonId: event.target.value }))}>
-        <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? person.personnelNumber} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
+        <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? '—'} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
       </Select></FilterField>
       <FilterField label="Кому передано"><Select value={draft.destinationResponsiblePersonId} onChange={(event) => setDraft((current) => ({ ...current, destinationResponsiblePersonId: event.target.value }))}>
-        <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? person.personnelNumber} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
+        <option value="">Усі МВО</option>{persons.map((person) => <option key={person.id} value={person.id}>{person.externalAccountingCode ?? '—'} — {person.lastName} {person.firstName} {person.middleName ?? ''}</option>)}
       </Select></FilterField>
       <FilterField label="Код/ПІБ, кому передано"><Input value={draft.transferRecipient} onChange={(event) => setDraft((current) => ({ ...current, transferRecipient: event.target.value }))} /></FilterField>
       <FilterField label="Кому видано"><Input value={draft.issueRecipient} onChange={(event) => setDraft((current) => ({ ...current, issueRecipient: event.target.value }))} /></FilterField>
@@ -173,11 +173,11 @@ export function AccountingMovementsView() {
         <StatusBadge key={`operation-${row.id}`} tone={operationTone(row)}>{row.operationLabel}</StatusBadge>,
         <Button disabled={detailsLoadingId === row.id} key={`document-${row.id}`} size="compact" title={`Відкрити ${row.documentLabel}`} type="button" variant="link" onClick={() => void openDetails(row.id)}>{detailsLoadingId === row.id ? 'Відкриття…' : row.documentLabel}</Button>,
         row.responsiblePerson.fullName,
-        row.responsiblePerson.externalAccountingCode ?? row.responsiblePerson.personnelNumber,
+        row.responsiblePerson.externalAccountingCode ?? '—',
         row.inventoryItem.name,
         row.inventoryItem.externalCode,
         formatSignedQuantity(row.quantity),
-        row.transferredTo ? `${row.transferredTo.externalAccountingCode ?? row.transferredTo.personnelNumber} — ${row.transferredTo.fullName}` : '—',
+        row.transferredTo ? `${row.transferredTo.externalAccountingCode ?? '—'} — ${row.transferredTo.fullName}` : '—',
         row.issuedTo ?? '—',
         row.relatedDocument ? <Button disabled={detailsLoadingId === row.relatedDocument.id} key={`related-${row.id}`} size="compact" type="button" variant="link" onClick={() => void openDocumentDetails(row.relatedDocument!.id)}>{detailsLoadingId === row.relatedDocument.id ? 'Відкриття…' : row.relatedDocument.label}</Button> : '—',
         <StatusBadge key={`status-${row.id}`} tone={statusTone(row.status)}>{row.statusLabel}</StatusBadge>,

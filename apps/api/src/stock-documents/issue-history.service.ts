@@ -27,7 +27,6 @@ const issueListInclude = {
   sourceResponsiblePerson: {
     select: {
       id: true,
-      personnelNumber: true,
       externalAccountingCode: true,
       lastName: true,
       firstName: true,
@@ -400,7 +399,6 @@ export class IssueHistoryService {
 
   private person(person: {
     id: string;
-    personnelNumber: string;
     externalAccountingCode: string | null;
     lastName: string;
     firstName: string;
@@ -408,7 +406,6 @@ export class IssueHistoryService {
   }) {
     return {
       id: person.id,
-      personnelNumber: person.personnelNumber,
       externalAccountingCode: person.externalAccountingCode,
       fullName: [person.lastName, person.firstName, person.middleName]
         .filter(Boolean)

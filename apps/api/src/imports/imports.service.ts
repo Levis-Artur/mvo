@@ -196,7 +196,6 @@ export class ImportsService {
               lastName: true,
               firstName: true,
               middleName: true,
-              personnelNumber: true,
               externalAccountingCode: true,
             },
           },

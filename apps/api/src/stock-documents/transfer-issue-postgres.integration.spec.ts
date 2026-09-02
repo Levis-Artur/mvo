@@ -125,7 +125,6 @@ async function createFixture(prisma: PrismaClient) {
       data: {
         lastName: 'Тестовий',
         firstName: 'Відправник',
-        personnelNumber: `ISS-SRC-${suffix}`,
         externalAccountingCode: suffix.slice(0, 4),
         managementId: management.id,
         serviceId: service.id,

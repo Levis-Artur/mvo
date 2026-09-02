@@ -24,7 +24,7 @@ export function MyTransferredPropertyCard({
   if (!line) return null;
 
   const recipient = transfer.destinationResponsiblePerson
-    ? `${transfer.destinationResponsiblePerson.externalAccountingCode ?? transfer.destinationResponsiblePerson.personnelNumber} — ${fullName(transfer.destinationResponsiblePerson)}`
+    ? `${transfer.destinationResponsiblePerson.externalAccountingCode ?? '—'} — ${fullName(transfer.destinationResponsiblePerson)}`
     : 'Одержувача не вказано';
 
   return (

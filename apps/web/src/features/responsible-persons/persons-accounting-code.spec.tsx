@@ -60,7 +60,6 @@ const person: ResponsiblePerson = {
   lastName: 'Жигульський',
   firstName: 'Андрій',
   middleName: 'Володимирович',
-  personnelNumber: '002',
   externalAccountingName: null,
   externalAccountingCode: '0057',
   position: null,

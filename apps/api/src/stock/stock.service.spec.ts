@@ -496,7 +496,6 @@ describe('StockService', () => {
       lastName: 'Левіс',
       firstName: 'Артур',
       middleName: null,
-      personnelNumber: '003',
       managementId: null,
       serviceId: null,
       unitId: null,
@@ -549,7 +548,6 @@ describe('StockService', () => {
       lastName: 'Левіс',
       firstName: 'Артур',
       middleName: null,
-      personnelNumber: '003',
     };
     const item = { id: 'item-id', name: 'Клавіатура' };
     const prisma = {
@@ -630,7 +628,6 @@ describe('StockService', () => {
       lastName: 'Левіс',
       firstName: 'Артур',
       middleName: null,
-      personnelNumber: '003',
       managementId: null,
       serviceId: null,
       unitId: null,

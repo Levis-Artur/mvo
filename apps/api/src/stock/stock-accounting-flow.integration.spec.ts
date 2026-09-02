@@ -238,10 +238,10 @@ describe('direct-balance accounting end-to-end flow', () => {
       {
         displayNumber: 1,
         documentDate: occurredAt,
-        sourcePersonnelNumber: '001',
+        sourceAccountingCode: '0057',
         sourceFullName: 'МВО А',
         sourceManagementName: 'Управління А',
-        destinationPersonnelNumber: '002',
+        destinationAccountingCode: '0061',
         destinationFullName: 'МВО Б',
         destinationManagementName: 'Управління Б',
         inventoryCode: 'KB-1',

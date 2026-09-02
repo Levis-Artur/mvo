@@ -150,7 +150,6 @@ function person(id: string) {
     lastName: id === sourceId ? 'Жигульський' : 'Левіс',
     firstName: id === sourceId ? 'Андрій' : 'Артур',
     middleName: null,
-    personnelNumber: id === sourceId ? '57' : '61',
     externalAccountingCode: id === sourceId ? '0057' : '0061',
     isActive: true,
   };

@@ -89,7 +89,6 @@ async function createFixture(prisma: PrismaClient) {
     data: {
       lastName: 'Тестовий',
       firstName: 'Реалізатор',
-      personnelNumber: `REAL-${suffix}`,
       managementId: management.id,
       serviceId: service.id,
     },

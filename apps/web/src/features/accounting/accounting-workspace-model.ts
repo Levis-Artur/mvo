@@ -25,7 +25,7 @@ export function operationPersonLabel(operation: Operation) {
   const name = [person.lastName, person.firstName, person.middleName]
     .filter(Boolean)
     .join(' ');
-  const number = person.externalAccountingCode || person.personnelNumber;
+  const number = person.externalAccountingCode ?? '—';
   return number ? `${number} — ${name}` : name;
 }
 

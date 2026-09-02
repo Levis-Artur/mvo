@@ -44,7 +44,6 @@ const source: AvailableStockSource = {
 
 const target: TransferTarget = {
   id: targetId,
-  personnelNumber: '002',
   externalAccountingCode: '0002',
   fullName: 'Петренко Петро',
   management: { id: 'management-1', name: 'Управління Б' },
@@ -78,7 +77,6 @@ const history: MyInventoryItemMovementHistory = {
       responsiblePerson: {
         id: personId,
         fullName: 'Іваненко Іван',
-        personnelNumber: '001',
         externalAccountingCode: '0001',
         management: { id: 'management-1', name: 'Управління А' },
         service: { id: 'service-1', name: 'Служба А' },

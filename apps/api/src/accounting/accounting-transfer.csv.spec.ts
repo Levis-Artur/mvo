@@ -7,10 +7,10 @@ import {
 describe('accounting transfer CSV formats', () => {
   const baseRow = {
     documentDate: new Date('2026-07-21T00:00:00.000Z'),
-    sourcePersonnelNumber: '001',
+    sourceAccountingCode: '0057',
     sourceFullName: 'Левіс Артур Сергійович',
     sourceManagementName: 'Управління "А"',
-    destinationPersonnelNumber: '003',
+    destinationAccountingCode: '0061',
     destinationFullName: 'Луцик Володимир',
     destinationManagementName: 'Управління Б',
     inventoryCode: 'KB;1',
@@ -21,19 +21,19 @@ describe('accounting transfer CSV formats', () => {
   };
 
   const expectedV1 = [
-    '\uFEFF"Номер документа";"Дата";"Номер MVO-відправника";"ПІБ MVO-відправника";"Управління відправника";"Номер MVO-одержувача";"ПІБ MVO-одержувача";"Управління одержувача";"Код номенклатури";"Назва";"Одиниця виміру";"Кількість";"Статус"',
-    '"MVO-INTERNAL-UUID-LIKE";"2026-07-21";"001";"Левіс Артур Сергійович";"Управління ""А""";"003";"Луцик Володимир";"Управління Б";"KB;1";"Клавіатура";"шт";"2.5000";"Проведено"',
+    '\uFEFF"Номер документа";"Дата";"Код МВО-відправника";"ПІБ MVO-відправника";"Управління відправника";"Код МВО-одержувача";"ПІБ MVO-одержувача";"Управління одержувача";"Код номенклатури";"Назва";"Одиниця виміру";"Кількість";"Статус"',
+    '"MVO-INTERNAL-UUID-LIKE";"2026-07-21";"0057";"Левіс Артур Сергійович";"Управління ""А""";"0061";"Луцик Володимир";"Управління Б";"KB;1";"Клавіатура";"шт";"2.5000";"Проведено"',
     '',
   ].join('\r\n');
 
-  it('keeps the legacy V1 output byte-for-byte stable', () => {
+  it('keeps the V1 document number while exporting accounting codes', () => {
     const csv = buildAccountingTransferCsvV1([
       { ...baseRow, documentNumber: 'MVO-INTERNAL-UUID-LIKE' },
     ]);
 
     expect(csv).toBe(expectedV1);
     expect(createHash('sha256').update(csv, 'utf8').digest('hex')).toBe(
-      '0db798fa0885245cfcd299d8be5ccfc97048d4bdf010482e433ff10a644b21d7',
+      '85afc514611152eca5798010f2486a7b5e9d99faac529c9d7b2325e10789c84e',
     );
   });
 

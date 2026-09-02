@@ -17,7 +17,6 @@ import {
 
 const personSelect = {
   id: true,
-  personnelNumber: true,
   externalAccountingCode: true,
   lastName: true,
   firstName: true,
@@ -189,11 +188,10 @@ export class AccountingMovementsService {
         documentLabel: row.documentLabel,
         mvoCode:
           row.responsiblePerson.externalAccountingCode
-          ?? row.responsiblePerson.personnelNumber,
+          ?? '',
         mvoName: row.responsiblePerson.fullName,
         transferredToCode:
           row.transferredTo?.externalAccountingCode
-          ?? row.transferredTo?.personnelNumber
           ?? '',
         transferredToName: row.transferredTo?.fullName ?? '',
         inventoryCode: row.inventoryItem.externalCode,
@@ -756,7 +754,6 @@ export class AccountingMovementsService {
 
   private person(person: {
     id: string;
-    personnelNumber: string;
     externalAccountingCode: string | null;
     lastName: string;
     firstName: string;
@@ -764,7 +761,6 @@ export class AccountingMovementsService {
   }) {
     return {
       id: person.id,
-      personnelNumber: person.personnelNumber,
       externalAccountingCode: person.externalAccountingCode,
       fullName: [person.lastName, person.firstName, person.middleName]
         .filter(Boolean)
@@ -773,11 +769,10 @@ export class AccountingMovementsService {
   }
 
   private personLabel(person: {
-    personnelNumber: string;
     externalAccountingCode: string | null;
     fullName: string;
   }) {
-    return `${person.externalAccountingCode ?? person.personnelNumber} — ${person.fullName}`;
+    return `${person.externalAccountingCode ?? '—'} — ${person.fullName}`;
   }
 
   private statusLabel(status: string) {

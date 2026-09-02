@@ -53,7 +53,7 @@ export function filterUsers(users: UserSummary[], search: string, role: string, 
   const normalized = search.trim().toLocaleLowerCase('uk-UA');
   return users.filter((user) => {
     const person = user.responsiblePerson;
-    const text = [user.username, person?.externalAccountingCode, person?.personnelNumber, person?.lastName, person?.firstName, person?.middleName]
+    const text = [user.username, person?.externalAccountingCode, person?.lastName, person?.firstName, person?.middleName]
       .filter(Boolean).join(' ').toLocaleLowerCase('uk-UA');
     return (!normalized || text.includes(normalized)) && (!role || user.role === role) &&
       (!status || (status === 'active' ? user.isActive : !user.isActive));

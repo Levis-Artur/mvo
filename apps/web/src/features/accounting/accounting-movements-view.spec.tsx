@@ -40,7 +40,6 @@ const baseRow: AccountingMovementRow = {
   documentId: null,
   responsiblePerson: {
     id: 'person-1',
-    personnelNumber: '57',
     externalAccountingCode: '0057',
     fullName: 'Жигульський Андрій Васильович',
   },
@@ -74,7 +73,6 @@ const rows: AccountingMovementRow[] = [
     status: 'POSTED',
     transferredTo: {
       id: 'person-2',
-      personnelNumber: '61',
       externalAccountingCode: '0061',
       fullName: 'Левіс Артур Сергійович',
     },
@@ -91,7 +89,6 @@ const rows: AccountingMovementRow[] = [
     status: 'POSTED',
     transferredTo: {
       id: 'person-2',
-      personnelNumber: '61',
       externalAccountingCode: '0061',
       fullName: 'Левіс Артур Сергійович',
     },

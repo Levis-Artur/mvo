@@ -25,7 +25,6 @@ const emptyPersonForm: CreateResponsiblePersonDto = {
   lastName: '',
   firstName: '',
   middleName: '',
-  personnelNumber: '',
   externalAccountingCode: '',
   position: '',
   phone: '',
@@ -51,7 +50,6 @@ export function PersonForm({
           lastName: person.lastName,
           firstName: person.firstName,
           middleName: person.middleName ?? '',
-          personnelNumber: person.personnelNumber,
           externalAccountingCode: person.externalAccountingCode ?? '',
           position: person.position ?? '',
           phone: person.phone ?? '',
@@ -217,21 +215,6 @@ export function PersonForm({
                 setForm((current) => ({
                   ...current,
                   externalAccountingCode: event.target.value,
-                }))
-              }
-            />
-          </FormField>
-          <FormField
-            hint="Внутрішній номер для облікового запису та legacy-даних."
-            label="Внутрішній номер"
-            required
-          >
-            <Input
-              value={form.personnelNumber}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  personnelNumber: event.target.value,
                 }))
               }
             />

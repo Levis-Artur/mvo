@@ -165,10 +165,10 @@ export function documentCounterparty(
     return `Кому: ${document.recipientName ?? 'Не вказано'}`;
   }
   if (document.destinationResponsiblePersonId === user.responsiblePersonId) {
-    return `Від кого: ${document.sourceResponsiblePerson.externalAccountingCode ?? document.sourceResponsiblePerson.personnelNumber} — ${document.sourceResponsiblePerson.lastName} ${document.sourceResponsiblePerson.firstName}`;
+    return `Від кого: ${document.sourceResponsiblePerson.externalAccountingCode ?? '—'} — ${document.sourceResponsiblePerson.lastName} ${document.sourceResponsiblePerson.firstName}`;
   }
   const destination = document.destinationResponsiblePerson;
-  return `Кому: ${destination ? `${destination.externalAccountingCode ?? destination.personnelNumber} — ${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
+  return `Кому: ${destination ? `${destination.externalAccountingCode ?? '—'} — ${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
 }
 
 export function successfulDocumentActionMessage(

@@ -44,7 +44,6 @@ const balanceInclude = {
       lastName: true,
       firstName: true,
       middleName: true,
-      personnelNumber: true,
       externalAccountingCode: true,
       managementId: true,
       serviceId: true,
@@ -69,7 +68,6 @@ const transactionInclude = {
       lastName: true,
       firstName: true,
       middleName: true,
-      personnelNumber: true,
       externalAccountingCode: true,
     },
   },
@@ -445,7 +443,6 @@ export class StockService {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   }) {
     return {
@@ -453,7 +450,6 @@ export class StockService {
       fullName: [person.lastName, person.firstName, person.middleName]
         .filter(Boolean)
         .join(' '),
-      personnelNumber: person.personnelNumber,
       externalAccountingCode: person.externalAccountingCode,
     };
   }
@@ -579,11 +575,6 @@ export class StockService {
             },
             {
               responsiblePerson: {
-                personnelNumber: { contains: search, mode: 'insensitive' },
-              },
-            },
-            {
-              responsiblePerson: {
                 externalAccountingCode: { contains: search, mode: 'insensitive' },
               },
             },
@@ -609,7 +600,6 @@ export class StockService {
         ]
           .filter(Boolean)
           .join(' '),
-        personnelNumber: balance.responsiblePerson.personnelNumber,
         externalAccountingCode:
           balance.responsiblePerson.externalAccountingCode,
       },
@@ -640,7 +630,6 @@ export class StockService {
         ]
           .filter(Boolean)
           .join(' '),
-        personnelNumber: transaction.responsiblePerson.personnelNumber,
         externalAccountingCode:
           transaction.responsiblePerson.externalAccountingCode,
       },

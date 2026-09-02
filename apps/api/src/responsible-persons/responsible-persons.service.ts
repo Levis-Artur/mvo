@@ -21,7 +21,6 @@ const responsiblePersonInclude = {
 
 const transferTargetSelect = {
   id: true,
-  personnelNumber: true,
   externalAccountingCode: true,
   lastName: true,
   firstName: true,
@@ -97,7 +96,6 @@ export class ResponsiblePersonsService {
     const limit = query.limit ?? 20;
     const where: Prisma.ResponsiblePersonWhereInput = {
       ...this.buildWhere({ ...query, isActive: true }),
-      externalAccountingCode: { not: null },
       id: user.responsiblePersonId
         ? { not: user.responsiblePersonId }
         : undefined,
@@ -115,7 +113,6 @@ export class ResponsiblePersonsService {
     return {
       items: items.map((person) => ({
         id: person.id,
-        personnelNumber: person.personnelNumber,
         externalAccountingCode: person.externalAccountingCode!,
         fullName: [person.lastName, person.firstName, person.middleName]
           .filter(Boolean)
@@ -217,7 +214,6 @@ export class ResponsiblePersonsService {
                 mode: 'insensitive',
               },
             },
-            { personnelNumber: { contains: search, mode: 'insensitive' } },
             {
               management: { name: { contains: search, mode: 'insensitive' } },
             },
@@ -344,7 +340,7 @@ export class ResponsiblePersonsService {
       ) {
         this.throwAccountingCodeConflict(externalAccountingCode);
       }
-      throw new ConflictException('Табельний номер вже використовується');
+      throw new ConflictException('Код МВО вже використовується');
     }
 
     throw error;

@@ -13,7 +13,7 @@ export function CreateMvoAccountModal({
   person: ResponsiblePerson;
   onClose: () => void;
 }) {
-  const [username, setUsername] = useState(person.personnelNumber);
+  const [username, setUsername] = useState(person.externalAccountingCode ?? '');
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -52,7 +52,7 @@ export function CreateMvoAccountModal({
         <Card>
           <p className="font-semibold">{fullName(person)}</p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-            Табельний номер: {person.personnelNumber}
+            Код МВО: {person.externalAccountingCode ?? '—'}
           </p>
         </Card>
 
@@ -99,5 +99,4 @@ export function CreateMvoAccountModal({
     </Modal>
   );
 }
-
 

@@ -27,7 +27,6 @@ const authUser: AuthUser = {
 
 const target: TransferTarget = {
   id: destinationId,
-  personnelNumber: '003',
   externalAccountingCode: '0057',
   fullName: 'Левіс Артур Сергійович',
   management: { id: 'management-id', name: 'Управління забезпечення' },

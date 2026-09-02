@@ -28,11 +28,6 @@ export class UpdateResponsiblePersonDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(80)
-  personnelNumber?: string;
-
-  @IsOptional()
-  @IsString()
   @MaxLength(255)
   position?: string | null;
 

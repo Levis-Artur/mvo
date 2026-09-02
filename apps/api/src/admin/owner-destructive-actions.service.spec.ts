@@ -465,7 +465,62 @@ describe('OwnerDestructiveActionsService', () => {
       where: { responsiblePersonId: 'person-a' },
       data: { responsiblePersonId: null },
     });
+    expect(tx.stockDocument.updateMany).toHaveBeenCalledWith({
+      where: { postedByUserId: 'mvo-user' },
+      data: { postedByUserId: null },
+    });
+    expect(tx.issueRealization.updateMany).toHaveBeenCalledWith({
+      where: { cancelledByUserId: 'mvo-user' },
+      data: { cancelledByUserId: null },
+    });
+    expect(tx.user.update).not.toHaveBeenCalledWith({
+      where: { id: 'mvo-user' },
+      data: { responsiblePersonId: null },
+    });
     expect(tx.user.delete).toHaveBeenCalledWith({ where: { id: 'mvo-user' } });
+    expect(tx.user.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.responsiblePerson.delete.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('detaches a linked non-MVO user and keeps the account', async () => {
+    const { service, prisma, tx } = createService();
+    prisma.responsiblePerson.findUnique.mockResolvedValue({
+      id: 'person-a', lastName: 'A', firstName: 'Person', middleName: null,
+      stockBalances: [], user: { id: 'linked-user', role: UserRole.DPP_ADMIN },
+      _count: { stockTransactions: 0, importRows: 0 },
+    });
+    prisma.custodyBalance.count.mockResolvedValue(0);
+    prisma.stockDocument.count.mockResolvedValue(0);
+    prisma.stockDocumentLine.count.mockResolvedValue(0);
+    prisma.stockDocumentAttachment.count.mockResolvedValue(0);
+    prisma.issueRealization.count.mockResolvedValue(0);
+    prisma.accountingTransferExportBatch.count.mockResolvedValue(0);
+    prisma.stockDocumentAttachment.findMany.mockResolvedValue([]);
+    prisma.issueRealizationAttachment.findMany.mockResolvedValue([]);
+    tx.responsiblePerson.findUniqueOrThrow.mockResolvedValue({
+      id: 'person-a', lastName: 'A', firstName: 'Person', middleName: null,
+    });
+    tx.user.findUnique.mockResolvedValue({
+      id: 'linked-user', role: UserRole.DPP_ADMIN,
+    });
+    tx.custodyBalance.findMany.mockResolvedValue([]);
+    tx.stockDocument.findMany.mockResolvedValue([]);
+    tx.accountingTransferExportBatchDocument.findMany.mockResolvedValue([]);
+    tx.issueRealization.findMany.mockResolvedValue([]);
+
+    await service.delete(owner, 'responsible-persons', 'person-a', {
+      confirmation: 'DELETE responsible-persons:person-a',
+    }, {});
+
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'linked-user' },
+      data: { responsiblePersonId: null },
+    });
+    expect(tx.user.delete).not.toHaveBeenCalled();
+    expect(tx.responsiblePerson.delete).toHaveBeenCalledWith({
+      where: { id: 'person-a' },
+    });
   });
 
   it('rolls the whole transaction back when rollback fails', async () => {

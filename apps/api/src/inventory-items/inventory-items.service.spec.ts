@@ -13,7 +13,6 @@ const person = {
   lastName: 'Левіс',
   firstName: 'Артур',
   middleName: null,
-  personnelNumber: '003',
   externalAccountingCode: '0057',
   management: { id: 'management-1', name: 'Управління А' },
   service: { id: 'service-1', name: 'Служба А' },
@@ -23,7 +22,6 @@ const person = {
 const destination = {
   ...person,
   id: '22222222-2222-4222-8222-222222222222',
-  personnelNumber: '004',
   externalAccountingCode: '1155',
   lastName: 'Луцик',
 };

@@ -34,7 +34,6 @@ describe('AccountingOverviewService', () => {
             comment: null,
             document: null,
             responsiblePerson: {
-              personnelNumber: '001',
               externalAccountingCode: 'MVO-001',
               lastName: 'Тестовий',
               firstName: 'Користувач',

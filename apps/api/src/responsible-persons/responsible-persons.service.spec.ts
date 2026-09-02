@@ -75,7 +75,6 @@ function validDto() {
   return {
     lastName: 'Тестовий',
     firstName: 'Олександр',
-    personnelNumber: 'TEST-001',
     externalAccountingCode: '0057',
     managementId: ids.management,
     serviceId: ids.service,
@@ -348,7 +347,6 @@ describe('ResponsiblePersonsService', () => {
     expect(prisma.responsiblePerson.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          personnelNumber: 'TEST-001',
           externalAccountingCode: '0057',
         }),
       }),
@@ -482,7 +480,6 @@ describe('ResponsiblePersonsService', () => {
                 mode: 'insensitive',
               },
             },
-            { personnelNumber: { contains: 'Тест', mode: 'insensitive' } },
             {
               management: {
                 name: { contains: 'Тест', mode: 'insensitive' },
@@ -570,7 +567,6 @@ describe('ResponsiblePersonsService', () => {
     prisma.responsiblePerson.findMany.mockResolvedValue([
       {
         id: '99999999-9999-4999-8999-999999999999',
-        personnelNumber: '003',
         lastName: 'Левіс',
         firstName: 'Артур',
         middleName: 'Сергійович',
@@ -599,13 +595,11 @@ describe('ResponsiblePersonsService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           isActive: true,
-          externalAccountingCode: { not: null },
           id: { not: currentResponsiblePersonId },
           OR: expect.any(Array),
         }),
         select: expect.objectContaining({
           id: true,
-          personnelNumber: true,
           externalAccountingCode: true,
           management: expect.any(Object),
         }),
@@ -615,7 +609,6 @@ describe('ResponsiblePersonsService', () => {
     expect(result.items).toEqual([
       {
         id: '99999999-9999-4999-8999-999999999999',
-        personnelNumber: '003',
         externalAccountingCode: '0057',
         fullName: 'Левіс Артур Сергійович',
         management: { id: ids.management, name: 'Управління' },

@@ -30,13 +30,12 @@ const mvoUser = { id: 'user-1', username: 'mvo', role: 'MVO', responsiblePersonI
 const auditor = { ...mvoUser, role: 'AUDITOR' } as AuthUser;
 const accountant = { ...mvoUser, role: 'ACCOUNTANT' } as AuthUser;
 const person = (id: string, active = true) => ({
-  id, isActive: active, personnelNumber: id, lastName: id, firstName: 'Ім’я', middleName: null,
+  id, isActive: active, lastName: id, firstName: 'Ім’я', middleName: null,
   externalAccountingName: null, externalAccountingCode: '0057',
   management: { id: 'management-1', name: 'Управління забезпечення' },
 }) as ResponsiblePerson;
 const target = (id: string): TransferTarget => ({
   id,
-  personnelNumber: id,
   externalAccountingCode: id === '001' ? '0057' : '1155',
   fullName: `${id} Ім’я`,
   management: { id: 'management-1', name: 'Управління забезпечення' },
@@ -76,7 +75,7 @@ describe('stock document frontend rules', () => {
   it('виключає відправника та шукає за номером, ПІБ і управлінням', () => {
     expect(recipientOptions([target('001'), target('003')], '001').map((item) => item.id)).toEqual(['003']);
     expect(personOptionLabel(person('003'))).toBe('0057 — 003 Ім’я — Управління забезпечення');
-    const arthur = { ...target('person-2'), personnelNumber: '003', externalAccountingCode: '0057', fullName: 'Левіс Артур Сергійович' };
+    const arthur = { ...target('person-2'), externalAccountingCode: '0057', fullName: 'Левіс Артур Сергійович' };
     expect(filterRecipientOptions([arthur], 'person-1', '0057')).toEqual([arthur]);
     expect(filterRecipientOptions([arthur], 'person-1', 'левіс артур')).toEqual([arthur]);
     expect(filterRecipientOptions([arthur], 'person-1', 'забезпечення')).toEqual([arthur]);

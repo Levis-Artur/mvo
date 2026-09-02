@@ -35,7 +35,6 @@ const historyItem: IssueHistoryItem = {
   sourceResponsiblePerson: {
     id: personId,
     fullName: 'Іваненко Іван',
-    personnelNumber: '0001',
     externalAccountingCode: '0001',
   },
   recipientName: 'Служба забезпечення',
@@ -62,7 +61,6 @@ const issueDocument = {
   sourceResponsiblePersonId: personId,
   sourceResponsiblePerson: {
     id: personId,
-    personnelNumber: '0001',
     externalAccountingCode: '0001',
     lastName: 'Іваненко',
     firstName: 'Іван',

@@ -45,7 +45,7 @@ export function AccountingMovementDetailsModal({
             <Detail label="МВО-відправник">{details.responsiblePerson.fullName}</Detail>
             <Detail label="Код МВО">
               {details.responsiblePerson.externalAccountingCode
-                ?? details.responsiblePerson.personnelNumber}
+                ?? '—'}
             </Detail>
             {destination ? (
               <Detail label="Кому передано">
@@ -55,7 +55,7 @@ export function AccountingMovementDetailsModal({
             {destination ? (
               <Detail label="Код МВО одержувача">
                 {destination.externalAccountingCode
-                  ?? destination.personnelNumber}
+                  ?? '—'}
               </Detail>
             ) : null}
             {issue && details.sourceTransfer ? (

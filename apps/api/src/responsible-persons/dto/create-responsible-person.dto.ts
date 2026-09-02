@@ -24,10 +24,6 @@ export class CreateResponsiblePersonDto {
   @MaxLength(120)
   middleName?: string;
 
-  @IsString()
-  @MaxLength(80)
-  personnelNumber!: string;
-
   @IsOptional()
   @IsString()
   @MaxLength(255)

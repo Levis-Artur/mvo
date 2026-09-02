@@ -1,10 +1,10 @@
 const HEADERS = [
   'Номер документа',
   'Дата',
-  'Номер MVO-відправника',
+  'Код МВО-відправника',
   'ПІБ MVO-відправника',
   'Управління відправника',
-  'Номер MVO-одержувача',
+  'Код МВО-одержувача',
   'ПІБ MVO-одержувача',
   'Управління одержувача',
   'Код номенклатури',
@@ -16,10 +16,10 @@ const HEADERS = [
 
 type AccountingTransferCsvRowBase = {
   documentDate: Date;
-  sourcePersonnelNumber: string;
+  sourceAccountingCode: string;
   sourceFullName: string;
   sourceManagementName: string;
-  destinationPersonnelNumber: string;
+  destinationAccountingCode: string;
   destinationFullName: string;
   destinationManagementName: string;
   inventoryCode: string;
@@ -59,10 +59,10 @@ function buildAccountingTransferCsv<Row extends AccountingTransferCsvRowBase>(
   return `\uFEFF${csvLine(HEADERS)}${rows.map((row) => csvLine([
     documentNumber(row),
     formatDate(row.documentDate),
-    row.sourcePersonnelNumber,
+    row.sourceAccountingCode,
     row.sourceFullName,
     row.sourceManagementName,
-    row.destinationPersonnelNumber,
+    row.destinationAccountingCode,
     row.destinationFullName,
     row.destinationManagementName,
     row.inventoryCode,

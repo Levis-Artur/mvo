@@ -30,7 +30,6 @@ const recipientSelect = {
   lastName: true,
   firstName: true,
   middleName: true,
-  personnelNumber: true,
   externalAccountingCode: true,
 } satisfies Prisma.ResponsiblePersonSelect;
 
@@ -110,7 +109,7 @@ export class MyPropertyService {
     const responsiblePersonId = this.requireMvoScope(user);
     const responsiblePerson = await this.prisma.responsiblePerson.findUnique({
       where: { id: responsiblePersonId },
-      select: { personnelNumber: true },
+      select: { externalAccountingCode: true },
     });
     if (!responsiblePerson) {
       throw new BadRequestException(
@@ -119,12 +118,12 @@ export class MyPropertyService {
     }
 
     const date = new Date().toISOString().slice(0, 10);
-    const personnelNumber = responsiblePerson.personnelNumber.replace(
+    const accountingCode = (responsiblePerson.externalAccountingCode ?? 'mvo').replace(
       /[^a-zA-Z0-9_-]/g,
       '_',
     );
     return {
-      filename: `mvo-property-${personnelNumber}-${date}.csv`,
+      filename: `mvo-property-${accountingCode}-${date}.csv`,
       stream: Readable.from(
         this.csvChunks(
           responsiblePersonId,
@@ -301,13 +300,6 @@ export class MyPropertyService {
             {
               document: {
                 destinationResponsiblePerson: {
-                  personnelNumber: { contains: term, mode: 'insensitive' },
-                },
-              },
-            },
-            {
-              document: {
-                destinationResponsiblePerson: {
                   externalAccountingCode: {
                     contains: term,
                     mode: 'insensitive',
@@ -418,7 +410,6 @@ export class MyPropertyService {
       recipient: recipient
         ? {
             id: recipient.id,
-            personnelNumber: recipient.personnelNumber,
             externalAccountingCode: recipient.externalAccountingCode,
             fullName: [
               recipient.lastName,

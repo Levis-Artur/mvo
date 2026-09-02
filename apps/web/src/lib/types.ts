@@ -80,7 +80,6 @@ export type UserSummary = AuthUser & {
     | 'lastName'
     | 'firstName'
     | 'middleName'
-    | 'personnelNumber'
     | 'externalAccountingCode'
     | 'isActive'
   > | null;
@@ -127,7 +126,6 @@ export type ResponsiblePerson = {
   lastName: string;
   firstName: string;
   middleName: string | null;
-  personnelNumber: string;
   externalAccountingName: string | null;
   externalAccountingCode: string | null;
   position: string | null;
@@ -146,7 +144,6 @@ export type ResponsiblePerson = {
 
 export type TransferTarget = {
   id: string;
-  personnelNumber: string;
   externalAccountingCode: string;
   fullName: string;
   management: Pick<Management, 'id' | 'name'>;
@@ -259,7 +256,6 @@ export type StockBalance = {
   responsiblePerson: {
     id: string;
     fullName: string;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   };
   inventoryItem: Pick<
@@ -271,7 +267,6 @@ export type StockBalance = {
 export type PersonReference = {
   id: string;
   fullName: string;
-  personnelNumber: string;
   externalAccountingCode: string | null;
 };
 
@@ -793,7 +788,6 @@ export type AccountingOverview = {
     comment: string | null;
     document: { displayNumber: number } | null;
     responsiblePerson: {
-      personnelNumber: string;
       externalAccountingCode: string | null;
       lastName: string;
       firstName: string;
@@ -829,7 +823,6 @@ export type AccountingMovementFilters = {
 
 export type AccountingMovementPerson = {
   id: string;
-  personnelNumber: string;
   externalAccountingCode: string | null;
   fullName: string;
 };
@@ -950,7 +943,6 @@ export type StockTransaction = {
   responsiblePerson: {
     id: string;
     fullName: string;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   };
   inventoryItem: Pick<
@@ -1011,7 +1003,6 @@ export type ImportRow = {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   } | null;
   inventoryItem: Pick<
@@ -1051,7 +1042,6 @@ export type CreateResponsiblePersonDto = {
   lastName: string;
   firstName: string;
   middleName?: string | null;
-  personnelNumber: string;
   position?: string | null;
   phone?: string | null;
   email?: string | null;

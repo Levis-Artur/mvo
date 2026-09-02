@@ -1132,19 +1132,27 @@ export class OwnerDestructiveActionsService {
     await tx.stockBalance.deleteMany({ where: { responsiblePersonId: id } });
 
     if (linkedUser?.role === UserRole.MVO) {
-      await this.deleteUserInTx(tx, linkedUser.id);
+      await this.deleteUserInTx(tx, linkedUser.id, {
+        skipResponsiblePersonDetach: true,
+      });
     } else if (linkedUser) {
       await tx.user.update({ where: { id: linkedUser.id }, data: { responsiblePersonId: null } });
     }
     await tx.responsiblePerson.delete({ where: { id } });
   }
 
-  private async deleteUserInTx(tx: Prisma.TransactionClient, id: string) {
+  private async deleteUserInTx(
+    tx: Prisma.TransactionClient,
+    id: string,
+    options: { skipResponsiblePersonDetach?: boolean } = {},
+  ) {
     await tx.stockDocument.updateMany({ where: { postedByUserId: id }, data: { postedByUserId: null } });
     await tx.stockDocument.updateMany({ where: { cancelledByUserId: id }, data: { cancelledByUserId: null } });
     await tx.stockDocument.updateMany({ where: { exportedByUserId: id }, data: { exportedByUserId: null } });
     await tx.issueRealization.updateMany({ where: { cancelledByUserId: id }, data: { cancelledByUserId: null } });
-    await tx.user.update({ where: { id }, data: { responsiblePersonId: null } });
+    if (!options.skipResponsiblePersonDetach) {
+      await tx.user.update({ where: { id }, data: { responsiblePersonId: null } });
+    }
     await tx.user.delete({ where: { id } });
   }
 

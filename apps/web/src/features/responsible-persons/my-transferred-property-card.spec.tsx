@@ -13,7 +13,6 @@ function transfer(): StockDocument {
     lastName: 'Іваненко',
     firstName: 'Іван',
     middleName: null,
-    personnelNumber: '0001',
     externalAccountingCode: '0001',
   };
   const recipient = {
@@ -21,7 +20,6 @@ function transfer(): StockDocument {
     id: '55555555-5555-4555-8555-555555555555',
     lastName: 'Жигульський',
     firstName: 'Андрій',
-    personnelNumber: '0057',
     externalAccountingCode: '0057',
   };
   const item = {

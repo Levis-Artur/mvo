@@ -60,7 +60,6 @@ const transferRow = {
       lastName: 'Інший',
       firstName: 'Одержувач',
       middleName: null,
-      personnelNumber: '003',
       externalAccountingCode: '0057',
     },
   },
@@ -84,7 +83,7 @@ function createService() {
       count: jest.fn().mockResolvedValue(1),
     },
     responsiblePerson: {
-      findUnique: jest.fn().mockResolvedValue({ personnelNumber: '002' }),
+      findUnique: jest.fn().mockResolvedValue({ externalAccountingCode: '0002' }),
     },
   };
   return { prisma, service: new MyPropertyService(prisma as never) };
@@ -253,7 +252,7 @@ describe('MyPropertyService', () => {
     expect(csv).not.toContain(itemId);
     expect(csv).not.toContain(directRow.id);
     expect(exported.filename).toMatch(
-      /^mvo-property-002-\d{4}-\d{2}-\d{2}\.csv$/,
+      /^mvo-property-0002-\d{4}-\d{2}-\d{2}\.csv$/,
     );
   });
 

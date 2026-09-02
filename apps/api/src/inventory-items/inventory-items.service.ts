@@ -363,7 +363,6 @@ export class InventoryItemsService {
         },
         orderBy: [
           { responsiblePerson: { externalAccountingCode: 'asc' } },
-          { responsiblePerson: { personnelNumber: 'asc' } },
           { updatedAt: 'desc' },
         ],
       }),
@@ -588,7 +587,6 @@ export class InventoryItemsService {
     };
     const personSelect = {
       id: true,
-      personnelNumber: true,
       externalAccountingCode: true,
       lastName: true,
       firstName: true,
@@ -924,7 +922,6 @@ export class InventoryItemsService {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
     management: { id: string; name: string };
     service: { id: string; name: string };
@@ -942,7 +939,6 @@ export class InventoryItemsService {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   }) {
     return `${person.externalAccountingCode ?? 'Не вказано'} — ${[
@@ -1001,7 +997,6 @@ export class InventoryItemsService {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   }) {
     return {
@@ -1009,7 +1004,6 @@ export class InventoryItemsService {
       fullName: [person.lastName, person.firstName, person.middleName]
         .filter(Boolean)
         .join(' '),
-      personnelNumber: person.personnelNumber,
       externalAccountingCode: person.externalAccountingCode,
     };
   }
@@ -1019,7 +1013,6 @@ export class InventoryItemsService {
     lastName: string;
     firstName: string;
     middleName: string | null;
-    personnelNumber: string;
     externalAccountingCode: string | null;
   }) {
     const reference = this.personReference(person);

@@ -32,7 +32,6 @@ const actor = {
 function person(id: string, number: string, lastName: string) {
   return {
     id,
-    personnelNumber: number,
     externalAccountingCode: number.padStart(4, '0'),
     lastName,
     firstName: 'Тест',
@@ -95,10 +94,10 @@ function snapshotRow(displayNumber: number | null = 7) {
     documentNumber: 'MVO-INTERNAL-UUID-LIKE',
     displayNumber,
     documentDate: new Date('2026-07-21T00:00:00.000Z'),
-    sourcePersonnelNumber: '001',
+    sourceAccountingCode: '0057',
     sourceFullName: 'Левіс Тест',
     sourceManagementName: 'Управління 001',
-    destinationPersonnelNumber: '003',
+    destinationAccountingCode: '0061',
     destinationFullName: 'Луцик Тест',
     destinationManagementName: 'Управління 003',
     inventoryCode: 'KB-0',

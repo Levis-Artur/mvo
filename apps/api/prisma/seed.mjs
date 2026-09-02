@@ -123,7 +123,7 @@ async function main() {
   });
 
   await prisma.responsiblePerson.upsert({
-    where: { personnelNumber: 'TEST-MVO-001' },
+    where: { externalAccountingCode: '0001' },
     update: {
       lastName: 'Тестовий',
       firstName: 'Олександр',
@@ -144,7 +144,6 @@ async function main() {
       lastName: 'Тестовий',
       firstName: 'Олександр',
       middleName: 'Демонстраційний',
-      personnelNumber: 'TEST-MVO-001',
       position: 'Інспектор з обліку майна',
       phone: '+380000000001',
       email: 'mvo.test.001@example.invalid',
@@ -160,7 +159,7 @@ async function main() {
   });
 
   await prisma.responsiblePerson.upsert({
-    where: { personnelNumber: 'TEST-MVO-002' },
+    where: { externalAccountingCode: '0002' },
     update: {
       lastName: 'Демонстраційна',
       firstName: 'Марія',
@@ -179,7 +178,6 @@ async function main() {
       lastName: 'Демонстраційна',
       firstName: 'Марія',
       middleName: 'Тестівна',
-      personnelNumber: 'TEST-MVO-002',
       position: 'Старший інспектор',
       phone: '+380000000002',
       email: 'mvo.test.002@example.invalid',
