@@ -41,6 +41,7 @@ export type AppView =
   | 'my-transactions'
   | 'transfers'
   | 'issues'
+  | 'manager'
   | 'accounting'
   | 'accounting-transfers'
   | 'profile';
@@ -327,6 +328,7 @@ const navigationLabels: Record<AppView, string> = {
   transactions: 'Журнал операцій', users: 'Користувачі', reports: 'Звіти',
   administration: 'Адміністрування', 'my-card': 'Моя картка', 'my-stock': 'Моє майно',
   'my-transactions': 'Мої операції', transfers: 'Передачі', issues: 'Видачі', profile: 'Профіль',
+  manager: 'Менеджерський перегляд',
   accounting: 'Бухгалтерія',
   'accounting-transfers': 'Передачі МВО для бухгалтерії',
 };
@@ -336,7 +338,16 @@ export function getNavigationItems(user: AuthUser | null) {
     return [];
   }
 
-  return navigationByRole[user.role]
+  const roleNavigation =
+    user.role === 'MVO' && hasManagerReadOnlyAccess(user)
+      ? [
+          ...navigationByRole.MVO.slice(0, 3),
+          nav('Менеджерський перегляд', '/manager', 'manager', 'responsiblePersons'),
+          ...navigationByRole.MVO.slice(3),
+        ]
+      : navigationByRole[user.role];
+
+  return roleNavigation
     .map((item) => ({
       ...item,
       label: navigationLabels[item.view],
@@ -345,8 +356,20 @@ export function getNavigationItems(user: AuthUser | null) {
         : {}),
     }))
     .filter((item) =>
-      item.disabled ? true : can(user, item.action ?? 'read', item.resource),
+      item.view === 'manager'
+        ? hasManagerReadOnlyAccess(user)
+        : item.disabled
+          ? true
+          : can(user, item.action ?? 'read', item.resource),
     );
+}
+
+export function hasManagerReadOnlyAccess(user: AuthUser | null) {
+  return user?.role === 'MVO' && Boolean(user.accessScopes?.length);
+}
+
+export function getManagerReadOnlyPresentationUser(user: AuthUser): AuthUser {
+  return { ...user, role: 'ORG_MANAGER', responsiblePersonId: null };
 }
 
 export function getDefaultAppPath(user: AuthUser | null) {

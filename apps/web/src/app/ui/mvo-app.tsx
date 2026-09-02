@@ -20,6 +20,7 @@ import { MvoIssuesView } from '@/features/stock-documents/mvo-issues-view';
 import { UsersView } from '@/features/users/users-view';
 import { AccountingTransfersView } from '@/features/accounting/accounting-transfers-view';
 import { AccountingWorkspaceView } from '@/features/accounting/accounting-workspace-view';
+import { ManagerReadOnlyView } from '@/features/manager/manager-read-only-view';
 
 export type View = AppView;
 
@@ -56,6 +57,7 @@ export function MvoApp({ initialView = 'home', initialImportId, initialAccountin
     {view === 'my-stock' ? <MyStockView /> : null}
     {view === 'transfers' ? <StockDocumentsView /> : null}
     {view === 'issues' ? <MvoIssuesView /> : null}
+    {view === 'manager' ? <ManagerReadOnlyView /> : null}
     {view === 'accounting' ? <AccountingWorkspaceView /> : null}
     {view === 'accounting-transfers' ? <AccountingTransfersView initialTab={initialAccountingTab} user={user} /> : null}
     {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних можливостей API." /> : null}

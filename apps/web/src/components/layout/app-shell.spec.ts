@@ -8,12 +8,13 @@ import {
   getAccessRedirectPath,
   getAssignableUserRoles,
   getDefaultAppPath,
+  getManagerReadOnlyPresentationUser,
   getNavigationItems,
   requiresResponsiblePerson,
 } from '../../lib/authz';
 import type { AuthUser } from '../../lib/types';
 
-const user = (role: AuthUser['role']) => ({ id: role, username: role, role, isActive: true, mustChangePassword: false, responsiblePersonId: role === 'MVO' ? 'person-1' : null }) as AuthUser;
+const user = (role: AuthUser['role'], accessScopes: AuthUser['accessScopes'] = []) => ({ id: role, username: role, role, isActive: true, mustChangePassword: false, responsiblePersonId: role === 'MVO' ? 'person-1' : null, accessScopes }) as AuthUser;
 
 describe('AppShell presentation model', () => {
   it('містить header, navigation, main і footer', () => {
@@ -97,6 +98,37 @@ describe('AppShell presentation model', () => {
     expect(getAccessRedirectPath(user('MVO'), 'home')).toBe('/my-stock');
   });
 
+  it('не показує менеджерський перегляд MVO без scopes', () => {
+    expect(getNavigationItems(user('MVO')).some((item) => item.view === 'manager')).toBe(false);
+    expect(canAccessPath(user('MVO'), '/manager', 'manager')).toBe(false);
+  });
+
+  it('показує та відкриває менеджерський перегляд MVO зі scope', () => {
+    const scopedMvo = user('MVO', [
+      { managementId: null, serviceCode: 'IT' },
+    ]);
+    expect(getNavigationItems(scopedMvo).map((item) => item.label)).toEqual([
+      'Моє майно',
+      'Передачі',
+      'Видачі',
+      'Менеджерський перегляд',
+      'Профіль',
+    ]);
+    expect(canAccessPath(scopedMvo, '/manager', 'manager')).toBe(true);
+    const managerPresentation = getManagerReadOnlyPresentationUser(scopedMvo);
+    expect(can(managerPresentation, 'write', 'stockDocuments')).toBe(false);
+    expect(can(managerPresentation, 'write', 'responsiblePersons')).toBe(false);
+  });
+
+  it('не додає manager route іншим ролям і не змінює ORG_MANAGER UI', () => {
+    expect(getNavigationItems(user('ORG_MANAGER')).map((item) => item.href)).toEqual([
+      '/persons', '/stock', '/profile',
+    ]);
+    expect(getNavigationItems(user('AUDITOR', [
+      { managementId: null, serviceCode: 'IT' },
+    ])).some((item) => item.view === 'manager')).toBe(false);
+  });
+
   it('не монтує технічний журнал під час завантаження MVO AppShell', () => {
     const app = readFileSync(join(__dirname, '../../app/ui/mvo-app.tsx'), 'utf8');
     const views = readFileSync(join(__dirname, '../../features/responsible-persons/my-views.tsx'), 'utf8');
@@ -104,5 +136,16 @@ describe('AppShell presentation model', () => {
     expect(app).not.toContain('MyCardView');
     expect(views).not.toContain('PersonOperationsTab');
     expect(views).not.toContain('getResponsiblePersonStockTransactions');
+  });
+
+  it('manager workspace перевикористовує read-only views і вмикає read-only режим документів', () => {
+    const manager = readFileSync(
+      join(__dirname, '../../features/manager/manager-read-only-view.tsx'),
+      'utf8',
+    );
+    expect(manager).toContain('<PersonsView />');
+    expect(manager).toContain('<StockView />');
+    expect(manager).toContain('<TransactionsView />');
+    expect(manager).toContain('<StockDocumentsView managerReadOnly />');
   });
 });

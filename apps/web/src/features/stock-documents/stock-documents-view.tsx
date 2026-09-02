@@ -24,11 +24,15 @@ import { StockDocumentForm } from './stock-document-form';
 import { StockDocumentsTable } from './stock-documents-table';
 import { DEFAULT_DOCUMENT_FILTERS, useStockDocumentsController } from './use-stock-documents-controller';
 import { DocumentSuccessModal } from './document-success-modal';
+import { getManagerReadOnlyPresentationUser } from '@/lib/authz';
 
-export function StockDocumentsView() {
+export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnly?: boolean } = {}) {
   const { user } = useAuth();
   if (!user) return <LoadingState label="Завантаження документів…" />;
-  return <StockDocumentsContent user={user} />;
+  const viewUser = managerReadOnly
+    ? getManagerReadOnlyPresentationUser(user)
+    : user;
+  return <StockDocumentsContent user={viewUser} />;
 }
 
 function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {

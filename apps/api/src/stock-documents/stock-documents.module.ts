@@ -18,6 +18,10 @@ import { IssueRealizationsService } from './issue-realizations.service';
     IssueHistoryService,
     IssueRealizationsService,
   ],
-  exports: [StockDocumentAttachmentStorageService, IssueHistoryService],
+  exports: [
+    StockDocumentsService,
+    StockDocumentAttachmentStorageService,
+    IssueHistoryService,
+  ],
 })
 export class StockDocumentsModule {}
