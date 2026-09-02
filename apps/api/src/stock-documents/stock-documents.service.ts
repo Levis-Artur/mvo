@@ -816,6 +816,67 @@ export class StockDocumentsService {
     return this.findOne(id, actor);
   }
 
+  async cancelForOwnerDeletionInTx(
+    tx: Prisma.TransactionClient,
+    id: string,
+    actor: CurrentUser,
+  ) {
+    if (actor.role !== UserRole.OWNER) {
+      throw new ForbiddenException('Доступно лише OWNER.');
+    }
+    await tx.$queryRaw`
+      SELECT "id" FROM "StockDocument" WHERE "id" = ${id}::uuid FOR UPDATE
+    `;
+    const current = await tx.stockDocument.findUnique({
+      where: { id },
+      select: {
+        type: true,
+        accountingModel: true,
+        status: true,
+        sourceResponsiblePersonId: true,
+        sourceTransferId: true,
+      },
+    });
+    if (!current || current.status === StockDocumentStatus.CANCELLED) return;
+    if (current.status !== StockDocumentStatus.POSTED) return;
+    this.assertMutableDocument(current);
+
+    if (current.type === StockDocumentType.MVO_TRANSFER) {
+      const activeIssues = await tx.stockDocument.count({
+        where: {
+          sourceTransferId: id,
+          type: StockDocumentType.ISSUE,
+          status: StockDocumentStatus.POSTED,
+        },
+      });
+      if (activeIssues) {
+        throw new ConflictException('Спочатку потрібно скасувати дочірні видачі.');
+      }
+    }
+    if (current.type === StockDocumentType.ISSUE) {
+      const activeRealizations = await tx.issueRealization.count({
+        where: { issueId: id, status: 'POSTED' },
+      });
+      if (activeRealizations) {
+        throw new ConflictException('Спочатку потрібно скасувати реалізації.');
+      }
+    }
+
+    const document = await tx.stockDocument.findUniqueOrThrow({
+      where: { id },
+      include: { lines: { include: { transactions: true } } },
+    });
+    for (const line of document.lines) await this.reverseLine(tx, document, line);
+    await tx.stockDocument.update({
+      where: { id },
+      data: {
+        status: StockDocumentStatus.CANCELLED,
+        cancelledByUserId: actor.id,
+        cancelledAt: new Date(),
+      },
+    });
+  }
+
   private assertCancellationExportAllowed(document: {
     type: StockDocumentType;
     accountingExportState: AccountingExportState;

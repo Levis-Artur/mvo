@@ -46,6 +46,50 @@ function user(
   };
 }
 
+describe('StockDocumentsService OWNER destructive cancellation', () => {
+  it('reuses accounting reversal while bypassing the exported lifecycle guard', async () => {
+    const h = harness();
+    const owner = user(UserRole.OWNER, null);
+    const original = {
+      id: 'original-transaction',
+      type: StockTransactionType.MVO_TRANSFER_OUT,
+    };
+    const document = rawDocument(
+      StockDocumentStatus.POSTED,
+      StockDocumentType.MVO_TRANSFER,
+      [line({ transactions: [original] })],
+    );
+    h.tx.stockDocument.findUnique
+      .mockResolvedValueOnce({
+        type: StockDocumentType.MVO_TRANSFER,
+        accountingModel: StockAccountingModel.DIRECT_BALANCE,
+        status: StockDocumentStatus.POSTED,
+        sourceResponsiblePersonId: sourceId,
+        sourceTransferId: null,
+      })
+      .mockResolvedValueOnce(document);
+    h.tx.stockDocument.findUniqueOrThrow.mockResolvedValue(document);
+    h.tx.stockDocument.update.mockResolvedValue({});
+
+    await h.service.cancelForOwnerDeletionInTx(h.tx as never, documentId, owner);
+
+    expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
+      h.tx,
+      expect.objectContaining({
+        type: StockTransactionType.MVO_TRANSFER_REVERSAL,
+        responsiblePersonId: sourceId,
+        reversalOfTransactionId: original.id,
+      }),
+    );
+    expect(h.tx.stockDocument.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: documentId },
+        data: expect.objectContaining({ status: StockDocumentStatus.CANCELLED }),
+      }),
+    );
+  });
+});
+
 const mvo = user(UserRole.MVO, sourceId);
 
 function line(overrides: Record<string, unknown> = {}) {
@@ -204,6 +248,7 @@ function harness() {
   const tx = {
     stockDocument: {
       findUnique: jest.fn(),
+      findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -721,12 +766,14 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
     await expect(
       h.service.findOne(documentId, user(UserRole.MVO, destinationId)),
     ).rejects.toBeInstanceOf(NotFoundException);
-    expect(h.prisma.stockDocument.findFirst).toHaveBeenCalledWith(
+   expect(h.prisma.stockDocument.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           AND: [
             { id: documentId },
-            { sourceResponsiblePerson: { id: destinationId } },
+            {
+              OR: [{ sourceResponsiblePersonId: destinationId }],
+            },
           ],
         },
       }),
