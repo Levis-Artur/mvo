@@ -93,7 +93,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id/stock-transactions')
-  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER, UserRole.MVO)
   stockTransactions(
     @Param('id') id: string,
     @Query() query: ListStockTransactionsQueryDto,

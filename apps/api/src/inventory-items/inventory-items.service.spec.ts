@@ -96,6 +96,39 @@ function prismaMock() {
 }
 
 describe('InventoryItemsService accounting card', () => {
+  it('limits MVO inventory reference data to scoped accounting data', async () => {
+    const prisma = {
+      inventoryItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+    };
+    const service = new InventoryItemsService(prisma as never);
+    await service.findAll(
+      { page: 1, limit: 20 },
+      {
+        id: 'scoped-user', username: 'mvo', role: UserRole.MVO,
+        isActive: true, mustChangePassword: false,
+        responsiblePersonId: person.id,
+        accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+      },
+    );
+
+    expect(prisma.inventoryItem.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: expect.arrayContaining([
+        {
+          stockBalances: {
+            some: {
+              responsiblePerson: {
+                OR: [{ id: person.id }, { service: { code: 'IT' } }],
+              },
+            },
+          },
+        },
+      ]),
+    });
+  });
+
   it('returns scoped MVO movement history with the current direct balance', async () => {
     const prisma = prismaMock();
     prisma.stockTransaction.findMany.mockResolvedValue([

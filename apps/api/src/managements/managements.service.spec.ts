@@ -1,6 +1,22 @@
 import { ManagementsService } from './managements.service';
+import { UserRole } from '@prisma/client';
 
 describe('ManagementsService', () => {
+  it('limits MVO reference data to self OR access scopes', async () => {
+    const prisma = { management: { findMany: jest.fn().mockResolvedValue([]) } };
+    const service = new ManagementsService(prisma as never);
+    await service.findAll({
+      id: 'user-id', username: 'mvo', role: UserRole.MVO, isActive: true,
+      mustChangePassword: false, responsiblePersonId: 'person-id',
+      accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+    });
+    expect(prisma.management.findMany.mock.calls[0][0].where).toEqual({
+      responsiblePersons: {
+        some: { OR: [{ id: 'person-id' }, { service: { code: 'IT' } }] },
+      },
+    });
+  });
+
   it('creates a new management and its three base services atomically', async () => {
     const transaction = {
       management: {

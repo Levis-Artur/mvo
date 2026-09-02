@@ -105,7 +105,7 @@ export class InventoryItemsService {
       new AccessControlService(prisma),
   ) {}
 
-  async findAll(query: ListInventoryItemsQueryDto) {
+  async findAll(query: ListInventoryItemsQueryDto, actor?: CurrentUser) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const search = query.search?.trim();
@@ -117,10 +117,34 @@ export class InventoryItemsService {
           ],
         }
       : undefined;
+    const personWhere =
+      actor?.role === UserRole.MVO || actor?.role === UserRole.ORG_MANAGER
+        ? this.accessControl.responsiblePersonFilter(actor)
+        : undefined;
+    const scopedItemWhere: Prisma.InventoryItemWhereInput | undefined =
+      personWhere
+        ? {
+            OR: [
+              { stockBalances: { some: { responsiblePerson: personWhere } } },
+              {
+                stockTransactions: {
+                  some: { responsiblePerson: personWhere },
+                },
+              },
+              {
+                stockDocumentLines: {
+                  some: {
+                    document: this.accessControl.stockDocumentFilter(actor!),
+                  },
+                },
+              },
+            ],
+          }
+        : undefined;
     const where: Prisma.InventoryItemWhereInput = {
       reviewStatus: query.reviewStatus,
       isActive: query.isActive,
-      AND: [searchWhere].filter(
+      AND: [searchWhere, scopedItemWhere].filter(
         (item): item is Prisma.InventoryItemWhereInput => Boolean(item),
       ),
     };
@@ -131,8 +155,17 @@ export class InventoryItemsService {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          _count: { select: { stockBalances: true } },
+          _count: {
+            select: {
+              stockBalances: personWhere
+                ? { where: { responsiblePerson: personWhere } }
+                : true,
+            },
+          },
           stockBalances: {
+            where: personWhere
+              ? { responsiblePerson: personWhere }
+              : undefined,
             select: { quantity: true },
           },
         },

@@ -1,4 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
+import { CurrentUserParam } from '../auth/current-user.decorator';
+import type { CurrentUser } from '../auth/auth.types';
 import {
   REFERENCE_DATA_READ_ROLES,
   REFERENCE_DATA_WRITE_ROLES,
@@ -14,8 +17,9 @@ export class ManagementsController {
   constructor(private readonly managementsService: ManagementsService) {}
 
   @Get()
-  findAll() {
-    return this.managementsService.findAll();
+  @Roles(...REFERENCE_DATA_READ_ROLES, UserRole.MVO, UserRole.ORG_MANAGER)
+  findAll(@CurrentUserParam() actor: CurrentUser) {
+    return this.managementsService.findAll(actor);
   }
 
   @Get(':id')

@@ -1,7 +1,22 @@
 import { BadRequestException } from '@nestjs/common';
 import { ServicesService } from './services.service';
+import { UserRole } from '@prisma/client';
 
 describe('ServicesService', () => {
+  it('limits MVO services to self OR access scopes', async () => {
+    const prisma = { service: { findMany: jest.fn().mockResolvedValue([]) } };
+    const service = new ServicesService(prisma as never);
+    await service.findAll({}, {
+      id: 'user-id', username: 'mvo', role: UserRole.MVO, isActive: true,
+      mustChangePassword: false, responsiblePersonId: 'person-id',
+      accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+    });
+    expect(prisma.service.findMany.mock.calls[0][0].where.responsiblePersons)
+      .toEqual({
+        some: { OR: [{ id: 'person-id' }, { service: { code: 'IT' } }] },
+      });
+  });
+
   it('forbids creating a service in a missing management', async () => {
     const prisma = {
       management: {

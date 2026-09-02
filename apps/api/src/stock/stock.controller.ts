@@ -74,7 +74,7 @@ export class StockController {
   }
 
   @Get('stock-transactions')
-  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER, UserRole.MVO)
   listTransactions(
     @Query() query: ListStockTransactionsQueryDto,
     @CurrentUserParam() user: CurrentUser,
@@ -83,7 +83,7 @@ export class StockController {
   }
 
   @Get('stock-transactions/:id')
-  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER)
+  @Roles(...TRANSACTION_READ_ROLES, UserRole.ORG_MANAGER, UserRole.MVO)
   findTransaction(
     @Param('id') id: string,
     @CurrentUserParam() user: CurrentUser,

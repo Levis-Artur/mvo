@@ -90,6 +90,36 @@ describe('StockDocumentsService OWNER destructive cancellation', () => {
   });
 });
 
+describe('StockDocumentsService scoped MVO manager reads', () => {
+  it('limits transfer listing to self OR service scope', async () => {
+    const h = harness();
+    const scopedMvo = user(UserRole.MVO, sourceId, [
+      { managementId: null, serviceCode: 'IT' },
+    ]);
+
+    await h.service.list(
+      { page: 1, limit: 20, type: StockDocumentType.MVO_TRANSFER },
+      scopedMvo,
+    );
+
+    expect(h.prisma.stockDocument.findMany.mock.calls[0][0].where.AND[0]).toEqual({
+      OR: [
+        { sourceResponsiblePersonId: sourceId },
+        {
+          sourceResponsiblePerson: {
+            OR: [{ service: { code: 'IT' } }],
+          },
+        },
+        {
+          destinationResponsiblePerson: {
+            OR: [{ service: { code: 'IT' } }],
+          },
+        },
+      ],
+    });
+  });
+});
+
 const mvo = user(UserRole.MVO, sourceId);
 
 function line(overrides: Record<string, unknown> = {}) {

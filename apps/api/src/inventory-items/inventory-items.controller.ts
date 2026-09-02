@@ -36,8 +36,12 @@ export class InventoryItemsController {
   constructor(private readonly inventoryItemsService: InventoryItemsService) {}
 
   @Get()
-  findAll(@Query() query: ListInventoryItemsQueryDto) {
-    return this.inventoryItemsService.findAll(query);
+  @Roles(...REFERENCE_DATA_READ_ROLES, UserRole.MVO, UserRole.ORG_MANAGER)
+  findAll(
+    @Query() query: ListInventoryItemsQueryDto,
+    @CurrentUserParam() actor: CurrentUser,
+  ) {
+    return this.inventoryItemsService.findAll(query, actor);
   }
 
   @Get(':id/my-transfer-history')

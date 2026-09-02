@@ -265,6 +265,71 @@ describe('StockService', () => {
     );
   });
 
+  it('limits scoped MVO transaction journal to self OR service scope', async () => {
+    const where = await stockTransactionWhere(
+      actor(UserRole.MVO, {
+        responsiblePersonId: scopeIds.responsiblePerson,
+        accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+      }),
+    );
+
+    expect(where.AND[0]).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          { responsiblePersonId: scopeIds.responsiblePerson },
+          {
+            responsiblePerson: {
+              OR: [{ service: { code: 'IT' } }],
+            },
+          },
+          {
+            accountingOwnerResponsiblePerson: {
+              OR: [{ service: { code: 'IT' } }],
+            },
+          },
+          {
+            sourceCustodianResponsiblePerson: {
+              OR: [{ service: { code: 'IT' } }],
+            },
+          },
+          {
+            destinationCustodianResponsiblePerson: {
+              OR: [{ service: { code: 'IT' } }],
+            },
+          },
+          {
+            document: {
+              OR: [
+                {
+                  sourceResponsiblePerson: {
+                    OR: [{ service: { code: 'IT' } }],
+                  },
+                },
+                {
+                  destinationResponsiblePerson: {
+                    OR: [{ service: { code: 'IT' } }],
+                  },
+                },
+              ],
+            },
+          },
+        ]),
+      }),
+    );
+  });
+
+  it('does not expose foreign transactions to MVO without scopes', async () => {
+    const where = await stockTransactionWhere(
+      actor(UserRole.MVO, {
+        responsiblePersonId: scopeIds.responsiblePerson,
+        accessScopes: [],
+      }),
+    );
+    expect(where.AND[0]).toEqual({
+      OR: [{ responsiblePersonId: scopeIds.responsiblePerson }],
+    });
+  });
+
   it('does not let transaction query filters expand manager scope', async () => {
     const foreignResponsiblePersonId =
       '55555555-5555-4555-8555-555555555555';

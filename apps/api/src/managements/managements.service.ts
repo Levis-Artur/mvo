@@ -3,7 +3,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import { AccessControlService } from '../auth/access-control.service';
+import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateManagementDto } from './dto/create-management.dto';
 import { UpdateManagementDto } from './dto/update-management.dto';
@@ -11,16 +13,33 @@ import { baseServicesForManagement } from '../services/base-services';
 
 @Injectable()
 export class ManagementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly accessControl: AccessControlService =
+      new AccessControlService(prisma),
+  ) {}
 
-  findAll() {
+  findAll(actor?: CurrentUser) {
+    const personWhere =
+      actor?.role === UserRole.MVO || actor?.role === UserRole.ORG_MANAGER
+        ? this.accessControl.responsiblePersonFilter(actor)
+        : undefined;
     return this.prisma.management.findMany({
+      where: personWhere
+        ? { responsiblePersons: { some: personWhere } }
+        : undefined,
       orderBy: { name: 'asc' },
       include: {
         services: {
+          where: personWhere
+            ? { responsiblePersons: { some: personWhere } }
+            : undefined,
           orderBy: { name: 'asc' },
           include: {
             units: {
+              where: personWhere
+                ? { responsiblePersons: { some: personWhere } }
+                : undefined,
               orderBy: { name: 'asc' },
             },
           },
