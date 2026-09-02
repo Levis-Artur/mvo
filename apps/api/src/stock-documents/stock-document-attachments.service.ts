@@ -309,7 +309,7 @@ export class StockDocumentAttachmentsService {
   private assertWriteAccess(
     actor: CurrentUser,
     document: {
-      createdByUserId: string;
+      createdByUserId: string | null;
       sourceResponsiblePersonId: string;
     },
   ) {

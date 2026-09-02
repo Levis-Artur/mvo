@@ -73,7 +73,7 @@ describe('IssueHistoryService', () => {
 
     const where = h.prisma.stockDocument.findMany.mock.calls[0][0].where;
     expect(where.AND[0]).toEqual({
-      sourceResponsiblePerson: { id: sourceId },
+      OR: [{ sourceResponsiblePersonId: sourceId }],
     });
     expect(where.AND[1].sourceResponsiblePersonId).toBe(
       'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',

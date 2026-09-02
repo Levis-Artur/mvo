@@ -61,7 +61,7 @@ export class OwnerDestructiveActionsService {
     entityType: string,
     id: string,
   ): Promise<DeletionPreview> {
-    this.assertEnabledOwner(actor);
+    this.assertOwner(actor);
     const type = this.parseEntityType(entityType);
     return this.buildPreview(type, id, actor.id);
   }
@@ -73,7 +73,7 @@ export class OwnerDestructiveActionsService {
     options: { force?: boolean; confirmation: string },
     context: RequestAuditContext,
   ) {
-    this.assertEnabledOwner(actor);
+    this.assertOwner(actor);
     const type = this.parseEntityType(entityType);
     if (options.confirmation !== `DELETE ${type}:${id}`) {
       throw new BadRequestException('Некоректне підтвердження видалення.');
@@ -268,9 +268,7 @@ export class OwnerDestructiveActionsService {
   }
 
   private assertEnabledOwner(actor: CurrentUser | undefined): void {
-    if (!actor || actor.role !== UserRole.OWNER) {
-      throw new ForbiddenException('Доступно лише OWNER.');
-    }
+    this.assertOwner(actor);
     if (
       (process.env.OWNER_DESTRUCTIVE_ACTIONS_ENABLED ?? 'false').toLowerCase() !==
       'true'
@@ -278,6 +276,12 @@ export class OwnerDestructiveActionsService {
       throw new ForbiddenException(
         'Режим destructive administration вимкнений.',
       );
+    }
+  }
+
+  private assertOwner(actor: CurrentUser | undefined): asserts actor is CurrentUser {
+    if (!actor || actor.role !== UserRole.OWNER) {
+      throw new ForbiddenException('Доступно лише OWNER.');
     }
   }
 
@@ -347,7 +351,19 @@ export class OwnerDestructiveActionsService {
   private async userPreview(id: string, actorId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { _count: { select: { sessions: true } } },
+      include: {
+        _count: {
+          select: {
+            sessions: true,
+            accessScopes: true,
+            createdStockDocuments: true,
+            uploadedStockDocumentAttachments: true,
+            createdIssueRealizations: true,
+            uploadedIssueRealizationAttachments: true,
+            accountingTransferExportBatches: true,
+          },
+        },
+      },
     });
     if (!user) throw new NotFoundException('Користувача не знайдено.');
     const activeOwners = await this.prisma.user.count({
@@ -363,7 +379,15 @@ export class OwnerDestructiveActionsService {
       'users',
       id,
       user.username,
-      [{ type: 'sessions', count: user._count.sessions, action: 'DELETE' }],
+      [
+        { type: 'sessions', count: user._count.sessions, action: 'DELETE' },
+        { type: 'accessScopes', count: user._count.accessScopes, action: 'DELETE' },
+        { type: 'createdStockDocuments', count: user._count.createdStockDocuments, action: 'DETACH' },
+        { type: 'uploadedStockDocumentAttachments', count: user._count.uploadedStockDocumentAttachments, action: 'DETACH' },
+        { type: 'createdIssueRealizations', count: user._count.createdIssueRealizations, action: 'DETACH' },
+        { type: 'uploadedIssueRealizationAttachments', count: user._count.uploadedIssueRealizationAttachments, action: 'DETACH' },
+        { type: 'accountingTransferExportBatches', count: user._count.accountingTransferExportBatches, action: 'DETACH' },
+      ],
       blockers,
     );
   }
@@ -479,7 +503,7 @@ export class OwnerDestructiveActionsService {
       {
         type: 'responsiblePersons',
         count: unit._count.responsiblePersons,
-        action: 'BLOCK',
+        action: 'DETACH',
       },
     ]);
   }
@@ -492,12 +516,36 @@ export class OwnerDestructiveActionsService {
       },
     });
     if (!service) throw new NotFoundException('Службу не знайдено.');
+    const [managementScopes, globalScopes, sameCodeElsewhere] = await Promise.all([
+      this.prisma.userAccessScope.count({
+        where: {
+          managementId: service.managementId,
+          serviceCode: service.code,
+        },
+      }),
+      this.prisma.userAccessScope.count({
+        where: { managementId: null, serviceCode: service.code },
+      }),
+      this.prisma.service.count({
+        where: { code: service.code, id: { not: id } },
+      }),
+    ]);
     return this.preview('services', id, service.name, [
       { type: 'units', count: service._count.units, action: 'BLOCK' },
       {
         type: 'responsiblePersons',
         count: service._count.responsiblePersons,
         action: 'BLOCK',
+      },
+      {
+        type: 'managementAccessScopes',
+        count: managementScopes,
+        action: 'DELETE',
+      },
+      {
+        type: 'globalServiceAccessScopes',
+        count: globalScopes,
+        action: sameCodeElsewhere > 0 ? 'RETAIN' : 'DELETE',
       },
     ]);
   }
@@ -510,6 +558,9 @@ export class OwnerDestructiveActionsService {
       },
     });
     if (!management) throw new NotFoundException('Управління не знайдено.');
+    const scopes = await this.prisma.userAccessScope.count({
+      where: { managementId: id },
+    });
     return this.preview('managements', id, management.name, [
       { type: 'services', count: management._count.services, action: 'BLOCK' },
       {
@@ -517,6 +568,7 @@ export class OwnerDestructiveActionsService {
         count: management._count.responsiblePersons,
         action: 'BLOCK',
       },
+      { type: 'accessScopes', count: scopes, action: 'DELETE' },
     ]);
   }
 
@@ -534,9 +586,30 @@ export class OwnerDestructiveActionsService {
     switch (type) {
       case 'users': {
         if (preview.blockers.length) throw new ConflictException(preview.blockers.join(' '));
-        const sessions = await tx.userSession.deleteMany({ where: { userId: id } });
+        await tx.stockDocument.updateMany({
+          where: { postedByUserId: id },
+          data: { postedByUserId: null },
+        });
+        await tx.stockDocument.updateMany({
+          where: { cancelledByUserId: id },
+          data: { cancelledByUserId: null },
+        });
+        await tx.stockDocument.updateMany({
+          where: { exportedByUserId: id },
+          data: { exportedByUserId: null },
+        });
+        await tx.issueRealization.updateMany({
+          where: { cancelledByUserId: id },
+          data: { cancelledByUserId: null },
+        });
+        await tx.user.update({
+          where: { id },
+          data: { responsiblePersonId: null },
+        });
         await tx.user.delete({ where: { id } });
-        return sessions.count;
+        return preview.dependencies
+          .filter((dependency) => dependency.action === 'DELETE')
+          .reduce((sum, dependency) => sum + dependency.count, 0);
       }
       case 'imports': {
         if (preview.blockers.length) throw new ConflictException(preview.blockers.join(' '));
@@ -588,20 +661,45 @@ export class OwnerDestructiveActionsService {
         return preview.dependencies.reduce((sum, item) => sum + item.count, 0);
       }
       case 'units':
-        if (preview.dependencies.some((d) => d.count > 0))
-          throw new ConflictException('Спочатку перемістіть або видаліть МВО.');
+        await tx.responsiblePerson.updateMany({
+          where: { unitId: id },
+          data: { unitId: null },
+        });
         await tx.unit.delete({ where: { id } });
-        return 0;
-      case 'services':
-        if (preview.dependencies.some((d) => d.count > 0))
+        return preview.dependencies.reduce((sum, item) => sum + item.count, 0);
+      case 'services': {
+        if (preview.dependencies.some((d) => d.action === 'BLOCK' && d.count > 0))
           throw new ConflictException('Спочатку перемістіть або видаліть залежності.');
+        const service = await tx.service.findUniqueOrThrow({ where: { id } });
+        const sameCodeElsewhere = await tx.service.count({
+          where: { code: service.code, id: { not: id } },
+        });
+        await tx.userAccessScope.deleteMany({
+          where: {
+            OR: [
+              {
+                managementId: service.managementId,
+                serviceCode: service.code,
+              },
+              ...(sameCodeElsewhere === 0
+                ? [{ managementId: null, serviceCode: service.code }]
+                : []),
+            ],
+          },
+        });
         await tx.service.delete({ where: { id } });
-        return 0;
+        return preview.dependencies
+          .filter((dependency) => dependency.action === 'DELETE')
+          .reduce((sum, dependency) => sum + dependency.count, 0);
+      }
       case 'managements':
-        if (preview.dependencies.some((d) => d.count > 0))
+        if (preview.dependencies.some((d) => d.action === 'BLOCK' && d.count > 0))
           throw new ConflictException('Спочатку перемістіть або видаліть залежності.');
+        await tx.userAccessScope.deleteMany({ where: { managementId: id } });
         await tx.management.delete({ where: { id } });
-        return 0;
+        return preview.dependencies
+          .filter((dependency) => dependency.action === 'DELETE')
+          .reduce((sum, dependency) => sum + dependency.count, 0);
     }
   }
 
@@ -622,7 +720,10 @@ export class OwnerDestructiveActionsService {
       data: {
         type: SecurityEventType.OWNER_DESTRUCTIVE_ACTION,
         actorUserId: actor.id,
-        targetUserId: entityType === 'users' ? entityId : undefined,
+        targetUserId:
+          entityType === 'users' && metadata.action !== 'DELETE'
+            ? entityId
+            : undefined,
         requestId: metadata.requestId,
         ipAddress: metadata.ipAddress,
         userAgent: metadata.userAgent,

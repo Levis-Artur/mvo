@@ -733,8 +733,10 @@ export class InventoryItemsService {
         : movement.sourceDocument || 'Ручна операція';
     const user =
       category === 'MVO_TRANSFER_REVERSAL' || category === 'ISSUE_REVERSAL'
-        ? document?.cancelledByUser?.username
-        : document?.postedByUser?.username || document?.createdByUser.username;
+        ? document?.cancelledByUser?.username ?? 'Видалений користувач'
+        : document?.postedByUser?.username ??
+          document?.createdByUser?.username ??
+          'Видалений користувач';
 
     return {
       id: movement.id,

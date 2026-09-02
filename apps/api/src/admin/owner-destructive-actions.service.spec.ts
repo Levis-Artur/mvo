@@ -1,4 +1,8 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ImportStatus, SecurityEventType, UserRole } from '@prisma/client';
 import { OwnerDestructiveActionsService } from './owner-destructive-actions.service';
 
@@ -34,9 +38,12 @@ function createService() {
     userSession: { deleteMany: jest.fn() },
     user: {
       findUnique: jest.fn(),
+      update: jest.fn(),
       delete: jest.fn(),
       deleteMany: jest.fn(),
     },
+    stockDocument: { updateMany: jest.fn() },
+    issueRealization: { updateMany: jest.fn() },
     responsiblePerson: { delete: jest.fn(), deleteMany: jest.fn() },
     inventoryItem: { delete: jest.fn(), deleteMany: jest.fn() },
     unit: { delete: jest.fn(), deleteMany: jest.fn() },
@@ -121,13 +128,23 @@ describe('OwnerDestructiveActionsService', () => {
     },
   );
 
-  it('rejects OWNER when the feature flag is false', async () => {
+  it('allows OWNER entity preview when the feature flag is false', async () => {
     process.env.OWNER_DESTRUCTIVE_ACTIONS_ENABLED = 'false';
-    const { service } = createService();
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-id', username: 'test-user', role: UserRole.MVO, isActive: true,
+      _count: {
+        sessions: 0, accessScopes: 0, createdStockDocuments: 0,
+        uploadedStockDocumentAttachments: 0, createdIssueRealizations: 0,
+        uploadedIssueRealizationAttachments: 0,
+        accountingTransferExportBatches: 0,
+      },
+    });
+    prisma.user.count.mockResolvedValue(1);
 
     await expect(
       service.deletionPreview(owner, 'users', 'user-id'),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toMatchObject({ canDelete: true });
   });
 
   it('returns a deletion preview for OWNER', async () => {
@@ -137,7 +154,12 @@ describe('OwnerDestructiveActionsService', () => {
       username: 'test-user',
       role: UserRole.MVO,
       isActive: true,
-      _count: { sessions: 2 },
+      _count: {
+        sessions: 2, accessScopes: 1, createdStockDocuments: 0,
+        uploadedStockDocumentAttachments: 0, createdIssueRealizations: 0,
+        uploadedIssueRealizationAttachments: 0,
+        accountingTransferExportBatches: 0,
+      },
     });
     prisma.user.count.mockResolvedValue(1);
 
@@ -151,8 +173,63 @@ describe('OwnerDestructiveActionsService', () => {
       blockers: [],
       dependencies: [
         { type: 'sessions', count: 2, action: 'DELETE' },
+        { type: 'accessScopes', count: 1, action: 'DELETE' },
+        { type: 'createdStockDocuments', count: 0, action: 'DETACH' },
+        { type: 'uploadedStockDocumentAttachments', count: 0, action: 'DETACH' },
+        { type: 'createdIssueRealizations', count: 0, action: 'DETACH' },
+        { type: 'uploadedIssueRealizationAttachments', count: 0, action: 'DETACH' },
+        { type: 'accountingTransferExportBatches', count: 0, action: 'DETACH' },
       ],
     });
+  });
+
+  it('reports historical User actor relations as detach dependencies', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-id', username: 'historical-user', role: UserRole.MVO,
+      isActive: true,
+      _count: {
+        sessions: 0, accessScopes: 0, createdStockDocuments: 2,
+        uploadedStockDocumentAttachments: 3, createdIssueRealizations: 4,
+        uploadedIssueRealizationAttachments: 5,
+        accountingTransferExportBatches: 6,
+      },
+    });
+    prisma.user.count.mockResolvedValue(1);
+
+    const preview = await service.deletionPreview(owner, 'users', 'user-id');
+
+    expect(preview.canDelete).toBe(true);
+    expect(preview.blockers).toEqual([]);
+    expect(preview.dependencies).toEqual(expect.arrayContaining([
+      { type: 'createdStockDocuments', count: 2, action: 'DETACH' },
+      { type: 'uploadedStockDocumentAttachments', count: 3, action: 'DETACH' },
+      { type: 'createdIssueRealizations', count: 4, action: 'DETACH' },
+      { type: 'uploadedIssueRealizationAttachments', count: 5, action: 'DETACH' },
+      { type: 'accountingTransferExportBatches', count: 6, action: 'DETACH' },
+    ]));
+  });
+
+  it('rejects deletion of the current OWNER account', async () => {
+    const { service, prisma } = createService();
+    prisma.user.findUnique.mockResolvedValue({
+      ...owner,
+      _count: {
+        sessions: 1, accessScopes: 0, createdStockDocuments: 0,
+        uploadedStockDocumentAttachments: 0, createdIssueRealizations: 0,
+        uploadedIssueRealizationAttachments: 0,
+        accountingTransferExportBatches: 0,
+      },
+    });
+    prisma.user.count.mockResolvedValue(1);
+
+    await expect(service.delete(
+      owner,
+      'users',
+      owner.id,
+      { confirmation: `DELETE users:${owner.id}` },
+      {},
+    )).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('reports the unsupported entityType in a clear 400 error', async () => {
@@ -205,10 +282,16 @@ describe('OwnerDestructiveActionsService', () => {
       username: 'test-user',
       role: UserRole.MVO,
       isActive: true,
-      _count: { sessions: 0 },
+      _count: {
+        sessions: 1, accessScopes: 2, createdStockDocuments: 1,
+        uploadedStockDocumentAttachments: 1, createdIssueRealizations: 1,
+        uploadedIssueRealizationAttachments: 1,
+        accountingTransferExportBatches: 1,
+      },
     });
     prisma.user.count.mockResolvedValue(1);
-    tx.userSession.deleteMany.mockResolvedValue({ count: 0 });
+    tx.user.update.mockResolvedValue({});
+    tx.user.delete.mockResolvedValue({});
 
     await service.delete(
       owner,
@@ -228,6 +311,13 @@ describe('OwnerDestructiveActionsService', () => {
         }),
       }),
     );
+    expect(tx.stockDocument.updateMany).toHaveBeenCalledTimes(3);
+    expect(tx.issueRealization.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: { responsiblePersonId: null },
+    });
+    expect(tx.user.delete).toHaveBeenCalledWith({ where: { id: 'user-id' } });
   });
 
   it('refuses the API reset without the separate business reset flag', async () => {

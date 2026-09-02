@@ -174,7 +174,8 @@ export class IssueHistoryService {
             note: document.note,
             status: document.status,
             attachmentNames,
-            author: document.createdByUser.username,
+            author:
+              document.createdByUser?.username ?? 'Видалений користувач',
             createdAt: document.createdAt,
           };
           if (line.realizationLines.length === 0) {
@@ -203,7 +204,8 @@ export class IssueHistoryService {
                     (attachment) => attachment.originalFileName,
                   ),
                 author:
-                  realizationLine.realization.createdByUser.username,
+                  realizationLine.realization.createdByUser?.username ??
+                  'Видалений користувач',
                 createdAt: realizationLine.realization.createdAt,
               },
             }));

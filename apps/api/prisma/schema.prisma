@@ -470,7 +470,7 @@ model StockDocument {
   recipientUnit                  String?
   basis                          String?
   note                           String?
-  createdByUserId                String              @db.Uuid
+  createdByUserId                String?             @db.Uuid
   postedByUserId                 String?             @db.Uuid
   postedAt                       DateTime?
   cancelledByUserId              String?             @db.Uuid
@@ -482,7 +482,7 @@ model StockDocument {
   updatedAt                      DateTime            @updatedAt
   sourceResponsiblePerson        ResponsiblePerson   @relation("StockDocumentSource", fields: [sourceResponsiblePersonId], references: [id], onDelete: Restrict)
   destinationResponsiblePerson   ResponsiblePerson?  @relation("StockDocumentDestination", fields: [destinationResponsiblePersonId], references: [id], onDelete: Restrict)
-  createdByUser                  User                @relation("StockDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdByUser                  User?               @relation("StockDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   postedByUser                   User?               @relation("StockDocumentPostedBy", fields: [postedByUserId], references: [id], onDelete: Restrict)
   cancelledByUser                User?               @relation("StockDocumentCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
   exportedByUser                 User?               @relation("StockDocumentExportedBy", fields: [exportedByUserId], references: [id], onDelete: Restrict)
@@ -551,10 +551,10 @@ model StockDocumentAttachment {
   sizeBytes        Int
   sha256           String
   storagePath      String
-  uploadedByUserId String        @db.Uuid
+  uploadedByUserId String?       @db.Uuid
   createdAt        DateTime      @default(now())
   document         StockDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  uploadedByUser   User          @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedByUser   User?         @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   @@index([documentId])
   @@index([uploadedByUserId])
@@ -569,13 +569,13 @@ model IssueRealization {
   recipientText     String?
   note              String?
   status            IssueRealizationStatus @default(POSTED)
-  createdByUserId   String                 @db.Uuid
+  createdByUserId   String?                @db.Uuid
   cancelledByUserId String?                @db.Uuid
   createdAt         DateTime               @default(now())
   updatedAt         DateTime               @updatedAt
   cancelledAt       DateTime?
   issue             StockDocument          @relation(fields: [issueId], references: [id], onDelete: Restrict)
-  createdByUser     User                   @relation("IssueRealizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdByUser     User?                  @relation("IssueRealizationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   cancelledByUser   User?                  @relation("IssueRealizationCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: Restrict)
   lines             IssueRealizationLine[]
   attachments       IssueRealizationAttachment[]
@@ -610,10 +610,10 @@ model IssueRealizationAttachment {
   sizeBytes        Int
   sha256           String
   storagePath      String
-  uploadedByUserId String           @db.Uuid
+  uploadedByUserId String?          @db.Uuid
   createdAt        DateTime         @default(now())
   realization      IssueRealization @relation(fields: [realizationId], references: [id], onDelete: Restrict)
-  uploadedByUser   User             @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  uploadedByUser   User?            @relation(fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   @@index([realizationId])
   @@index([uploadedByUserId])
@@ -622,7 +622,7 @@ model IssueRealizationAttachment {
 
 model AccountingTransferExportBatch {
   id              String    @id @default(uuid()) @db.Uuid
-  createdByUserId String    @db.Uuid
+  createdByUserId String?   @db.Uuid
   filters         Json
   filename        String
   sha256          String
@@ -630,7 +630,7 @@ model AccountingTransferExportBatch {
   documentCount   Int
   rowCount        Int
   createdAt       DateTime  @default(now())
-  createdByUser   User      @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdByUser   User?     @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   documents       AccountingTransferExportBatchDocument[]
   rows            AccountingTransferExportRow[]
 
