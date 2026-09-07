@@ -6,10 +6,10 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReadAccessPaginationQueryDto } from '../../auth/dto/read-access-query.dto';
 import { parseBooleanQuery } from '../../common/dto/active-query.dto';
 
-export class ListStockBalancesQueryDto extends PaginationQueryDto {
+export class ListStockBalancesQueryDto extends ReadAccessPaginationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;

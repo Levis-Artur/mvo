@@ -9,6 +9,7 @@ import { documentNumberLabel } from '@/features/stock-documents/stock-document-r
 import { StockDocumentStatusBadge } from '@/features/stock-documents/stock-document-status-badge';
 import type {
   AccountingCardDocument,
+  ReadAccessMode,
   ResponsiblePersonAccountingCard,
   StockTransaction,
 } from '@/lib/types';
@@ -151,7 +152,7 @@ function SectionButton({
   );
 }
 
-export function PersonOperationsTab({ personId }: { personId: string }) {
+export function PersonOperationsTab({ personId, accessMode }: { personId: string; accessMode?: ReadAccessMode }) {
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -159,11 +160,11 @@ export function PersonOperationsTab({ personId }: { personId: string }) {
   useEffect(() => {
     setLoading(true);
     apiClient
-      .getResponsiblePersonStockTransactions(personId, { limit: 50 })
+      .getResponsiblePersonStockTransactions(personId, { limit: 50, accessMode })
       .then((response) => setTransactions(response.items))
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setLoading(false));
-  }, [personId]);
+  }, [personId, accessMode]);
 
   if (error) return <ErrorState message={error} />;
   return (

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReadAccessMode } from '@/lib/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inventoryService as apiClient } from './inventory.service';
 import type {
@@ -30,7 +31,7 @@ import {
   type StockFilterDraft,
 } from './stock-model';
 
-export function StockView() {
+export function StockView({ accessMode }: { accessMode?: ReadAccessMode } = {}) {
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -78,7 +79,7 @@ export function StockView() {
     try {
       const query = stockQueryFromFilters(applied);
       const nextBalances = await fetchAllPages((pagination) =>
-        apiClient.stockBalances({ ...query, ...pagination }),
+        apiClient.stockBalances({ ...query, ...pagination, accessMode }),
       );
       setBalances(nextBalances);
     } catch (reason) {
@@ -86,7 +87,7 @@ export function StockView() {
     } finally {
       setLoading(false);
     }
-  }, [applied]);
+  }, [applied, accessMode]);
 
   const refresh = useCallback(async () => {
     setError('');

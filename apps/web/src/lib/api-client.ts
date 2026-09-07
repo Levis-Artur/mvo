@@ -50,6 +50,7 @@ import type {
   StockDocumentAttachment,
   StockDocumentInput,
   StockDocumentsQuery,
+  ReadAccessMode,
   StockTransaction,
   StockTransactionsQuery,
   TransferTarget,
@@ -549,8 +550,8 @@ export const apiClient = {
     ),
   downloadAccountingMvoTransferExportBatch: (id: string) =>
     downloadRequest(`/accounting/mvo-transfer-exports/${encodeURIComponent(id)}/download`),
-  stockDocument: (id: string) =>
-    request<StockDocument>(`/stock-documents/${id}`),
+  stockDocument: (id: string, accessMode?: ReadAccessMode) =>
+    request<StockDocument>(`/stock-documents/${id}`, {}, { accessMode }),
   createStockDocument: (body: StockDocumentInput) =>
     request<StockDocument>('/stock-documents', mutation('POST', body)),
   createAndPostMvoTransfer: (body: CreateMvoTransferInput) =>
@@ -714,7 +715,7 @@ export const apiClient = {
     ),
   getResponsiblePersonStockTransactions: (
     id: string,
-    query: { page?: number; limit?: number },
+    query: { page?: number; limit?: number; accessMode?: ReadAccessMode },
   ) =>
     request<PaginatedResponse<StockTransaction>>(
       `/responsible-persons/${id}/stock-transactions`,

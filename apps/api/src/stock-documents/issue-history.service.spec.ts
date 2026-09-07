@@ -58,6 +58,23 @@ function harness(items: unknown[] = [issue]) {
 }
 
 describe('IssueHistoryService', () => {
+  it('ignores MVO scopes in operational ISSUE lists and CSV exports', async () => {
+    const h = harness([]);
+    const user = actor(UserRole.MVO, sourceId, [{ managementId: null, serviceCode: 'IT' }]);
+    await h.service.list({ page: 1, limit: 25 }, user);
+    await h.service.exportCsv({ page: 1, limit: 25 }, user, {});
+    for (const [query] of h.prisma.stockDocument.findMany.mock.calls) {
+      expect(query.where.AND[0]).toEqual({ OR: [{ sourceResponsiblePersonId: sourceId }] });
+    }
+  });
+
+  it('rejects a crafted scoped ISSUE request without authorized scopes', async () => {
+    const h = harness([]);
+    await expect(h.service.list({ page: 1, limit: 25, accessMode: 'SCOPED_READ' }, actor(UserRole.MVO, sourceId)))
+      .rejects.toThrow('Менеджерський перегляд потребує областей доступу.');
+    expect(h.prisma.stockDocument.findMany).not.toHaveBeenCalled();
+  });
+
   it('scopes MVO history to the responsible person from auth context', async () => {
     const h = harness();
     const result = await h.service.list(

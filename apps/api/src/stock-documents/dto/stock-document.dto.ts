@@ -14,7 +14,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReadAccessPaginationQueryDto } from '../../auth/dto/read-access-query.dto';
 
 export class StockDocumentLineDto {
   @IsUUID()
@@ -143,7 +143,7 @@ export class CreateIssueDto {
 
 export class UpdateStockDocumentDto extends CreateStockDocumentDto {}
 
-export class ListStockDocumentsQueryDto extends PaginationQueryDto {
+export class ListStockDocumentsQueryDto extends ReadAccessPaginationQueryDto {
   @IsOptional()
   @IsEnum(StockDocumentType)
   type?: StockDocumentType;

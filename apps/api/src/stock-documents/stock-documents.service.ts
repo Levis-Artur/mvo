@@ -17,6 +17,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import type { ReadAccessMode } from '../auth/dto/read-access-query.dto';
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -183,7 +184,7 @@ export class StockDocumentsService {
       },
     };
     const where: Prisma.StockDocumentWhereInput = {
-      AND: [this.accessControl.stockDocumentFilter(actor), queryWhere],
+      AND: [this.accessControl.stockDocumentFilter(this.accessControl.forRead(actor, query.accessMode)), queryWhere],
     };
     const [items, total] = await Promise.all([
       this.prisma.stockDocument.findMany({
@@ -201,10 +202,10 @@ export class StockDocumentsService {
     };
   }
 
-  async findOne(id: string, actor: CurrentUser) {
+  async findOne(id: string, actor: CurrentUser, accessMode?: ReadAccessMode) {
     const document = await this.prisma.stockDocument.findFirst({
       where: {
-        AND: [{ id }, this.accessControl.stockDocumentFilter(actor)],
+        AND: [{ id }, this.accessControl.stockDocumentFilter(this.accessControl.forRead(actor, accessMode))],
       },
       include: documentInclude,
     });

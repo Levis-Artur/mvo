@@ -351,7 +351,7 @@ export class IssueHistoryService {
       ],
     };
     return {
-      AND: [this.accessControl.stockDocumentFilter(actor), queryWhere],
+      AND: [this.accessControl.stockDocumentFilter(this.accessControl.forRead(actor, filters.accessMode)), queryWhere],
     };
   }
 

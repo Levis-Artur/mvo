@@ -91,6 +91,53 @@ describe('StockDocumentsService OWNER destructive cancellation', () => {
 });
 
 describe('StockDocumentsService scoped MVO manager reads', () => {
+  it.each(['post', 'cancel'] as const)('still forbids %s of a foreign document with MVO scopes', async (action) => {
+    const h = harness();
+    const actor = user(UserRole.MVO, sourceId, [{ managementId: null, serviceCode: 'IT' }]);
+    h.tx.stockDocument.findUnique.mockResolvedValue({
+      id: documentId,
+      type: StockDocumentType.MVO_TRANSFER,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      status: action === 'post' ? StockDocumentStatus.DRAFT : StockDocumentStatus.POSTED,
+      sourceResponsiblePersonId: destinationId,
+    });
+    await expect(h.service[action](documentId, actor, {})).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.tx.stockDocument.update).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('keeps operational transfers self-only (scopes: %s)', async (hasScopes) => {
+    const h = harness();
+    const actor = user(UserRole.MVO, sourceId, hasScopes ? [{ managementId: null, serviceCode: 'IT' }] : []);
+    await h.service.list({ page: 1, limit: 20, type: StockDocumentType.MVO_TRANSFER }, actor);
+    const where = h.prisma.stockDocument.findMany.mock.calls[0][0].where;
+    expect(where.AND[0]).toEqual({ OR: [{ sourceResponsiblePersonId: sourceId }] });
+    expect(h.prisma.stockDocument.count).toHaveBeenCalledWith({ where });
+    expect(actor.accessScopes).toHaveLength(hasScopes ? 1 : 0);
+  });
+
+  it('rejects a crafted scoped document request without scopes before reading data', async () => {
+    const h = harness();
+    await expect(h.service.list({ page: 1, limit: 20, accessMode: 'SCOPED_READ' }, mvo))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    await expect(h.service.findOne(documentId, mvo, 'SCOPED_READ'))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.prisma.stockDocument.findMany).not.toHaveBeenCalled();
+    expect(h.prisma.stockDocument.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('uses explicit read mode for document details as well as lists', async () => {
+    const h = harness();
+    const actor = user(UserRole.MVO, sourceId, [{ managementId: null, serviceCode: 'IT' }]);
+    h.prisma.stockDocument.findFirst.mockResolvedValue(null);
+    await expect(h.service.findOne(documentId, actor)).rejects.toBeInstanceOf(NotFoundException);
+    expect(h.prisma.stockDocument.findFirst.mock.calls[0][0].where.AND[1])
+      .toEqual({ OR: [{ sourceResponsiblePersonId: sourceId }] });
+    await expect(h.service.findOne(documentId, actor, 'SCOPED_READ')).rejects.toBeInstanceOf(NotFoundException);
+    expect(h.prisma.stockDocument.findFirst.mock.calls[1][0].where.AND[1].OR).toHaveLength(3);
+  });
+
   it('limits transfer listing to self OR service scope', async () => {
     const h = harness();
     const scopedMvo = user(UserRole.MVO, sourceId, [
@@ -98,7 +145,7 @@ describe('StockDocumentsService scoped MVO manager reads', () => {
     ]);
 
     await h.service.list(
-      { page: 1, limit: 20, type: StockDocumentType.MVO_TRANSFER },
+      { page: 1, limit: 20, type: StockDocumentType.MVO_TRANSFER, accessMode: 'SCOPED_READ' },
       scopedMvo,
     );
 

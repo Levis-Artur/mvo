@@ -683,7 +683,10 @@ export type InventoryItemMovementFilters = Pick<
   | 'documentNumber'
 >;
 
+export type ReadAccessMode = 'SELF_ONLY' | 'SCOPED_READ';
+
 export type StockDocumentsQuery = {
+  accessMode?: ReadAccessMode;
   type?: StockDocumentType;
   status?: StockDocumentStatus;
   sourceResponsiblePersonId?: string;
@@ -1084,6 +1087,7 @@ export type InventoryItemsQuery = {
 };
 
 export type StockBalancesQuery = {
+  accessMode?: ReadAccessMode;
   search?: string;
   responsiblePersonId?: string;
   inventoryItemId?: string;
@@ -1096,6 +1100,7 @@ export type StockBalancesQuery = {
 };
 
 export type StockTransactionsQuery = {
+  accessMode?: ReadAccessMode;
   responsiblePersonId?: string;
   inventoryItemId?: string;
   type?: StockTransactionType;

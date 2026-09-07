@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Res, StreamableFile } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
+import { ReadAccessQueryDto } from '../auth/dto/read-access-query.dto';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { CurrentUser } from '../auth/auth.types';
@@ -69,8 +70,8 @@ export class StockController {
 
   @Get('stock-balances/:id')
   @Roles(...STOCK_BALANCE_READ_ROLES)
-  findBalance(@Param('id') id: string, @CurrentUserParam() user: CurrentUser) {
-    return this.stockService.findBalance(id, user);
+  findBalance(@Param('id') id: string, @CurrentUserParam() user: CurrentUser, @Query() query: ReadAccessQueryDto) {
+    return this.stockService.findBalance(id, user, query.accessMode);
   }
 
   @Get('stock-transactions')
@@ -87,8 +88,9 @@ export class StockController {
   findTransaction(
     @Param('id') id: string,
     @CurrentUserParam() user: CurrentUser,
+    @Query() query: ReadAccessQueryDto,
   ) {
-    return this.stockService.findTransaction(id, user);
+    return this.stockService.findTransaction(id, user, query.accessMode);
   }
 
   @Post('stock-transactions/manual-receipt')

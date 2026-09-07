@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma, SecurityEventType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentUser } from './auth.types';
+import type { ReadAccessMode } from './dto/read-access-query.dto';
 
 type AuditInput = {
   user?: CurrentUser;
@@ -43,6 +44,23 @@ export class AccessControlService {
 
   isReadMethod(method: string): boolean {
     return ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
+  }
+
+  // Use only for GET filtering; never replace the authenticated write actor.
+  forRead(user: CurrentUser, mode: ReadAccessMode = 'SELF_ONLY'): CurrentUser {
+    if (mode === 'SCOPED_READ') {
+      if (
+        user.role === UserRole.ORG_MANAGER ||
+        (user.role === UserRole.MVO && this.accessScopeResponsiblePersonFilters(user).length > 0)
+      ) {
+        return user;
+      }
+      throw new ForbiddenException('Менеджерський перегляд потребує областей доступу.');
+    }
+    if (mode !== 'SELF_ONLY') {
+      throw new ForbiddenException('Невідомий режим читання.');
+    }
+    return user.role === UserRole.MVO ? { ...user, accessScopes: [] } : user;
   }
 
   isPrivileged(user: CurrentUser): boolean {

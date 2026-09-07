@@ -1,8 +1,8 @@
 import { IsDateString, IsOptional, IsUUID } from 'class-validator';
 import { StockTransactionType } from '@prisma/client';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReadAccessPaginationQueryDto } from '../../auth/dto/read-access-query.dto';
 
-export class ListStockTransactionsQueryDto extends PaginationQueryDto {
+export class ListStockTransactionsQueryDto extends ReadAccessPaginationQueryDto {
   @IsOptional()
   @IsUUID()
   responsiblePersonId?: string;

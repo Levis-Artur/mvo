@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReadAccessMode } from '@/lib/types';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
@@ -32,11 +33,11 @@ export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnl
   const viewUser = managerReadOnly
     ? getManagerReadOnlyPresentationUser(user)
     : user;
-  return <StockDocumentsContent user={viewUser} />;
+  return <StockDocumentsContent user={viewUser} accessMode={managerReadOnly ? 'SCOPED_READ' : undefined} />;
 }
 
-function StockDocumentsContent({ user }: { user: NonNullable<ReturnType<typeof useAuth>['user']> }) {
-  const controller = useStockDocumentsController(user);
+function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; accessMode?: ReadAccessMode }) {
+  const controller = useStockDocumentsController(user, accessMode);
   const router = useRouter();
   const [advancedFilters, setAdvancedFilters] = useState(false);
   const writable = canChangeStockDocuments(user);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import type { ResponsiblePerson, UserSummary } from '@/lib/types';
+import type { ResponsiblePerson, UserSummary, ReadAccessMode } from '@/lib/types';
 import { Button, Card, Modal, StatusBadge } from '@/components/ui';
 import { personDisplayName } from './persons-model';
 import {
@@ -39,6 +39,7 @@ function Detail({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function PersonDetailsModal({
+  accessMode,
   person,
   account,
   accountLookupAvailable,
@@ -52,6 +53,7 @@ export function PersonDetailsModal({
   onDelete,
   onStockPresence,
 }: {
+  accessMode?: ReadAccessMode;
   person: ResponsiblePerson;
   account?: UserSummary;
   accountLookupAvailable: boolean;
@@ -169,7 +171,7 @@ export function PersonDetailsModal({
             onPresenceResolved={reportStockPresence}
           />
         ) : null}
-        {tab === 'operations' ? <PersonOperationsTab personId={person.id} /> : null}
+        {tab === 'operations' ? <PersonOperationsTab personId={person.id} accessMode={accessMode} /> : null}
         {tab === 'transfers' ? <PersonTransfersTab personId={person.id} /> : null}
 
         {tab === 'admin' ? (

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReadAccessMode } from '@/lib/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { InventoryItem, ResponsiblePerson, StockTransaction } from '@/lib/types';
 import { getErrorMessage } from '@/components/common';
@@ -25,7 +26,7 @@ import {
 } from './transaction-model';
 import { TransactionsTable } from './transactions-table';
 
-export function TransactionsView() {
+export function TransactionsView({ accessMode }: { accessMode?: ReadAccessMode } = {}) {
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -60,14 +61,14 @@ export function TransactionsView() {
     setError('');
     try {
       const query = transactionApiQuery(applied);
-      const result = await fetchAllPages((pagination) => apiClient.stockTransactions({ ...query, ...pagination }));
+      const result = await fetchAllPages((pagination) => apiClient.stockTransactions({ ...query, ...pagination, accessMode }));
       setTransactions(result);
     } catch (reason) {
       setError(getErrorMessage(reason));
     } finally {
       setLoading(false);
     }
-  }, [applied]);
+  }, [applied, accessMode]);
 
   useEffect(() => { void loadReferences(); }, [loadReferences]);
   useEffect(() => { void loadTransactions(); }, [loadTransactions]);

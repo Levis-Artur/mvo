@@ -5,6 +5,7 @@ import { getErrorMessage, getMvoErrorMessage } from '@/components/common/formatt
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import type {
   AuthUser,
+  ReadAccessMode,
   AvailableStockSource,
   Pagination,
   ResponsiblePerson,
@@ -35,7 +36,7 @@ export const DEFAULT_DOCUMENT_FILTERS: DocumentFilters = {
 };
 const emptyPagination: Pagination = { page: 1, limit: 20, total: 0, totalPages: 0 };
 
-export function useStockDocumentsController(user: AuthUser) {
+export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAccessMode) {
   const errorMessage = user.role === 'MVO' ? getMvoErrorMessage : getErrorMessage;
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
@@ -68,6 +69,7 @@ export function useStockDocumentsController(user: AuthUser) {
     setLoading(true); setError('');
     try {
       const response = await stockDocumentsService.list({
+        accessMode,
         type: user.role === 'MVO' ? 'MVO_TRANSFER' : appliedFilters.type || undefined,
         status: appliedFilters.status || undefined,
         sourceResponsiblePersonId: user.role === 'MVO' ? undefined : appliedFilters.sourceId || undefined,
@@ -83,7 +85,7 @@ export function useStockDocumentsController(user: AuthUser) {
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, errorMessage, limit, page, user.role]);
+  }, [appliedFilters, errorMessage, limit, page, user.role, accessMode]);
 
   const loadReferences = useCallback(async () => {
     setPersonsError('');
@@ -161,7 +163,7 @@ export function useStockDocumentsController(user: AuthUser) {
 
   async function openDetails(document: Pick<StockDocument, 'id'>) {
     setActionError(''); setConfirming(null); setSuccess(null);
-    try { setSelected(await stockDocumentsService.findOne(document.id)); }
+    try { setSelected(await stockDocumentsService.findOne(document.id, accessMode)); }
     catch (reason) { setError(errorMessage(reason)); }
   }
 

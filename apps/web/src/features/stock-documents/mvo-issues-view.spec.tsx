@@ -22,6 +22,7 @@ const user: AuthUser = {
   isActive: true,
   mustChangePassword: false,
   responsiblePersonId: personId,
+  accessScopes: [{ managementId: null, serviceCode: 'IT' }],
 };
 
 jest.mock('@/app/ui/auth-context', () => ({
@@ -185,6 +186,8 @@ describe('MVO issues workspace', () => {
     expect(await screen.findByText('№ 15')).toBeTruthy();
     expect(screen.getByText('Служба забезпечення')).toBeTruthy();
     expect(screen.getByText('Є документ')).toBeTruthy();
+    const [query] = jest.mocked(stockDocumentsService.issueHistory).mock.calls[0];
+    expect(query).not.toHaveProperty('accessMode');
   });
 
   it('creates an ISSUE from the direct balance without transfer identifiers', async () => {

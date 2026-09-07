@@ -6,6 +6,7 @@ import { useAuth } from '@/app/ui/auth-context';
 import { can } from '@/lib/authz';
 import type {
   Management,
+  ReadAccessMode,
   ResponsiblePerson,
   ResponsiblePersonsQuery,
   Service,
@@ -41,7 +42,7 @@ import {
 
 const INITIAL_QUERY: ResponsiblePersonsQuery = { page: 1, limit: 20 };
 
-export function PersonsView() {
+export function PersonsView({ accessMode }: { accessMode?: ReadAccessMode } = {}) {
   const { user } = useAuth();
   const canWritePersons = can(user, 'write', 'responsiblePersons');
   const canCreateMvoUser =
@@ -336,6 +337,7 @@ export function PersonsView() {
 
       {detailsPerson ? (
         <PersonDetailsModal
+          accessMode={accessMode}
           account={accounts.get(detailsPerson.id)}
           accountLookupAvailable={accountsAvailable}
           canCreateAccount={canCreateMvoUser}

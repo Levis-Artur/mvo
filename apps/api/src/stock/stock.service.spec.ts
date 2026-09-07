@@ -75,6 +75,33 @@ async function stockTransactionWhere(
 }
 
 describe('StockService', () => {
+  it('requires explicit manager mode for scoped MVO stock and journal reads', async () => {
+    const user = actor(UserRole.MVO, {
+      responsiblePersonId: scopeIds.responsiblePerson,
+      accessScopes: [{ managementId: null, serviceCode: 'IT' }],
+    });
+    const ownStock = await stockBalanceWhere(user);
+    expect(ownStock.responsiblePerson.AND[0]).toEqual({ OR: [{ id: scopeIds.responsiblePerson }] });
+    const ownJournal = await stockTransactionWhere(user);
+    expect(ownJournal.AND[0]).toEqual({ OR: [{ responsiblePersonId: scopeIds.responsiblePerson }] });
+    const query = { page: 1, limit: 20, accessMode: 'SCOPED_READ' as const };
+    const managerStock = await stockBalanceWhere(user, query);
+    expect(managerStock.responsiblePerson.AND[0]).toEqual({
+      OR: [{ id: scopeIds.responsiblePerson }, { service: { code: 'IT' } }],
+    });
+    const managerJournal = await stockTransactionWhere(user, query);
+    expect(managerJournal.AND[0]).toEqual(new AccessControlService({} as never).stockTransactionFilter(user));
+    expect(managerJournal.AND[0].OR).toContainEqual({ responsiblePersonId: scopeIds.responsiblePerson });
+    expect(managerJournal.AND[0].OR).toContainEqual({ responsiblePerson: { OR: [{ service: { code: 'IT' } }] } });
+  });
+
+  it('rejects scoped stock and journal requests from MVO without scopes', async () => {
+    const user = actor(UserRole.MVO, { responsiblePersonId: scopeIds.responsiblePerson, accessScopes: [] });
+    const query = { page: 1, limit: 20, accessMode: 'SCOPED_READ' as const };
+    await expect(stockBalanceWhere(user, query)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(stockTransactionWhere(user, query)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
   it('keeps OWNER stock-balance listing global', async () => {
     const where = await stockBalanceWhere(actor(UserRole.OWNER));
     expect(where.responsiblePerson).not.toHaveProperty('AND');
@@ -99,7 +126,7 @@ describe('StockService', () => {
       responsiblePersonId: scopeIds.responsiblePerson,
       accessScopes: [{ managementId: null, serviceCode: 'IT' }],
     });
-    const where = await stockBalanceWhere(mvo);
+    const where = await stockBalanceWhere(mvo, { page: 1, limit: 20, accessMode: 'SCOPED_READ' });
 
     expect(where.responsiblePerson.AND[0]).toEqual({
       OR: [
@@ -271,6 +298,7 @@ describe('StockService', () => {
         responsiblePersonId: scopeIds.responsiblePerson,
         accessScopes: [{ managementId: null, serviceCode: 'IT' }],
       }),
+      { page: 1, limit: 20, accessMode: 'SCOPED_READ' },
     );
 
     expect(where.AND[0]).toEqual(

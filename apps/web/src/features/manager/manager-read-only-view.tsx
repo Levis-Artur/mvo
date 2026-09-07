@@ -40,9 +40,9 @@ export function ManagerReadOnlyView() {
           </Button>
         ))}
       </nav>
-      {section === 'persons' ? <PersonsView /> : null}
-      {section === 'stock' ? <StockView /> : null}
-      {section === 'transactions' ? <TransactionsView /> : null}
+      {section === 'persons' ? <PersonsView accessMode="SCOPED_READ" /> : null}
+      {section === 'stock' ? <StockView accessMode="SCOPED_READ" /> : null}
+      {section === 'transactions' ? <TransactionsView accessMode="SCOPED_READ" /> : null}
       {section === 'transfers' ? <StockDocumentsView managerReadOnly /> : null}
     </section>
   );

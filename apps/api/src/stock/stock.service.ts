@@ -11,6 +11,7 @@ import {
   StockTransactionType,
   UserRole,
 } from '@prisma/client';
+import type { ReadAccessMode } from '../auth/dto/read-access-query.dto';
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -119,9 +120,9 @@ export class StockService {
     };
   }
 
-  async findBalance(id: string, user?: CurrentUser) {
+  async findBalance(id: string, user?: CurrentUser, accessMode?: ReadAccessMode) {
     const authorizationWhere = user
-      ? this.accessControl.responsiblePersonFilter(user)
+      ? this.accessControl.responsiblePersonFilter(this.accessControl.forRead(user, accessMode))
       : {};
     const balance = await this.prisma.stockBalance.findFirst({
       where: {
@@ -158,7 +159,7 @@ export class StockService {
       },
     };
     const where: Prisma.StockTransactionWhereInput = {
-      AND: [this.accessControl.stockTransactionFilter(user), queryWhere],
+      AND: [this.accessControl.stockTransactionFilter(this.accessControl.forRead(user, query.accessMode)), queryWhere],
     };
 
     const [items, total] = await Promise.all([
@@ -183,10 +184,10 @@ export class StockService {
     };
   }
 
-  async findTransaction(id: string, user: CurrentUser) {
+  async findTransaction(id: string, user: CurrentUser, accessMode?: ReadAccessMode) {
     const transaction = await this.prisma.stockTransaction.findFirst({
       where: {
-        AND: [{ id }, this.accessControl.stockTransactionFilter(user)],
+        AND: [{ id }, this.accessControl.stockTransactionFilter(this.accessControl.forRead(user, accessMode))],
       },
       include: transactionInclude,
     });
@@ -539,7 +540,7 @@ export class StockService {
   ): Prisma.StockBalanceWhereInput {
     const search = query.search?.trim();
     const authorizationWhere = user
-      ? this.accessControl.responsiblePersonFilter(user)
+      ? this.accessControl.responsiblePersonFilter(this.accessControl.forRead(user, query.accessMode))
       : {};
     const queryResponsiblePersonWhere: Prisma.ResponsiblePersonWhereInput = {
       managementId: query.managementId,

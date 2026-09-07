@@ -22,6 +22,7 @@ import {
   STOCK_DOCUMENT_READ_ROLES,
   STOCK_DOCUMENT_WRITE_ROLES,
 } from '../auth/access-policy';
+import { ReadAccessQueryDto } from '../auth/dto/read-access-query.dto';
 import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
@@ -342,8 +343,8 @@ export class StockDocumentsController {
 
   @Get(':id')
   @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
-  findOne(@Param('id') id: string, @CurrentUserParam() actor: CurrentUser) {
-    return this.service.findOne(id, actor);
+  findOne(@Param('id') id: string, @CurrentUserParam() actor: CurrentUser, @Query() query: ReadAccessQueryDto) {
+    return this.service.findOne(id, actor, query.accessMode);
   }
 
   @Post()

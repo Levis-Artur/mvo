@@ -148,9 +148,9 @@ describe('AppShell presentation model', () => {
       join(__dirname, '../../features/manager/manager-read-only-view.tsx'),
       'utf8',
     );
-    expect(manager).toContain('<PersonsView />');
-    expect(manager).toContain('<StockView />');
-    expect(manager).toContain('<TransactionsView />');
+    expect(manager).toContain('<PersonsView accessMode="SCOPED_READ" />');
+    expect(manager).toContain('<StockView accessMode="SCOPED_READ" />');
+    expect(manager).toContain('<TransactionsView accessMode="SCOPED_READ" />');
     expect(manager).toContain('<StockDocumentsView managerReadOnly />');
   });
 });

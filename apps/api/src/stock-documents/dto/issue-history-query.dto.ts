@@ -13,9 +13,9 @@ import {
   Min,
 } from 'class-validator';
 import { parseBooleanQuery } from '../../common/dto/active-query.dto';
-import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { ReadAccessPaginationQueryDto } from '../../auth/dto/read-access-query.dto';
 
-export class IssueHistoryFiltersDto extends PaginationQueryDto {
+export class IssueHistoryFiltersDto extends ReadAccessPaginationQueryDto {
   @IsOptional()
   @Transform(({ value }: { value: string | number | undefined }) =>
     value === undefined || value === '' ? 1 : Number(value),
