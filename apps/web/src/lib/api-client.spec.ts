@@ -259,6 +259,22 @@ describe('owner/custody API URLs', () => {
     );
   });
 
+  it('sends the server-side unrealized-only flag to my-property', async () => {
+    await apiClient.myProperty({
+      search: 'клавіатура',
+      unrealizedOnly: true,
+      section: 'DIRECT',
+      page: 1,
+      limit: 20,
+      sortBy: 'name',
+      sortOrder: 'asc',
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/stock/my-property?search=%D0%BA%D0%BB%D0%B0%D0%B2%D1%96%D0%B0%D1%82%D1%83%D1%80%D0%B0&unrealizedOnly=true&section=DIRECT&page=1&limit=20&sortBy=name&sortOrder=asc',
+      expect.objectContaining({ credentials: 'include' }),
+    );
+  });
+
   it('downloads authorized CSV as a Blob and reads its filename', async () => {
     jest.mocked(fetch).mockResolvedValueOnce(new Response('\uFEFF"Категорія"\r\n', {
       status: 200,

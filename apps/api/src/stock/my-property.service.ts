@@ -141,7 +141,19 @@ export class MyPropertyService {
     page: number,
     limit: number,
   ) {
-    const where = this.directWhere(responsiblePersonId, search);
+    const unrealizedQuantities = query.unrealizedOnly
+      ? await this.unrealizedQuantities(responsiblePersonId)
+      : undefined;
+    const unrealizedInventoryItemIds = unrealizedQuantities
+      ? [...unrealizedQuantities.entries()]
+          .filter(([, quantity]) => quantity.greaterThan(0))
+          .map(([inventoryItemId]) => inventoryItemId)
+      : undefined;
+    const where = this.directWhere(
+      responsiblePersonId,
+      search,
+      unrealizedInventoryItemIds,
+    );
     const [items, total] = await Promise.all([
       this.prisma.stockBalance.findMany({
         where,
@@ -152,15 +164,17 @@ export class MyPropertyService {
       }),
       this.prisma.stockBalance.count({ where }),
     ]);
-    const unrealizedQuantities = await this.unrealizedQuantities(
-      responsiblePersonId,
-      items.map((item) => item.inventoryItem.id),
-    );
+    const pageUnrealizedQuantities =
+      unrealizedQuantities ??
+      (await this.unrealizedQuantities(
+        responsiblePersonId,
+        items.map((item) => item.inventoryItem.id),
+      ));
     return this.paginated(
       items.map((item) =>
         this.serializeDirect(
           item,
-          unrealizedQuantities.get(item.inventoryItem.id),
+          pageUnrealizedQuantities.get(item.inventoryItem.id),
         ),
       ),
       page,
@@ -171,14 +185,14 @@ export class MyPropertyService {
 
   private async unrealizedQuantities(
     responsiblePersonId: string,
-    inventoryItemIds: string[],
+    inventoryItemIds?: string[],
   ) {
     const totals = new Map<string, Prisma.Decimal>();
-    if (inventoryItemIds.length === 0) return totals;
+    if (inventoryItemIds?.length === 0) return totals;
 
     const issueLines = await this.prisma.stockDocumentLine.findMany({
       where: {
-        inventoryItemId: { in: inventoryItemIds },
+        inventoryItemId: inventoryItemIds ? { in: inventoryItemIds } : undefined,
         document: {
           type: StockDocumentType.ISSUE,
           status: StockDocumentStatus.POSTED,
@@ -242,10 +256,12 @@ export class MyPropertyService {
   private directWhere(
     responsiblePersonId: string,
     search?: string,
+    inventoryItemIds?: string[],
   ): Prisma.StockBalanceWhereInput {
     const terms = this.searchTerms(search);
     return {
       responsiblePersonId,
+      inventoryItemId: inventoryItemIds ? { in: inventoryItemIds } : undefined,
       quantity: { gt: 0 },
       AND: terms.map((term) => ({
         OR: [

@@ -44,6 +44,22 @@ const issueLine = {
   quantity: new Prisma.Decimal('3.0000'),
   realizationLines: [{ quantity: new Prisma.Decimal('1.2500') }],
 };
+const zeroUnrealizedItem = {
+  id: '88888888-8888-4888-8888-888888888888',
+  externalCode: 'MS-001',
+  name: 'Миша',
+  unitOfMeasure: 'шт',
+};
+const zeroUnrealizedRow = {
+  ...directRow,
+  id: '99999999-9999-4999-8999-999999999999',
+  inventoryItem: zeroUnrealizedItem,
+};
+const fullyRealizedIssueLine = {
+  inventoryItemId: zeroUnrealizedItem.id,
+  quantity: new Prisma.Decimal('2'),
+  realizationLines: [{ quantity: new Prisma.Decimal('2') }],
+};
 const transferRow = {
   id: '66666666-6666-4666-8666-666666666666',
   quantity: new Prisma.Decimal('2.2500'),
@@ -116,6 +132,62 @@ async function streamText(stream: NodeJS.ReadableStream) {
 }
 
 describe('MyPropertyService', () => {
+  it('filters unrealized items before pagination and combines it with search', async () => {
+    const { prisma, service } = createService();
+    prisma.stockDocumentLine.findMany.mockResolvedValueOnce([
+      issueLine,
+      fullyRealizedIssueLine,
+    ]);
+    prisma.stockBalance.findMany.mockImplementationOnce(
+      (args: { where: { inventoryItemId?: { in: string[] } } }) =>
+        Promise.resolve(
+          [directRow, zeroUnrealizedRow].filter((row) =>
+            args.where.inventoryItemId?.in.includes(row.inventoryItem.id),
+          ),
+        ),
+    );
+    prisma.stockBalance.count.mockImplementationOnce(
+      (args: { where: { inventoryItemId?: { in: string[] } } }) =>
+        Promise.resolve(
+          [directRow, zeroUnrealizedRow].filter((row) =>
+            args.where.inventoryItemId?.in.includes(row.inventoryItem.id),
+          ).length,
+        ),
+    );
+
+    const result = await service.list(
+      {
+        ...query(MyPropertySection.DIRECT, '  клавіатура  '),
+        page: 1,
+        limit: 1,
+        unrealizedOnly: true,
+      },
+      { ...user, accessScopes: [{ managementId: null, serviceCode: 'IT' }] },
+    );
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        inventoryItem: expect.objectContaining({ id: itemId }),
+        unrealizedQuantity: '1.75',
+      }),
+    ]);
+    expect(result.pagination).toEqual({ page: 1, limit: 1, total: 1, totalPages: 1 });
+    const where = prisma.stockBalance.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({
+      responsiblePersonId: mvoId,
+      inventoryItemId: { in: [itemId] },
+    });
+    expect(JSON.stringify(where.AND)).toContain('клавіатура');
+    expect(prisma.stockBalance.count).toHaveBeenCalledWith({ where });
+  });
+
+  it('does not apply the unrealized filter by default', async () => {
+    const { prisma, service } = createService();
+    await service.list(query(MyPropertySection.DIRECT), user);
+    expect(prisma.stockBalance.findMany.mock.calls[0][0].where.inventoryItemId)
+      .toBeUndefined();
+  });
+
   it('returns only positive direct StockBalance rows for the current MVO', async () => {
     const { prisma, service } = createService();
 

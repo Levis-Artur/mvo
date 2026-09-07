@@ -50,6 +50,7 @@ export function MyStockView() {
   const [section, setSection] = useState<MyPropertySection>('DIRECT');
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
+  const [unrealizedOnly, setUnrealizedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<MyPropertySortBy>(
     DEFAULT_MY_PROPERTY_SORT.sortBy,
   );
@@ -85,6 +86,8 @@ export function MyStockView() {
     try {
       const response = await responsiblePersonsService.myProperty({
         search: search || undefined,
+        unrealizedOnly:
+          section === 'DIRECT' && unrealizedOnly ? true : undefined,
         section,
         page,
         limit: Math.min(limit, 100),
@@ -99,7 +102,7 @@ export function MyStockView() {
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [limit, page, personId, search, section, sortBy, sortOrder]);
+  }, [limit, page, personId, search, section, sortBy, sortOrder, unrealizedOnly]);
 
   useEffect(() => {
     void load();
@@ -342,6 +345,35 @@ export function MyStockView() {
           </Button>
         ))}
       </nav>
+
+      {section === 'DIRECT' ? (
+        <nav aria-label="Фільтр нереалізованого майна" className="my-stock-tabs">
+          <Button
+            aria-current={!unrealizedOnly ? 'page' : undefined}
+            size="compact"
+            type="button"
+            variant={!unrealizedOnly ? 'primary' : 'ghost'}
+            onClick={() => {
+              setUnrealizedOnly(false);
+              setPage(1);
+            }}
+          >
+            Усі
+          </Button>
+          <Button
+            aria-current={unrealizedOnly ? 'page' : undefined}
+            size="compact"
+            type="button"
+            variant={unrealizedOnly ? 'primary' : 'ghost'}
+            onClick={() => {
+              setUnrealizedOnly(true);
+              setPage(1);
+            }}
+          >
+            Є нереалізовані
+          </Button>
+        </nav>
+      ) : null}
 
       {error ? <ErrorState message={error} /> : null}
 

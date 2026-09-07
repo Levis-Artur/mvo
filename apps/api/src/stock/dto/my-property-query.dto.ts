@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { parseBooleanQuery } from '../../common/dto/active-query.dto';
 
 export enum MyPropertySection {
   DIRECT = 'DIRECT',
@@ -33,6 +34,13 @@ export class ListMyPropertyQueryDto extends PaginationQueryDto {
   @IsString()
   @MaxLength(200)
   search?: string;
+
+  @IsOptional()
+  @Transform(({ value }: { value: string | boolean | undefined }) =>
+    parseBooleanQuery(value),
+  )
+  @IsBoolean()
+  unrealizedOnly?: boolean;
 
   @IsOptional()
   @IsEnum(MyPropertySection)

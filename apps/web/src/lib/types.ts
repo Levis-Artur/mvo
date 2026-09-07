@@ -552,6 +552,7 @@ export type InventoryItemTransferHistory = {
 
 export type MyPropertyQuery = {
   search?: string;
+  unrealizedOnly?: boolean;
   section: MyPropertySection;
   page: number;
   limit: number;
