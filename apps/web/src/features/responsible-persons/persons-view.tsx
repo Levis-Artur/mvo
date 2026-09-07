@@ -55,6 +55,13 @@ export function PersonsView() {
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [accountsAvailable, setAccountsAvailable] = useState(false);
   const [stockPresence, setStockPresence] = useState<Record<string, boolean>>({});
+  const handleStockPresence = useCallback((personId: string, hasStock: boolean) => {
+    setStockPresence((current) =>
+      current[personId] === hasStock
+        ? current
+        : { ...current, [personId]: hasStock },
+    );
+  }, []);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -345,9 +352,7 @@ export function PersonsView() {
             setDeletingPerson(detailsPerson);
           }}
           onEdit={() => openEdit(detailsPerson)}
-          onStockPresence={(personId, hasStock) =>
-            setStockPresence((current) => ({ ...current, [personId]: hasStock }))
-          }
+          onStockPresence={handleStockPresence}
           onToggleActive={() => {
             setDetailsPerson(null);
             void toggleActive(detailsPerson);
