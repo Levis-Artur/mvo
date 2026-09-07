@@ -5,8 +5,8 @@ import { profilePresentation } from './profile-model';
 
 describe('profile presentation', () => {
   it('shows the correct localized role', () => {
-    const user: AuthUser = { id: '1', username: 'auditor', role: 'AUDITOR', isActive: true, mustChangePassword: false, responsiblePersonId: null };
-    expect(profilePresentation(user, null).role).toBe('Аудитор');
+    const user: AuthUser = { id: '1', username: 'accountant', role: 'ACCOUNTANT', isActive: true, mustChangePassword: false, responsiblePersonId: null };
+    expect(profilePresentation(user, null).role).toBe('Бухгалтер');
   });
 
   it('показує дані картки MVO у профілі', () => {

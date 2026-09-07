@@ -9,7 +9,7 @@ import { Button, ConfirmationDialog, ErrorState, FilterBar, LoadingState, Select
 import { getErrorMessage } from '@/components/common';
 import { DestructiveActionModal } from '@/features/admin/destructive-action-modal';
 import { ADMIN_ENTITY_TYPES } from '@/features/admin/admin-entity-types';
-import { can, getUserManagementResource } from '@/lib/authz';
+import { can } from '@/lib/authz';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import type { ResponsiblePerson, UserSummary } from '@/lib/types';
 import { UserFormModal } from './user-form-modal';
@@ -19,10 +19,9 @@ import { UsersTable } from './users-table';
 
 export function UsersView() {
   const { user } = useAuth();
-  const resource = getUserManagementResource(user);
-  const canWrite = can(user, 'write', resource);
-  const canReset = can(user, 'resetPassword', resource);
-  const canRevoke = can(user, 'revokeSessions', resource);
+  const canWrite = can(user, 'write', 'users');
+  const canReset = can(user, 'resetPassword', 'users');
+  const canRevoke = can(user, 'revokeSessions', 'users');
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,14 +71,14 @@ export function UsersView() {
   }
 
   return <section className="grid gap-4">
-    <PageHeader icon="users" title={resource === 'users' ? 'Користувачі' : 'Користувачі МВО'} description="Керування обліковими записами, ролями та доступом до системи." action={<div className="flex flex-wrap gap-2">{canWrite ? <Button icon="users" type="button" onClick={() => { setEditing(null); setFormOpen(true); }}>Створити користувача</Button> : null}<Button icon="refresh" variant="outline" type="button" onClick={() => void load()}>Оновити</Button></div>} />
+    <PageHeader icon="users" title="Користувачі" description="Керування обліковими записами, ролями та доступом до системи." action={<div className="flex flex-wrap gap-2">{canWrite ? <Button icon="users" type="button" onClick={() => { setEditing(null); setFormOpen(true); }}>Створити користувача</Button> : null}<Button icon="refresh" variant="outline" type="button" onClick={() => void load()}>Оновити</Button></div>} />
     <FilterBar search={searchDraft} loading={loading} onSearchChange={setSearchDraft} onApply={() => setFilters({ search: searchDraft, role: roleDraft, status: statusDraft })} onReset={() => { setSearchDraft(''); setRoleDraft(''); setStatusDraft(''); setFilters({ search: '', role: '', status: '' }); }} onRefresh={() => void load()}>
-      <label className="filter-bar__field"><span>Роль</span><Select value={roleDraft} onChange={(event) => setRoleDraft(event.target.value)}><option value="">Усі ролі</option><option value="OWNER">Власник</option><option value="DPP_ADMIN">Адміністратор ДПП</option><option value="AUDITOR">Аудитор</option><option value="ACCOUNTANT">Бухгалтер</option><option value="ORG_MANAGER">Менеджер</option><option value="MVO">МВО</option></Select></label>
+      <label className="filter-bar__field"><span>Роль</span><Select value={roleDraft} onChange={(event) => setRoleDraft(event.target.value)}><option value="">Усі ролі</option><option value="OWNER">Власник</option><option value="ACCOUNTANT">Бухгалтер</option><option value="ORG_MANAGER">Менеджер</option><option value="MVO">МВО</option></Select></label>
       <label className="filter-bar__field"><span>Активність</span><Select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value)}><option value="">Усі</option><option value="active">Активні</option><option value="inactive">Неактивні</option></Select></label>
     </FilterBar>
     {error ? <ErrorState message={error} /> : null}
     {loading ? <LoadingState label="Завантаження користувачів…" /> : <UsersTable users={visibleUsers} personsById={personsById} canWrite={canWrite} canResetPassword={canReset} canResetTwoFactor={user?.role === 'OWNER'} canRevokeSessions={canRevoke} canDelete={user?.role === 'OWNER'} onEdit={(item) => { setEditing(item); setFormOpen(true); }} onResetPassword={(item) => void action(async () => { const result = await usersService.resetUserPassword(item.id); setTemporaryPassword(result.temporaryPassword); }, 'Тимчасовий пароль створено.')} onResetTwoFactor={setResettingTwoFactor} onBlock={(item) => void action(() => usersService.blockUser(item.id), 'Користувача заблоковано.')} onUnblock={(item) => void action(() => usersService.unblockUser(item.id), 'Користувача розблоковано.')} onRevokeSessions={(item) => void action(() => usersService.revokeUserSessions(item.id), 'Сесії відкликано.')} onDeactivate={(item) => void action(() => usersService.deactivateUser(item.id), 'Користувача деактивовано.')} onActivate={(item) => void action(() => usersService.activateUser(item.id), 'Користувача активовано.')} onDelete={setDeleting} />}
-    {formOpen ? <UserFormModal mode={resource} user={editing} onClose={() => setFormOpen(false)} onSaved={(password) => { setFormOpen(false); if (password) setTemporaryPassword(password); void load(); setToast({ message: editing ? 'Користувача оновлено.' : 'Користувача створено.', tone: 'success' }); }} /> : null}
+    {formOpen ? <UserFormModal user={editing} onClose={() => setFormOpen(false)} onSaved={(password) => { setFormOpen(false); if (password) setTemporaryPassword(password); void load(); setToast({ message: editing ? 'Користувача оновлено.' : 'Користувача створено.', tone: 'success' }); }} /> : null}
     {temporaryPassword ? <TemporaryPasswordModal temporaryPassword={temporaryPassword} onClose={() => setTemporaryPassword('')} /> : null}
     {resettingTwoFactor ? <ConfirmationDialog destructive title="Скинути 2FA" message={`Скинути двофакторну автентифікацію для ${resettingTwoFactor.username}? Усі його активні сесії буде відкликано, а під час наступного входу користувач повинен налаштувати Authenticator заново.`} onClose={() => setResettingTwoFactor(null)} onConfirm={() => { const target = resettingTwoFactor; setResettingTwoFactor(null); void action(() => usersService.resetUserTwoFactor(target.id), '2FA скинуто. Користувач налаштує його заново під час наступного входу.'); }} /> : null}
     {deleting ? <DestructiveActionModal entityType={ADMIN_ENTITY_TYPES.user} entityId={deleting.id} onClose={() => setDeleting(null)} onDeleted={async () => { await load(); setToast({ message: 'Користувача видалено.', tone: 'success' }); }} /> : null}

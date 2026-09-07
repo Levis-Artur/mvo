@@ -96,8 +96,6 @@ enum InventoryItemReviewStatus {
 
 enum UserRole {
   OWNER
-  AUDITOR
-  DPP_ADMIN
   MVO
   ACCOUNTANT
   ORG_MANAGER

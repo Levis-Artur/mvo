@@ -1274,15 +1274,13 @@ export class StockDocumentsService {
   }
 
   private assertCanWrite(actor: CurrentUser) {
-    if (actor.role === UserRole.AUDITOR) {
-      throw new ForbiddenException(
-        'AUDITOR має доступ лише для перегляду',
-      );
-    }
     if (actor.role === UserRole.ACCOUNTANT) {
       throw new ForbiddenException(
         'ACCOUNTANT не може створювати, проводити або скасовувати документи руху',
       );
+    }
+    if (actor.role !== UserRole.OWNER && actor.role !== UserRole.MVO) {
+      throw new ForbiddenException('Немає права змінювати документи руху');
     }
   }
 

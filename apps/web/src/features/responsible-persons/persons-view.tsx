@@ -45,7 +45,7 @@ export function PersonsView() {
   const { user } = useAuth();
   const canWritePersons = can(user, 'write', 'responsiblePersons');
   const canCreateMvoUser =
-    can(user, 'write', 'users') || can(user, 'write', 'mvoUsers');
+    can(user, 'write', 'users');
   const canDelete = canShowDestructiveActions(user?.role);
 
   const [managements, setManagements] = useState<Management[]>([]);

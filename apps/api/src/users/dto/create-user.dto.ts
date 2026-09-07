@@ -1,5 +1,5 @@
 import { UserRole } from '@prisma/client';
-import { IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -7,7 +7,7 @@ export class CreateUserDto {
   @MaxLength(255)
   username!: string;
 
-  @IsEnum(UserRole)
+  @IsIn([UserRole.ACCOUNTANT, UserRole.ORG_MANAGER, UserRole.MVO])
   @IsOptional()
   role?: UserRole;
 
@@ -15,4 +15,3 @@ export class CreateUserDto {
   @IsOptional()
   responsiblePersonId?: string;
 }
-

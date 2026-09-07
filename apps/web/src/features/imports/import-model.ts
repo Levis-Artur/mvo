@@ -40,7 +40,7 @@ export function importSummary(batch: ImportBatch) {
 
 export function importRoleAccess(role?: UserRole) {
   return {
-    canWrite: role === 'OWNER' || role === 'DPP_ADMIN' || role === 'ACCOUNTANT',
+    canWrite: role === 'OWNER' || role === 'ACCOUNTANT',
     canDelete: role === 'OWNER',
   };
 }

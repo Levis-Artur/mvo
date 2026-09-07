@@ -27,7 +27,7 @@ import {
 } from './stock-document-rules';
 
 const mvoUser = { id: 'user-1', username: 'mvo', role: 'MVO', responsiblePersonId: 'person-1' } as AuthUser;
-const auditor = { ...mvoUser, role: 'AUDITOR' } as AuthUser;
+const manager = { ...mvoUser, role: 'ORG_MANAGER', responsiblePersonId: null } as AuthUser;
 const accountant = { ...mvoUser, role: 'ACCOUNTANT' } as AuthUser;
 const person = (id: string, active = true) => ({
   id, isActive: active, lastName: id, firstName: 'Ім’я', middleName: null,
@@ -60,16 +60,15 @@ const input = (patch: Partial<StockDocumentInput> = {}): StockDocumentInput => (
 });
 
 describe('stock document frontend rules', () => {
-  it('AUDITOR і ACCOUNTANT мають read-only UI, а MVO може створювати власні документи', () => {
+  it('ORG_MANAGER і ACCOUNTANT не можуть змінювати документи, а MVO може створювати власні', () => {
     expect(canChangeStockDocuments(mvoUser)).toBe(true);
-    expect(canChangeStockDocuments(auditor)).toBe(false);
+    expect(canChangeStockDocuments(manager)).toBe(false);
     expect(canChangeStockDocuments(accountant)).toBe(false);
   });
 
-  it('MVO не може підмінити source, OWNER і DPP можуть його вибирати', () => {
+  it('MVO не може підмінити source, OWNER може його вибирати', () => {
     expect(resolveSourceId(mvoUser, 'another-person')).toBe('person-1');
     expect(resolveSourceId({ role: 'OWNER', responsiblePersonId: null }, 'person-3')).toBe('person-3');
-    expect(resolveSourceId({ role: 'DPP_ADMIN', responsiblePersonId: null }, 'person-4')).toBe('person-4');
   });
 
   it('виключає відправника та шукає за номером, ПІБ і управлінням', () => {

@@ -68,13 +68,13 @@ export class ResponsiblePersonsController {
   }
 
   @Post()
-  @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
+  @Roles(UserRole.OWNER)
   create(@Body() dto: CreateResponsiblePersonDto) {
     return this.responsiblePersonsService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
+  @Roles(UserRole.OWNER)
   update(@Param('id') id: string, @Body() dto: UpdateResponsiblePersonDto) {
     return this.responsiblePersonsService.update(id, dto);
   }

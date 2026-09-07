@@ -109,13 +109,13 @@ export class InventoryItemsController {
   }
 
   @Post()
-  @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
+  @Roles(UserRole.OWNER)
   create(@Body() dto: CreateInventoryItemDto) {
     return this.inventoryItemsService.create(dto);
   }
 
   @Patch(':id')
-  @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
+  @Roles(UserRole.OWNER)
   update(@Param('id') id: string, @Body() dto: UpdateInventoryItemDto) {
     return this.inventoryItemsService.update(id, dto);
   }

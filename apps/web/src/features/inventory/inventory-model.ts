@@ -44,7 +44,7 @@ export function inventoryItemStatuses(item: InventoryItem) {
 
 export function inventoryRoleAccess(role?: UserRole) {
   return {
-    canWrite: role === 'OWNER' || role === 'DPP_ADMIN',
+    canWrite: role === 'OWNER',
     canDelete: role === 'OWNER',
   };
 }

@@ -29,28 +29,10 @@ export const roleCapabilities = {
     'USER_ADMINISTRATION',
     'OWNER_DESTRUCTIVE_ADMINISTRATION',
   ],
-  [UserRole.DPP_ADMIN]: [
-    'REFERENCE_DATA_READ',
-    'REFERENCE_DATA_WRITE',
-    'STOCK_READ',
-    'IMPORT_READ',
-    'IMPORT_WRITE',
-    'STOCK_DOCUMENT_READ',
-    'ACCOUNTING_TRANSFER_READ',
-    'STOCK_DOCUMENT_WRITE',
-    'USER_ADMINISTRATION',
-  ],
   [UserRole.ACCOUNTANT]: [
     'IMPORT_READ',
     'IMPORT_WRITE',
     'ACCOUNTING_WORKSPACE_READ',
-  ],
-  [UserRole.AUDITOR]: [
-    'REFERENCE_DATA_READ',
-    'STOCK_READ',
-    'IMPORT_READ',
-    'STOCK_DOCUMENT_READ',
-    'ACCOUNTING_TRANSFER_READ',
   ],
   [UserRole.MVO]: [
     'STOCK_READ',
@@ -68,13 +50,10 @@ export const roleCapabilities = {
 
 export const REFERENCE_DATA_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-  UserRole.AUDITOR,
 ];
 
 export const REFERENCE_DATA_WRITE_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
 ];
 
 export const RESPONSIBLE_PERSON_READ_ROLES = [
@@ -96,33 +75,24 @@ export const STOCK_READ_ROLES = [
 
 export const TRANSACTION_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-  UserRole.AUDITOR,
 ];
 
 export const ACCOUNTING_CARD_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-  UserRole.AUDITOR,
   UserRole.MVO,
 ];
 
 export const INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-  UserRole.AUDITOR,
 ];
 
 export const IMPORT_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
   UserRole.ACCOUNTANT,
-  UserRole.AUDITOR,
 ];
 
 export const IMPORT_WRITE_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
   UserRole.ACCOUNTANT,
 ];
 
@@ -133,19 +103,15 @@ export const STOCK_DOCUMENT_READ_ROLES = [
 
 export const STOCK_DOCUMENT_WRITE_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
   UserRole.MVO,
 ];
 
 export const ACCOUNTING_TRANSFER_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
-  UserRole.AUDITOR,
 ];
 
 export const ACCOUNTING_TRANSFER_EXPORT_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
 ];
 
 export const ACCOUNTING_ANALYTICS_READ_ROLES = [
@@ -154,7 +120,6 @@ export const ACCOUNTING_ANALYTICS_READ_ROLES = [
 
 export const TRANSFER_TARGET_READ_ROLES = [
   UserRole.OWNER,
-  UserRole.DPP_ADMIN,
   UserRole.MVO,
 ];
 

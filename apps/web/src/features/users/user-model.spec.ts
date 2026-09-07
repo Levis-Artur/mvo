@@ -18,10 +18,8 @@ describe('users presentation permissions', () => {
     expect(userUiAccess('OWNER')).toEqual({ visible: true, readOnly: false, destructive: true });
   });
 
-  it('keeps AUDITOR read-only and hides users from MVO', () => {
-    expect(userUiAccess('AUDITOR').readOnly).toBe(true);
-    expect(userUiAccess('AUDITOR').destructive).toBe(false);
-    expect(userUiAccess('MVO').visible).toBe(false);
+  it.each(['ACCOUNTANT', 'ORG_MANAGER', 'MVO'] as const)('hides users from %s', (role) => {
+    expect(userUiAccess(role)).toEqual({ visible: false, readOnly: true, destructive: false });
   });
 
   it('never exposes password hashes or session tokens', () => {

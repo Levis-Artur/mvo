@@ -2,7 +2,7 @@ import type { AuthUser, DashboardStats } from '@/lib/types';
 import { dashboardContentState, dashboardMetrics, getDashboardActions } from './dashboard-model';
 
 const owner = { id: 'owner', username: 'owner', role: 'OWNER', isActive: true, mustChangePassword: false, responsiblePersonId: null } as AuthUser;
-const auditor = { ...owner, id: 'auditor', username: 'auditor', role: 'AUDITOR' } as AuthUser;
+const mvo = { ...owner, id: 'mvo', username: 'mvo', role: 'MVO' } as AuthUser;
 const stats: DashboardStats = { activeResponsiblePersons: 2, managements: 1, services: 3, units: 4, inventoryItems: 51, inventoryItemsNeedsReview: 5, responsiblePersonsWithStock: 6, completedImports: 7, importsWithErrors: 8, recentReceiptDiscrepancies: 9 };
 
 describe('dashboard presentation model', () => {
@@ -14,7 +14,7 @@ describe('dashboard presentation model', () => {
     expect(getDashboardActions(owner).map(({ label, href }) => [label, href])).toEqual([
       ['Новий імпорт', '/imports'], ['Реєстр МВО', '/persons'], ['Переглянути залишки', '/stock'], ['Організаційна структура', '/structure'], ['Журнал операцій', '/transactions'],
     ]);
-    expect(getDashboardActions(auditor).some((action) => action.label === 'Новий імпорт')).toBe(false);
+    expect(getDashboardActions(mvo).some((action) => action.label === 'Новий імпорт')).toBe(false);
   });
 
   it('API error використовує ErrorState branch', () => {

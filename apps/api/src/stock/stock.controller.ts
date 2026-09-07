@@ -92,7 +92,7 @@ export class StockController {
   }
 
   @Post('stock-transactions/manual-receipt')
-  @Roles(UserRole.OWNER, UserRole.DPP_ADMIN)
+  @Roles(UserRole.OWNER)
   manualReceipt(@Body() dto: ManualReceiptDto) {
     return this.stockService.manualReceipt(dto);
   }

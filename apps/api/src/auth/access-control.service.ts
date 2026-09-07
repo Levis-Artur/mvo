@@ -46,14 +46,12 @@ export class AccessControlService {
   }
 
   isPrivileged(user: CurrentUser): boolean {
-    return user.role === UserRole.OWNER || user.role === UserRole.DPP_ADMIN;
+    return user.role === UserRole.OWNER;
   }
 
   isGlobalReader(user: CurrentUser): boolean {
     return (
       user.role === UserRole.OWNER ||
-      user.role === UserRole.DPP_ADMIN ||
-      user.role === UserRole.AUDITOR ||
       user.role === UserRole.ACCOUNTANT
     );
   }

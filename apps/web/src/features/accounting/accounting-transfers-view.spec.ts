@@ -16,7 +16,7 @@ describe('AccountingTransfersView', () => {
   const view = readFileSync(join(__dirname, 'accounting-transfers-view.tsx'), 'utf8');
   const client = readFileSync(join(__dirname, '../../lib/api-client.ts'), 'utf8');
 
-  it.each(['OWNER', 'DPP_ADMIN', 'AUDITOR'] as const)(
+  it.each(['OWNER'] as const)(
     'shows the accounting register to %s',
     (role) => {
       expect(can(user(role), 'read', 'accountingTransfers')).toBe(true);
@@ -80,7 +80,7 @@ describe('AccountingTransfersView', () => {
     );
     expect(exportMapper).not.toContain('status:');
     expect(exportMapper).not.toContain('exportState:');
-    expect(view).toContain("user && user.role !== 'AUDITOR'");
+    expect(view).toContain("user?.role === 'OWNER'");
   });
 
   it('shows exported transfers as sent to accounting', () => {

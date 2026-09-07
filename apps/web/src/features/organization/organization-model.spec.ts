@@ -26,9 +26,9 @@ const people = [
 ] as ResponsiblePerson[];
 
 describe('organization presentation model', () => {
-  it('keeps AUDITOR read-only and destructive actions OWNER-only', () => {
-    expect(organizationRoleAccess('AUDITOR')).toEqual({
-      readOnly: true,
+  it('keeps writes and destructive actions OWNER-only', () => {
+    expect(organizationRoleAccess('MVO')).toEqual({
+      readOnly: false,
       canWrite: false,
       canDelete: false,
     });

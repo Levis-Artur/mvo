@@ -62,7 +62,7 @@ export class UsersService {
     this.assertCanAccessUsers(actor);
 
     return this.prisma.user.findMany({
-      where: actor.role === UserRole.DPP_ADMIN ? { role: UserRole.MVO } : {},
+      where: {},
       orderBy: { username: 'asc' },
       select: userSelect,
     });
@@ -74,7 +74,6 @@ export class UsersService {
     const user = await this.prisma.user.findFirst({
       where: {
         id,
-        ...(actor.role === UserRole.DPP_ADMIN ? { role: UserRole.MVO } : {}),
       },
       select: userSelect,
     });
@@ -106,7 +105,7 @@ export class UsersService {
   async create(actor: CurrentUser, dto: CreateUserDto, context: RequestContext) {
     this.assertCanAccessUsers(actor);
 
-    const role = this.resolveCreateRole(actor, dto.role);
+    const role = dto.role ?? UserRole.MVO;
     const username = this.authService.normalizeUsername(dto.username);
     const responsiblePersonId =
       role === UserRole.MVO ? dto.responsiblePersonId : null;
@@ -157,10 +156,6 @@ export class UsersService {
 
     if (existing.role === UserRole.OWNER && dto.role && dto.role !== UserRole.OWNER) {
       throw new ForbiddenException('OWNER не можна позбавити ролі OWNER');
-    }
-
-    if (actor.role === UserRole.DPP_ADMIN && dto.role && dto.role !== UserRole.MVO) {
-      throw new ForbiddenException('DPP_ADMIN може керувати лише MVO');
     }
 
     const role = dto.role ?? existing.role;
@@ -361,7 +356,7 @@ export class UsersService {
   }
 
   private assertCanAccessUsers(actor: CurrentUser): void {
-    if (actor.role !== UserRole.OWNER && actor.role !== UserRole.DPP_ADMIN) {
+    if (actor.role !== UserRole.OWNER) {
       throw new ForbiddenException('Доступ заборонено.');
     }
   }
@@ -372,23 +367,11 @@ export class UsersService {
     }
   }
 
-  private resolveCreateRole(actor: CurrentUser, requestedRole?: UserRole): UserRole {
-    if (actor.role === UserRole.DPP_ADMIN) {
-      if (requestedRole && requestedRole !== UserRole.MVO) {
-        throw new ForbiddenException('DPP_ADMIN може створювати лише MVO');
-      }
-      return UserRole.MVO;
-    }
-
-    return requestedRole ?? UserRole.MVO;
-  }
-
   private async getEditableTarget(actor: CurrentUser, id: string): Promise<User> {
     this.assertCanAccessUsers(actor);
     const target = await this.prisma.user.findFirst({
       where: {
         id,
-        ...(actor.role === UserRole.DPP_ADMIN ? { role: UserRole.MVO } : {}),
       },
     });
 

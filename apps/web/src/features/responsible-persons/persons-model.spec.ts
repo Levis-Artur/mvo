@@ -25,12 +25,12 @@ describe('responsible persons presentation model', () => {
     });
   });
 
-  it('keeps role-based actions read-only for AUDITOR and destructive for OWNER only', () => {
+  it('keeps role-based actions read-only for ACCOUNTANT and destructive for OWNER only', () => {
     expect(personRoleAccess('OWNER')).toMatchObject({
       canWrite: true,
       canDelete: true,
     });
-    expect(personRoleAccess('AUDITOR')).toEqual({
+    expect(personRoleAccess('ACCOUNTANT')).toEqual({
       readOnly: true,
       canWrite: false,
       canDelete: false,

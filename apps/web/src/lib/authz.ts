@@ -16,7 +16,6 @@ export type PermissionResource =
   | 'imports'
   | 'transactions'
   | 'users'
-  | 'mvoUsers'
   | 'reports'
   | 'profile'
   | 'ownStock'
@@ -80,9 +79,7 @@ const UNIMPLEMENTED_TITLE = 'Функція ще не реалізована';
 
 export const roleLabels: Record<UserRole, string> = {
   OWNER: 'Власник',
-  AUDITOR: 'Аудитор',
   ACCOUNTANT: 'Бухгалтер',
-  DPP_ADMIN: 'Адміністратор ДПП',
   MVO: 'Матеріально відповідальна особа',
   ORG_MANAGER: 'Менеджер',
 };
@@ -100,7 +97,6 @@ const permissions: Record<
     imports: ['read', 'write'],
     transactions: ['read'],
     users: ['read', 'write', 'manage', 'resetPassword', 'revokeSessions'],
-    mvoUsers: ['read', 'write', 'manage', 'resetPassword', 'revokeSessions'],
     reports: ['read'],
     profile: ['read', 'write'],
     administration: ['read'],
@@ -108,36 +104,10 @@ const permissions: Record<
     accounting: ['read'],
     accountingTransfers: ['read'],
   },
-  AUDITOR: {
-    dashboard: ['read'],
-    responsiblePersons: ['read'],
-    organization: ['read'],
-    nomenclature: ['read'],
-    stock: ['read'],
-    imports: ['read'],
-    transactions: ['read'],
-    reports: ['read'],
-    profile: ['read', 'write'],
-    stockDocuments: ['read'],
-    accountingTransfers: ['read'],
-  },
   ACCOUNTANT: {
     imports: ['read', 'write'],
     profile: ['read', 'write'],
     accounting: ['read'],
-  },
-  DPP_ADMIN: {
-    dashboard: ['read'],
-    responsiblePersons: ['read', 'write'],
-    organization: ['read', 'write'],
-    nomenclature: ['read', 'write'],
-    stock: ['read', 'write'],
-    imports: ['read', 'write'],
-    transactions: ['read'],
-    mvoUsers: ['read', 'write', 'manage', 'resetPassword', 'revokeSessions'],
-    profile: ['read', 'write'],
-    stockDocuments: ['read', 'write'],
-    accountingTransfers: ['read'],
   },
   MVO: {
     ownStock: ['read'],
@@ -169,36 +139,9 @@ const navigationByRole: Record<UserRole, NavigationItem[]> = {
       title: UNIMPLEMENTED_TITLE,
     }),
   ],
-  AUDITOR: [
-    nav('Головна', '/', 'home', 'dashboard'),
-    nav('МВО', '/persons', 'persons', 'responsiblePersons'),
-    nav('Організаційна структура', '/structure', 'structure', 'organization'),
-    nav('Номенклатура', '/nomenclature', 'nomenclature', 'nomenclature'),
-    nav('Залишки', '/stock', 'stock', 'stock'),
-    nav('Імпорт', '/imports', 'imports', 'imports'),
-    nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
-    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
-    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
-    nav('Звіти', '#', 'reports', 'reports', {
-      disabled: true,
-      title: UNIMPLEMENTED_TITLE,
-    }),
-  ],
   ACCOUNTANT: [
     nav('Бухгалтерія', '/accounting', 'accounting', 'accounting'),
     nav('Профіль', '/profile', 'profile', 'profile'),
-  ],
-  DPP_ADMIN: [
-    nav('Головна', '/', 'home', 'dashboard'),
-    nav('МВО', '/persons', 'persons', 'responsiblePersons'),
-    nav('Організаційна структура', '/structure', 'structure', 'organization'),
-    nav('Номенклатура', '/nomenclature', 'nomenclature', 'nomenclature'),
-    nav('Залишки', '/stock', 'stock', 'stock'),
-    nav('Імпорт', '/imports', 'imports', 'imports'),
-    nav('Журнал операцій', '/transactions', 'transactions', 'transactions'),
-    nav('Передачі', '/transfers', 'transfers', 'stockDocuments'),
-    nav('Передачі МВО для бухгалтерії', '/accounting/mvo-transfers', 'accounting-transfers', 'accountingTransfers'),
-    nav('Користувачі МВО', '/mvo-users', 'users', 'mvoUsers'),
   ],
   MVO: [
     nav('Моє майно', '/my-stock', 'my-stock', 'ownStock'),
@@ -431,33 +374,13 @@ export function getToolbarActions(user: AuthUser | null, view: AppView) {
   );
 }
 
-export function getUserManagementResource(user: AuthUser | null) {
-  return can(user, 'write', 'users') ? 'users' : 'mvoUsers';
-}
-
-export function resolveUserFormRole(
-  resource: 'users' | 'mvoUsers',
-  role: UserRole,
-) {
-  return resource === 'users' ? role : 'MVO';
-}
-
-export function getAssignableUserRoles(
-  resource: 'users' | 'mvoUsers',
-  currentRole?: UserRole,
-) {
-  if (resource === 'mvoUsers') {
-    return ['MVO'] satisfies UserRole[];
-  }
-
+export function getAssignableUserRoles(currentRole?: UserRole) {
   if (currentRole === 'OWNER') {
     return ['OWNER'] satisfies UserRole[];
   }
 
   return [
-    'AUDITOR',
     'ACCOUNTANT',
-    'DPP_ADMIN',
     'ORG_MANAGER',
     'MVO',
   ] satisfies UserRole[];

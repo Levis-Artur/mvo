@@ -13,7 +13,7 @@ import { formatQuantity } from '../inventory/quantity-format';
 import type { DocumentFormLine } from './stock-document.types';
 
 export function canChangeStockDocuments(user: Pick<AuthUser, 'role'>) {
-  return user.role !== 'AUDITOR' && user.role !== 'ACCOUNTANT';
+  return user.role === 'OWNER' || user.role === 'MVO';
 }
 
 export function resolveSourceId(

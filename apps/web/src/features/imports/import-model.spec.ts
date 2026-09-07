@@ -42,7 +42,7 @@ describe('import presentation model', () => {
 
   it('limits destructive import actions to OWNER', () => {
     expect(importRoleAccess('OWNER').canDelete).toBe(true);
-    expect(importRoleAccess('DPP_ADMIN').canDelete).toBe(false);
+    expect(importRoleAccess('ACCOUNTANT').canDelete).toBe(false);
     expect(importRoleAccess('MVO').canDelete).toBe(false);
   });
 

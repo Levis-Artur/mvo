@@ -116,11 +116,21 @@ beforeEach(() => {
 });
 
 describe('UserFormModal manager access scopes', () => {
+  it('offers only Accountant, Manager and MVO when creating a user', async () => {
+    render(<UserFormModal user={null} onClose={jest.fn()} onSaved={jest.fn()} />);
+    await waitForFormLoaded();
+    const role = screen.getByLabelText(/Роль/) as HTMLSelectElement;
+    expect(Array.from(role.options, (option) => [option.value, option.text])).toEqual([
+      ['ACCOUNTANT', 'Бухгалтер'],
+      ['ORG_MANAGER', 'Менеджер'],
+      ['MVO', 'Матеріально відповідальна особа'],
+    ]);
+  });
+
   it('shows the Ukrainian manager role and scopes only for ORG_MANAGER', async () => {
     const user = userEvent.setup();
     render(
       <UserFormModal
-        mode="users"
         user={null}
         onClose={jest.fn()}
         onSaved={jest.fn()}
@@ -138,7 +148,7 @@ describe('UserFormModal manager access scopes', () => {
     await user.selectOptions(role, 'ORG_MANAGER');
     expect(screen.getByText('Області доступу')).toBeTruthy();
 
-    await user.selectOptions(role, 'AUDITOR');
+    await user.selectOptions(role, 'ACCOUNTANT');
     expect(screen.queryByText('Області доступу')).toBeNull();
   });
 
@@ -146,7 +156,6 @@ describe('UserFormModal manager access scopes', () => {
     const user = userEvent.setup();
     render(
       <UserFormModal
-        mode="users"
         user={manager}
         onClose={jest.fn()}
         onSaved={jest.fn()}
@@ -171,7 +180,6 @@ describe('UserFormModal manager access scopes', () => {
     const user = userEvent.setup();
     render(
       <UserFormModal
-        mode="users"
         user={null}
         onClose={jest.fn()}
         onSaved={jest.fn()}
@@ -218,7 +226,6 @@ describe('UserFormModal manager access scopes', () => {
 
     render(
       <UserFormModal
-        mode="users"
         user={manager}
         onClose={jest.fn()}
         onSaved={jest.fn()}
@@ -242,7 +249,6 @@ describe('UserFormModal manager access scopes', () => {
     const user = userEvent.setup();
     render(
       <UserFormModal
-        mode="users"
         user={manager}
         onClose={jest.fn()}
         onSaved={jest.fn()}
@@ -274,7 +280,6 @@ describe('UserFormModal manager access scopes', () => {
     const onSaved = jest.fn();
     render(
       <UserFormModal
-        mode="users"
         user={null}
         onClose={jest.fn()}
         onSaved={onSaved}

@@ -15,6 +15,7 @@ import {
   ACCOUNTING_TRANSFER_EXPORT_ROLES,
   ACCOUNTING_TRANSFER_READ_ROLES,
   hasCapability,
+  roleCapabilities,
   IMPORT_READ_ROLES,
   IMPORT_WRITE_ROLES,
   INVENTORY_ITEM_ACCOUNTING_CARD_READ_ROLES,
@@ -29,6 +30,15 @@ import {
 } from './access-policy';
 
 describe('role access policy', () => {
+  it('defines exactly the remaining roles and keeps user administration OWNER-only', () => {
+    expect(Object.keys(roleCapabilities).sort()).toEqual([
+      'ACCOUNTANT', 'MVO', 'ORG_MANAGER', 'OWNER',
+    ]);
+    expect(Reflect.getMetadata(ROLES_KEY, UsersController)).toEqual([UserRole.OWNER]);
+    expect(STOCK_DOCUMENT_WRITE_ROLES).toEqual([UserRole.OWNER, UserRole.MVO]);
+    expect(IMPORT_WRITE_ROLES).toEqual([UserRole.OWNER, UserRole.ACCOUNTANT]);
+  });
+
   it('gives ORG_MANAGER scoped read capabilities only', () => {
     expect(hasCapability(UserRole.ORG_MANAGER, 'REFERENCE_DATA_READ')).toBe(true);
     expect(hasCapability(UserRole.ORG_MANAGER, 'STOCK_READ')).toBe(true);
@@ -135,14 +145,13 @@ describe('role access policy', () => {
     expect(STOCK_DOCUMENT_READ_ROLES).toContain(UserRole.MVO);
     expect(TRANSFER_TARGET_READ_ROLES).toContain(UserRole.MVO);
     expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.ACCOUNTANT);
-    expect(TRANSFER_TARGET_READ_ROLES).not.toContain(UserRole.AUDITOR);
     expect(hasCapability(UserRole.MVO, 'REFERENCE_DATA_READ')).toBe(false);
     expect(hasCapability(UserRole.MVO, 'IMPORT_READ')).toBe(false);
     expect(hasCapability(UserRole.MVO, 'IMPORT_WRITE')).toBe(false);
     expect(hasCapability(UserRole.MVO, 'MVO_SCOPED_ACCESS')).toBe(true);
     expect(TRANSACTION_READ_ROLES).not.toContain(UserRole.MVO);
     expect(TRANSACTION_READ_ROLES).toEqual(expect.arrayContaining([
-      UserRole.OWNER, UserRole.DPP_ADMIN, UserRole.AUDITOR,
+      UserRole.OWNER,
     ]));
   });
 
@@ -164,12 +173,6 @@ describe('role access policy', () => {
     expect(ACCOUNTING_ANALYTICS_READ_ROLES).toEqual([UserRole.OWNER]);
     expect(hasCapability(UserRole.ACCOUNTANT, 'ACCOUNTING_WORKSPACE_READ')).toBe(
       true,
-    );
-    expect(hasCapability(UserRole.DPP_ADMIN, 'ACCOUNTING_WORKSPACE_READ')).toBe(
-      false,
-    );
-    expect(hasCapability(UserRole.AUDITOR, 'ACCOUNTING_WORKSPACE_READ')).toBe(
-      false,
     );
     expect(hasCapability(UserRole.MVO, 'ACCOUNTING_WORKSPACE_READ')).toBe(false);
   });

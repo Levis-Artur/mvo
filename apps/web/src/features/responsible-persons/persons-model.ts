@@ -65,10 +65,10 @@ export function usersByResponsiblePerson(users: UserSummary[]) {
 
 export function personRoleAccess(role?: UserRole) {
   return {
-    readOnly: role === 'AUDITOR' || role === 'ACCOUNTANT',
-    canWrite: role === 'OWNER' || role === 'DPP_ADMIN',
+    readOnly: role === 'ACCOUNTANT',
+    canWrite: role === 'OWNER',
     canDelete: role === 'OWNER',
-    canCreateAccount: role === 'OWNER' || role === 'DPP_ADMIN',
+    canCreateAccount: role === 'OWNER',
   };
 }
 

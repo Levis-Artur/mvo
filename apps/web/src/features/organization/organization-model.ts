@@ -13,8 +13,8 @@ export type OrgForm =
 
 export function organizationRoleAccess(role?: UserRole) {
   return {
-    readOnly: role === 'AUDITOR',
-    canWrite: role === 'OWNER' || role === 'DPP_ADMIN',
+    readOnly: false,
+    canWrite: role === 'OWNER',
     canDelete: role === 'OWNER',
   };
 }

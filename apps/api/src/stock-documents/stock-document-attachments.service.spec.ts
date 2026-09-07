@@ -204,7 +204,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
     );
   });
 
-  it.each([UserRole.OWNER, UserRole.ACCOUNTANT, UserRole.AUDITOR, UserRole.DPP_ADMIN])(
+  it.each([UserRole.OWNER, UserRole.ACCOUNTANT])(
     'allows %s to preview an ISSUE attachment through global read permission',
     async (role) => {
       const { service } = createService(StockDocumentStatus.POSTED);

@@ -15,14 +15,6 @@ const owner = {
   mustChangePassword: false,
   responsiblePersonId: null,
 };
-const dppAdmin = {
-  id: 'dpp-id',
-  username: 'dpp',
-  role: UserRole.DPP_ADMIN,
-  isActive: true,
-  mustChangePassword: false,
-  responsiblePersonId: null,
-};
 const context = {
   ipAddress: '127.0.0.1',
   userAgent: 'jest',
@@ -111,13 +103,38 @@ function user(role: UserRole, overrides: Record<string, unknown> = {}) {
 }
 
 describe('UsersService', () => {
-  it('allows OWNER to create AUDITOR', async () => {
+  it.each([UserRole.ACCOUNTANT, UserRole.ORG_MANAGER, UserRole.MVO])(
+    'does not allow %s to list, create or update users', async (role) => {
+      const { service, prisma } = createService();
+      const actor = { ...owner, role };
+      await expect(service.findAll(actor)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.findOne(actor, 'target-id')).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.create(actor, {
+        username: 'new-mvo', role: UserRole.MVO, responsiblePersonId: 'person-id',
+      }, context)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service.update(actor, 'target-id', {
+        role: UserRole.ACCOUNTANT,
+      }, context)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(prisma.user.findFirst).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps OWNER access to the complete user registry', async () => {
     const { service, prisma } = createService();
-    prisma.user.create.mockResolvedValue(user(UserRole.AUDITOR));
+    await service.findAll(owner);
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+  });
+
+  it('allows OWNER to create ACCOUNTANT', async () => {
+    const { service, prisma } = createService();
+    prisma.user.create.mockResolvedValue(user(UserRole.ACCOUNTANT));
 
     const result = await service.create(
       owner,
-      { username: ' Auditor ', role: UserRole.AUDITOR },
+      { username: ' Accountant ', role: UserRole.ACCOUNTANT },
       context,
     );
 
@@ -125,28 +142,11 @@ describe('UsersService', () => {
     expect(prisma.user.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          username: 'auditor',
-          role: UserRole.AUDITOR,
+          username: 'accountant',
+          role: UserRole.ACCOUNTANT,
           passwordHash: 'hashed-password',
           createdById: owner.id,
         }),
-      }),
-    );
-  });
-
-  it('allows OWNER to create DPP_ADMIN', async () => {
-    const { service, prisma } = createService();
-    prisma.user.create.mockResolvedValue(user(UserRole.DPP_ADMIN));
-
-    await service.create(
-      owner,
-      { username: 'dpp', role: UserRole.DPP_ADMIN },
-      context,
-    );
-
-    expect(prisma.user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ role: UserRole.DPP_ADMIN }),
       }),
     );
   });
@@ -219,29 +219,29 @@ describe('UsersService', () => {
       { managementId: 'management-1' },
     ]);
     await expect(
-      service.findAccessScopes(dppAdmin, 'manager-id'),
+      service.findAccessScopes({ ...owner, role: UserRole.ACCOUNTANT }, 'manager-id'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     await expect(
-      service.replaceAccessScopes(dppAdmin, 'manager-id', [], context),
+      service.replaceAccessScopes({ ...owner, role: UserRole.ACCOUNTANT }, 'manager-id', [], context),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('atomically clears scopes when ORG_MANAGER changes to another role', async () => {
     const { service, prisma } = createService();
     prisma.user.findFirst.mockResolvedValue(user(UserRole.ORG_MANAGER));
-    prisma.user.update.mockResolvedValue(user(UserRole.AUDITOR));
+    prisma.user.update.mockResolvedValue(user(UserRole.ACCOUNTANT));
 
     await service.update(
       owner,
       'manager-id',
-      { role: UserRole.AUDITOR },
+      { role: UserRole.ACCOUNTANT },
       context,
     );
 
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          role: UserRole.AUDITOR,
+          role: UserRole.ACCOUNTANT,
           accessScopes: { deleteMany: {} },
         }),
       }),
@@ -309,42 +309,6 @@ describe('UsersService', () => {
     await expect(
       service.create(owner, { username: 'owner2', role: UserRole.OWNER }, context),
     ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('allows DPP_ADMIN to create MVO', async () => {
-    const { service, prisma } = createService();
-    prisma.responsiblePerson.findUnique.mockResolvedValue({
-      id: 'person-id',
-      isActive: true,
-      user: null,
-    });
-    prisma.user.create.mockResolvedValue(
-      user(UserRole.MVO, { responsiblePersonId: 'person-id' }),
-    );
-
-    await service.create(
-      dppAdmin,
-      { username: 'mvo', responsiblePersonId: 'person-id' },
-      context,
-    );
-
-    expect(prisma.user.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ role: UserRole.MVO }),
-      }),
-    );
-  });
-
-  it('does not allow DPP_ADMIN to create AUDITOR', async () => {
-    const { service } = createService();
-
-    await expect(
-      service.create(
-        dppAdmin,
-        { username: 'auditor', role: UserRole.AUDITOR },
-        context,
-      ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('does not create MVO without responsiblePersonId', async () => {
@@ -453,10 +417,8 @@ describe('UsersService', () => {
   });
 
   it.each([
-    UserRole.DPP_ADMIN,
     UserRole.ORG_MANAGER,
     UserRole.ACCOUNTANT,
-    UserRole.AUDITOR,
     UserRole.MVO,
   ])('rejects 2FA reset by %s', async (role) => {
     const { service, prisma } = createService();

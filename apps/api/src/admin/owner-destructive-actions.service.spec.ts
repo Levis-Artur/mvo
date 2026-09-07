@@ -194,7 +194,7 @@ describe('OwnerDestructiveActionsService', () => {
     delete process.env.ALLOW_BUSINESS_DATA_RESET;
   });
 
-  it.each([UserRole.MVO, UserRole.DPP_ADMIN, UserRole.AUDITOR])(
+  it.each([UserRole.MVO, UserRole.ACCOUNTANT, UserRole.ORG_MANAGER])(
     'rejects role %s',
     async (role) => {
       const { service } = createService();
@@ -487,7 +487,7 @@ describe('OwnerDestructiveActionsService', () => {
     const { service, prisma, tx } = createService();
     prisma.responsiblePerson.findUnique.mockResolvedValue({
       id: 'person-a', lastName: 'A', firstName: 'Person', middleName: null,
-      stockBalances: [], user: { id: 'linked-user', role: UserRole.DPP_ADMIN },
+      stockBalances: [], user: { id: 'linked-user', role: UserRole.ACCOUNTANT },
       _count: { stockTransactions: 0, importRows: 0 },
     });
     prisma.custodyBalance.count.mockResolvedValue(0);
@@ -502,7 +502,7 @@ describe('OwnerDestructiveActionsService', () => {
       id: 'person-a', lastName: 'A', firstName: 'Person', middleName: null,
     });
     tx.user.findUnique.mockResolvedValue({
-      id: 'linked-user', role: UserRole.DPP_ADMIN,
+      id: 'linked-user', role: UserRole.ACCOUNTANT,
     });
     tx.custodyBalance.findMany.mockResolvedValue([]);
     tx.stockDocument.findMany.mockResolvedValue([]);

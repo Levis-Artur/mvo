@@ -7,8 +7,6 @@ describe('AccountingController access', () => {
     const roles = Reflect.getMetadata(ROLES_KEY, AccountingController) as UserRole[];
     expect(roles).toEqual(expect.arrayContaining([
       UserRole.OWNER,
-      UserRole.DPP_ADMIN,
-      UserRole.AUDITOR,
     ]));
     expect(roles).not.toContain(UserRole.MVO);
     expect(roles).not.toContain(UserRole.ACCOUNTANT);
@@ -21,9 +19,7 @@ describe('AccountingController access', () => {
     ) as UserRole[];
     expect(roles).toEqual([
       UserRole.OWNER,
-      UserRole.DPP_ADMIN,
     ]);
-    expect(roles).not.toContain(UserRole.AUDITOR);
     expect(roles).not.toContain(UserRole.MVO);
   });
 
@@ -34,8 +30,6 @@ describe('AccountingController access', () => {
     ) as UserRole[];
     expect(roles).toEqual([
       UserRole.OWNER,
-      UserRole.DPP_ADMIN,
-      UserRole.AUDITOR,
     ]);
     expect(roles).not.toContain(UserRole.MVO);
   });
@@ -50,7 +44,7 @@ describe('AccountingController access', () => {
   });
 
   it.each(['movements', 'exportMovements', 'movementDetails'] as const)(
-    'limits %s to OWNER and ACCOUNTANT and keeps MVO denied',
+    'limits %s to OWNER and keeps MVO denied',
     (method) => {
       const roles = Reflect.getMetadata(
         ROLES_KEY,
@@ -77,13 +71,11 @@ describe('AccountingController access', () => {
     expect(controllerRoles).toEqual(
       expect.arrayContaining([
         UserRole.OWNER,
-        UserRole.DPP_ADMIN,
-        UserRole.AUDITOR,
       ]),
     );
   });
 
-  it('keeps batch history and download under read access for AUDITOR', () => {
+  it('keeps batch history and download under read access for OWNER', () => {
     expect(
       Reflect.getMetadata(ROLES_KEY, AccountingController.prototype.downloadBatch),
     ).toBeUndefined();

@@ -553,9 +553,7 @@ describe('StockDocumentsService standalone ISSUE', () => {
 
   it.each([
     UserRole.OWNER,
-    UserRole.DPP_ADMIN,
     UserRole.ACCOUNTANT,
-    UserRole.AUDITOR,
   ])('%s cannot create an ISSUE without MVO auth context', async (role) => {
     const h = harness();
     await expect(
@@ -821,27 +819,34 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects a balance owned by another MVO', async () => {
-    const h = harness();
-    const transferLine = line({ quantity: new Prisma.Decimal(20) });
-    h.tx.stockDocument.create.mockResolvedValue(
-      rawDocument(
-        StockDocumentStatus.POSTED,
-        StockDocumentType.MVO_TRANSFER,
-        [transferLine],
-      ),
-    );
-    h.tx.stockBalance.findUnique.mockResolvedValue({
-      id: balanceId,
-      responsiblePersonId: destinationId,
-      inventoryItemId: itemId,
-    });
+  it.each([
+    { accessScopes: [] },
+    { accessScopes: [{ managementId: null, serviceCode: 'IT' }] },
+  ])(
+    'rejects another MVO balance even with read scopes $accessScopes', async ({ accessScopes }) => {
+      const h = harness();
+      const transferLine = line({ quantity: new Prisma.Decimal(20) });
+      h.tx.stockDocument.create.mockResolvedValue(
+        rawDocument(
+          StockDocumentStatus.POSTED,
+          StockDocumentType.MVO_TRANSFER,
+          [transferLine],
+        ),
+      );
+      h.tx.stockBalance.findUnique.mockResolvedValue({
+        id: balanceId,
+        responsiblePersonId: destinationId,
+        inventoryItemId: itemId,
+      });
 
-    await expect(
-      h.service.createAndPostMvoTransfer(transferDto(), mvo, {}),
-    ).rejects.toThrow('не належить МВО-відправнику');
-    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
-  });
+      await expect(
+        h.service.createAndPostMvoTransfer(
+          transferDto(), user(UserRole.MVO, sourceId, accessScopes), {},
+        ),
+      ).rejects.toThrow('не належить МВО-відправнику');
+      expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects insufficient sender stock without changing recipient stock', async () => {
     const h = harness();
@@ -912,12 +917,12 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
     );
   });
 
-  it('keeps ACCOUNTANT read-only for transfers', async () => {
+  it.each([UserRole.ACCOUNTANT, UserRole.ORG_MANAGER])('denies transfer writes for %s', async (role) => {
     const h = harness();
     await expect(
       h.service.createAndPostMvoTransfer(
         transferDto(),
-        user(UserRole.ACCOUNTANT, null),
+        user(role, null),
         {},
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);

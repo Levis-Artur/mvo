@@ -2,9 +2,7 @@ export type EntityStatus = boolean;
 
 export type UserRole =
   | 'OWNER'
-  | 'AUDITOR'
   | 'ACCOUNTANT'
-  | 'DPP_ADMIN'
   | 'MVO'
   | 'ORG_MANAGER';
 

@@ -11,12 +11,29 @@ import {
   getManagerReadOnlyPresentationUser,
   getNavigationItems,
   requiresResponsiblePerson,
+  roleLabels,
 } from '../../lib/authz';
 import type { AuthUser } from '../../lib/types';
 
 const user = (role: AuthUser['role'], accessScopes: AuthUser['accessScopes'] = []) => ({ id: role, username: role, role, isActive: true, mustChangePassword: false, responsiblePersonId: role === 'MVO' ? 'person-1' : null, accessScopes }) as AuthUser;
 
 describe('AppShell presentation model', () => {
+  it('lists exactly the remaining roles and excludes OWNER from ordinary user creation', () => {
+    expect(roleLabels).toEqual({
+      OWNER: 'Власник',
+      ACCOUNTANT: 'Бухгалтер',
+      ORG_MANAGER: 'Менеджер',
+      MVO: 'Матеріально відповідальна особа',
+    });
+    expect(getAssignableUserRoles()).toEqual(['ACCOUNTANT', 'ORG_MANAGER', 'MVO']);
+    expect(getAssignableUserRoles('MVO')).toEqual(['ACCOUNTANT', 'ORG_MANAGER', 'MVO']);
+    expect(getAssignableUserRoles('OWNER')).toEqual(['OWNER']);
+    for (const role of ['OWNER', 'ACCOUNTANT', 'ORG_MANAGER', 'MVO'] as const) {
+      expect(canAccessPath(user(role), '/mvo-users', 'users')).toBe(false);
+    }
+    expect(canAccessPath(user('OWNER'), '/admin/users', 'users')).toBe(true);
+  });
+
   it('містить header, navigation, main і footer', () => {
     expect(APP_SHELL_REGIONS).toEqual(['header', 'navigation', 'main', 'footer']);
   });
@@ -29,7 +46,7 @@ describe('AppShell presentation model', () => {
 
   it('роль впливає на видимі пункти навігації', () => {
     expect(getNavigationItems(user('OWNER')).some((item) => item.href === '/admin/users')).toBe(true);
-    expect(getNavigationItems(user('AUDITOR')).some((item) => item.href === '/admin/users')).toBe(false);
+    expect(getNavigationItems(user('ACCOUNTANT')).some((item) => item.href === '/admin/users')).toBe(false);
     expect(getNavigationItems(user('MVO')).some((item) => item.href === '/my-stock')).toBe(true);
   });
 
@@ -40,14 +57,6 @@ describe('AppShell presentation model', () => {
     expect(paths('OWNER')).toEqual([
       '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
       '/transactions', '/transfers', '/accounting', '/accounting/mvo-transfers', '/admin/users', '/admin',
-    ]);
-    expect(paths('DPP_ADMIN')).toEqual([
-      '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers', '/accounting/mvo-transfers', '/mvo-users',
-    ]);
-    expect(paths('AUDITOR')).toEqual([
-      '/', '/persons', '/structure', '/nomenclature', '/stock', '/imports',
-      '/transactions', '/transfers', '/accounting/mvo-transfers',
     ]);
     expect(paths('ACCOUNTANT')).toEqual([
       '/accounting', '/profile',
@@ -74,15 +83,11 @@ describe('AppShell presentation model', () => {
     expect(canAccessPath(accountant, '/accounting', 'accounting')).toBe(true);
     expect(canAccessPath(user('MVO'), '/accounting', 'accounting')).toBe(false);
     expect(requiresResponsiblePerson('ACCOUNTANT')).toBe(false);
-    expect(getAssignableUserRoles('users')).toContain('ACCOUNTANT');
-    expect(getAssignableUserRoles('users')).toContain('ORG_MANAGER');
+    expect(getAssignableUserRoles()).toContain('ACCOUNTANT');
+    expect(getAssignableUserRoles()).toContain('ORG_MANAGER');
   });
 
-  it('зберігає AUDITOR у read-only режимі та не відкриває користувачів для MVO', () => {
-    const auditor = user('AUDITOR');
-    expect(can(auditor, 'read', 'stockDocuments')).toBe(true);
-    expect(can(auditor, 'write', 'stockDocuments')).toBe(false);
-    expect(can(auditor, 'write', 'imports')).toBe(false);
+  it('keeps user administration closed to MVO', () => {
     expect(getNavigationItems(user('MVO')).some((item) => item.resource === 'users')).toBe(false);
   });
 
@@ -124,7 +129,7 @@ describe('AppShell presentation model', () => {
     expect(getNavigationItems(user('ORG_MANAGER')).map((item) => item.href)).toEqual([
       '/persons', '/stock', '/profile',
     ]);
-    expect(getNavigationItems(user('AUDITOR', [
+    expect(getNavigationItems(user('OWNER', [
       { managementId: null, serviceCode: 'IT' },
     ])).some((item) => item.view === 'manager')).toBe(false);
   });

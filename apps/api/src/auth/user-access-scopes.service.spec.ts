@@ -146,8 +146,8 @@ describe('UserAccessScopesService', () => {
     });
   });
 
-  it('rejects scopes for roles outside MVO and ORG_MANAGER', async () => {
-    const prisma = prismaMock(UserRole.AUDITOR);
+  it.each([UserRole.OWNER, UserRole.ACCOUNTANT])('rejects scopes for %s', async (role) => {
+    const prisma = prismaMock(role);
 
     await expect(
       createService(prisma).replaceForUser('user-1', [

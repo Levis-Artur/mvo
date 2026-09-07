@@ -44,8 +44,6 @@ export type UserUiAccess = { visible: boolean; readOnly: boolean; destructive: b
 
 export function userUiAccess(role: UserRole): UserUiAccess {
   if (role === 'OWNER') return { visible: true, readOnly: false, destructive: true };
-  if (role === 'DPP_ADMIN') return { visible: true, readOnly: false, destructive: false };
-  if (role === 'AUDITOR') return { visible: true, readOnly: true, destructive: false };
   return { visible: false, readOnly: true, destructive: false };
 }
 

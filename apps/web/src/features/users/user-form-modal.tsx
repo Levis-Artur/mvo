@@ -2,7 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from 'react';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
-import { getAssignableUserRoles, requiresResponsiblePerson, resolveUserFormRole, roleLabels } from '@/lib/authz';
+import { getAssignableUserRoles, requiresResponsiblePerson, roleLabels } from '@/lib/authz';
 import type {
   Management,
   ResponsiblePerson,
@@ -27,8 +27,7 @@ function scopeDraft(
   return { ...scope, key: `access-scope-${nextScopeKey}` };
 }
 
-export function UserFormModal({ mode, user, onClose, onSaved }: {
-  mode: 'users' | 'mvoUsers';
+export function UserFormModal({ user, onClose, onSaved }: {
   user: UserSummary | null;
   onClose: () => void;
   onSaved: (temporaryPassword?: string) => void;
@@ -44,17 +43,16 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
   const [loadingPersons, setLoadingPersons] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const ownerMode = mode === 'users';
-  const selectedRole = resolveUserFormRole(mode, role);
+  const selectedRole = role;
   const isManager = selectedRole === 'ORG_MANAGER';
-  const hasAccessScopes = ownerMode && (isManager || selectedRole === 'MVO');
+  const hasAccessScopes = isManager || selectedRole === 'MVO';
 
   useEffect(() => {
     Promise.all([
       fetchAllPages((pagination) => usersService.responsiblePersons({ ...pagination, isActive: true })),
       usersService.managements(),
       usersService.services(),
-      ownerMode && (user?.role === 'ORG_MANAGER' || user?.role === 'MVO')
+      (user?.role === 'ORG_MANAGER' || user?.role === 'MVO')
         ? usersService.userAccessScopes(user.id)
         : Promise.resolve([]),
     ])
@@ -147,11 +145,11 @@ export function UserFormModal({ mode, user, onClose, onSaved }: {
         {loadingPersons ? <LoadingState label="Завантаження реєстру МВО…" /> : null}
         <FormField label="Логін" required><Input autoFocus minLength={3} value={username} onChange={(event) => setUsername(event.target.value)} /></FormField>
         <FormField label="Роль" required>
-          {ownerMode ? <Select value={role} onChange={(event) => {
+          <Select value={role} onChange={(event) => {
             const nextRole = event.target.value as UserRole;
             setRole(nextRole);
             if (!requiresResponsiblePerson(nextRole)) setResponsiblePersonId('');
-          }}>{getAssignableUserRoles(mode, user?.role).map((option) => <option key={option} value={option}>{roleLabels[option]}</option>)}</Select> : <Input readOnly value={roleLabels.MVO} />}
+          }}>{getAssignableUserRoles(user?.role).map((option) => <option key={option} value={option}>{roleLabels[option]}</option>)}</Select>
         </FormField>
         <FormField label="Пов’язаний МВО" required={requiresResponsiblePerson(role)}>
           <Select disabled={!requiresResponsiblePerson(role)} value={responsiblePersonId} onChange={(event) => setResponsiblePersonId(event.target.value)}>

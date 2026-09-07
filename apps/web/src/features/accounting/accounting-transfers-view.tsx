@@ -184,7 +184,7 @@ export function AccountingTransfersView({ initialTab = 'register', user, embedde
 
   return <section className="grid min-w-0 gap-4">
     <PageHeader
-      action={tab === 'register' && user && user.role !== 'AUDITOR' ? <Button disabled={exporting} type="button" onClick={() => void exportCsv()}>{exporting ? 'Формування…' : 'Експортувати CSV'}</Button> : undefined}
+      action={tab === 'register' && user?.role === 'OWNER' ? <Button disabled={exporting} type="button" onClick={() => void exportCsv()}>{exporting ? 'Формування…' : 'Експортувати CSV'}</Button> : undefined}
       description="Нові передачі між МВО для бухгалтерського опрацювання. Експорт не змінює залишки та не пов’язує передачі з імпортами."
       icon="journal"
       title="Передачі МВО для бухгалтерії"

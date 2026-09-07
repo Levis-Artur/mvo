@@ -313,7 +313,7 @@ export class StockDocumentAttachmentsService {
       sourceResponsiblePersonId: string;
     },
   ) {
-    if (actor.role === UserRole.OWNER || actor.role === UserRole.DPP_ADMIN) {
+    if (actor.role === UserRole.OWNER) {
       return;
     }
     if (

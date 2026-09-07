@@ -27,11 +27,9 @@ describe('ImportsController access', () => {
     (method) => {
       expect(roles(ImportsController.prototype[method])).toEqual([
         UserRole.OWNER,
-        UserRole.DPP_ADMIN,
         UserRole.ACCOUNTANT,
       ]);
       expect(roles(ImportsController.prototype[method])).not.toContain(UserRole.MVO);
-      expect(roles(ImportsController.prototype[method])).not.toContain(UserRole.AUDITOR);
     },
   );
 });

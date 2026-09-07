@@ -13,7 +13,7 @@ function user(role: UserRole): AuthUser {
 }
 
 describe('inventory item card route access', () => {
-  it.each(['OWNER', 'DPP_ADMIN', 'AUDITOR'] as UserRole[])(
+  it.each(['OWNER'] as UserRole[])(
     'allows %s to open a global inventory item card',
     (role) => {
       expect(
@@ -45,10 +45,10 @@ describe('inventory item card route access', () => {
     )).toBe(false);
   });
 
-  it.each(['AUDITOR'] as UserRole[])(
-    'keeps %s read-only in nomenclature',
+  it.each(['ORG_MANAGER'] as UserRole[])(
+    'does not give %s access to global nomenclature',
     (role) => {
-      expect(can(user(role), 'read', 'nomenclature')).toBe(true);
+      expect(can(user(role), 'read', 'nomenclature')).toBe(false);
       expect(can(user(role), 'write', 'nomenclature')).toBe(false);
     },
   );
