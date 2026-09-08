@@ -8,6 +8,7 @@ export type DataTableScrollMode = 'natural' | 'horizontal' | 'bounded';
 export type DataTableResponsiveMode = 'table' | 'cards' | 'cards-wide';
 export type DataTableColumn = {
   label: string;
+  hint?: string;
   align?: TableAlign;
   numeric?: boolean;
   actions?: boolean;
@@ -32,5 +33,5 @@ export function DataTable({ ariaLabel, columns, headers, rows, rowKeys, loading 
     column?.actions ? 'data-table__actions' : '',
     column?.className ?? '',
   ].filter(Boolean).join(' ');
-  return <div className="data-table-shell"><div className={`${scrollMode === 'natural' ? '' : 'compact-scrollbar '}data-table-scroll`} data-scroll-mode={scrollMode}><table aria-label={ariaLabel} className={`data-table ${tableClassName}`} data-responsive={responsiveMode}><thead><tr>{normalizedColumns.map((column) => <th className={columnClassName(column)} key={column.label} scope="col">{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={rowKeys?.[index] ?? index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); } }} tabIndex={onRowClick ? 0 : undefined}>{row.map((cell, cellIndex) => <td className={columnClassName(normalizedColumns[cellIndex])} data-label={normalizedColumns[cellIndex]?.label} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
+  return <div className="data-table-shell"><div className={`${scrollMode === 'natural' ? '' : 'compact-scrollbar '}data-table-scroll`} data-scroll-mode={scrollMode}><table aria-label={ariaLabel} className={`data-table ${tableClassName}`} data-responsive={responsiveMode}><thead><tr>{normalizedColumns.map((column) => <th className={columnClassName(column)} key={column.label} scope="col">{column.label}{column.hint ? <span aria-label={column.hint} className="ml-1 cursor-help text-[var(--color-text-secondary)]" title={column.hint}>ⓘ</span> : null}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr aria-selected={selectedIndex === index ? 'true' : undefined} className={onRowClick ? 'data-table__interactive' : undefined} key={rowKeys?.[index] ?? index} onClick={() => onRowClick?.(index)} onKeyDown={(event) => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(index); } }} tabIndex={onRowClick ? 0 : undefined}>{row.map((cell, cellIndex) => <td className={columnClassName(normalizedColumns[cellIndex])} data-label={normalizedColumns[cellIndex]?.label} key={cellIndex}>{cell}</td>)}</tr>)}</tbody></table></div><footer className="data-table__footer">Записів у таблиці: {rows.length}</footer></div>;
 }

@@ -213,6 +213,7 @@ export function MyStockView() {
     <section className="grid min-w-0 gap-4">
       <PageHeader
         description="Знайдіть потрібну позицію та відкрийте її картку."
+        helpHref="/help#my-property"
         icon="box"
         title="Моє майно"
       />
@@ -443,6 +444,7 @@ function myStockColumns(section: MyPropertySection): DataTableColumn[] {
   if (section === 'DIRECT') {
     columns.push({
       label: 'Нереалізовано',
+      hint: 'Кількість майна, за яким оформлена видача, але реалізація ще не завершена.',
       className: 'my-stock-table__unrealized',
       numeric: true,
     });

@@ -38,6 +38,7 @@ export function AccountingImportsHome({
     <section className="accounting-imports">
       <PageHeader
         description="Завантажуйте відомості для оновлення залишків матеріально відповідальних осіб."
+        helpHref="/help#accounting"
         icon="upload"
         title="Бухгалтерія"
       />

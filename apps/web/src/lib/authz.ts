@@ -43,7 +43,8 @@ export type AppView =
   | 'manager'
   | 'accounting'
   | 'accounting-transfers'
-  | 'profile';
+  | 'profile'
+  | 'help';
 
 export type ToolbarActionId =
   | 'create'
@@ -274,6 +275,7 @@ const navigationLabels: Record<AppView, string> = {
   manager: 'Менеджерський перегляд',
   accounting: 'Бухгалтерія',
   'accounting-transfers': 'Передачі МВО для бухгалтерії',
+  help: 'Посібник користувача',
 };
 
 export function getNavigationItems(user: AuthUser | null) {
@@ -341,6 +343,9 @@ export function canAccessPath(
   pathname: string,
   view: AppView,
 ) {
+  if (view === 'help' && pathname === '/help') {
+    return Boolean(user);
+  }
   if (
     view === 'nomenclature' &&
     pathname.startsWith('/inventory-items/') &&

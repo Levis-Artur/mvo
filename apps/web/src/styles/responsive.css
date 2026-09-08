@@ -87,5 +87,6 @@
   .dashboard-metrics { grid-template-columns: minmax(0, 1fr); }
   .app-user { gap: var(--space-2); }
   .app-user__api { display: none; }
+  .app-user__help-label { display: none; }
   .app-user__profile svg { display: none; }
 }

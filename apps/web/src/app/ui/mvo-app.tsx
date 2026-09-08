@@ -21,6 +21,7 @@ import { UsersView } from '@/features/users/users-view';
 import { AccountingTransfersView } from '@/features/accounting/accounting-transfers-view';
 import { AccountingWorkspaceView } from '@/features/accounting/accounting-workspace-view';
 import { ManagerReadOnlyView } from '@/features/manager/manager-read-only-view';
+import { HelpView } from '@/features/help/help-view';
 
 export type View = AppView;
 
@@ -45,7 +46,7 @@ export function MvoApp({ initialView = 'home', initialImportId, initialAccountin
 
   function selectView(nextView: View) { setView(nextView); router.push(getViewHref(user, nextView)); }
 
-  return <AppShell apiState={apiState} currentPage={currentPage?.label ?? 'Головна'} navigationItems={navigationItems} navRef={topNavRef} user={user} userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''} onLogout={logout} onSelectView={selectView}>
+  return <AppShell apiState={apiState} currentPage={view === 'help' ? 'Посібник користувача' : currentPage?.label ?? 'Головна'} navigationItems={navigationItems} navRef={topNavRef} user={user} userLabel={user ? `${user.username} · ${roleLabels[user.role]}` : ''} onLogout={logout} onSelectView={selectView}>
     {view === 'home' ? <DashboardView apiCheckedAt={apiCheckedAt} apiState={apiState} onNavigate={selectView} /> : null}
     {view === 'persons' ? <PersonsView /> : null}
     {view === 'structure' ? <StructureView /> : null}
@@ -60,6 +61,7 @@ export function MvoApp({ initialView = 'home', initialImportId, initialAccountin
     {view === 'manager' ? <ManagerReadOnlyView /> : null}
     {view === 'accounting' ? <AccountingWorkspaceView /> : null}
     {view === 'accounting-transfers' ? <AccountingTransfersView initialTab={initialAccountingTab} user={user} /> : null}
+    {view === 'help' && user ? <HelpView user={user} /> : null}
     {view === 'reports' ? <PlaceholderView title="Звіти" description="Розділ звітів буде підключено після появи відповідних можливостей API." /> : null}
     {view === 'administration' ? <AdministrationView /> : null}
   </AppShell>;

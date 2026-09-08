@@ -49,6 +49,7 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
         {user.role !== 'MVO' ? <Button disabled={controller.loading} icon="refresh" variant="outline" type="button" onClick={() => void controller.load()}>Оновити</Button> : null}
       </div>}
       description={user.role === 'MVO' ? 'Створюйте передачі майна іншим МВО та переглядайте їхню історію.' : 'Історія документів руху майна.'}
+      helpHref={user.role === 'MVO' ? '/help#transfers' : undefined}
       icon="transfer"
       title={user.role === 'MVO' ? 'Передачі' : 'Документи руху майна'}
     />

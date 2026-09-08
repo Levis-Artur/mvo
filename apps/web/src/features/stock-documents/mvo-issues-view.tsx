@@ -288,6 +288,7 @@ export function MvoIssuesView() {
           </div>
         }
         description="Оформлюйте видачу майна та переглядайте історію проведених документів."
+        helpHref="/help#issues"
         icon="journal"
         title="Видачі"
       />

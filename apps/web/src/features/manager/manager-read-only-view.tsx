@@ -24,6 +24,7 @@ export function ManagerReadOnlyView() {
     <section className="grid min-w-0 gap-4">
       <PageHeader
         description="Додатковий доступ у вибраних областях. Усі дані доступні лише для перегляду. Операції з майном залишаються доступними тільки у власному обліку МВО."
+        helpHref="/help#manager"
         icon="shield"
         title="Менеджерський перегляд"
       />
