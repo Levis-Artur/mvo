@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { PatrolPoliceLogo } from '@/components/brand/patrol-police-logo';
 
 export function AuthPageShell({ title, description, children }: {
   title: string;
@@ -10,7 +11,7 @@ export function AuthPageShell({ title, description, children }: {
       <section className="auth-panel" aria-labelledby="auth-title">
         <header className="auth-panel__header">
           <div className="auth-panel__brand" aria-label="Облік майна МВО">
-            <span className="auth-panel__mark" aria-hidden="true">МВО</span>
+            <PatrolPoliceLogo className="auth-panel__logo" />
             <div>
               <strong>Облік майна МВО</strong>
               <span>Інформаційна система обліку майна</span>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
+import { PatrolPoliceLogo } from '@/components/brand/patrol-police-logo';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button, Card, ErrorState, LoadingState, StatusBadge } from '@/components/ui';
 import { apiClient } from '@/lib/api-client';
@@ -40,7 +41,7 @@ export function ProfileView() {
   }
 
   return <main className="min-h-screen bg-[var(--color-workspace)]">
-    <header className="app-topbar"><div className="app-topbar__inner"><div className="app-brand"><span className="app-brand__badge">МВО</span><strong className="app-brand__title">Облік майна МВО</strong></div><Button variant="ghost" type="button" onClick={() => void logout().catch(() => undefined)}>Вийти</Button></div></header>
+    <header className="app-topbar"><div className="app-topbar__inner"><div className="app-brand"><div className="app-brand__mark"><PatrolPoliceLogo className="app-brand__logo" /></div><span className="app-brand__badge">МВО</span><strong className="app-brand__title">Облік майна МВО</strong></div><Button variant="ghost" type="button" onClick={() => void logout().catch(() => undefined)}>Вийти</Button></div></header>
     <div className="page-container grid gap-4">
       <PageHeader icon="profile" title="Профіль" description="Облікові дані, організаційна належність і дії безпеки." action={<Button variant="outline" type="button" onClick={() => router.push('/')}>До системи</Button>} />
       {error ? <ErrorState message={error} /> : null}

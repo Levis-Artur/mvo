@@ -88,6 +88,14 @@ beforeEach(() => {
 });
 
 describe('mandatory 2FA login page', () => {
+  it('shows the official Patrol Police logo', () => {
+    render(<LoginPage />);
+
+    expect(
+      screen.getByRole('img', { name: 'Патрульна поліція України' }).getAttribute('src'),
+    ).toContain('patrol-police-logo.png');
+  });
+
   it('changes a temporary password before starting 2FA enrollment', async () => {
     mockedApi.changePasswordPreAuth.mockResolvedValue({
       requiresPreAuth: true,

@@ -1,6 +1,7 @@
 'use client';
 
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import qrcode from 'qrcode-generator';
 import { AuthPageShell } from '@/components/auth/auth-page-shell';
@@ -348,7 +349,13 @@ function TwoFactorQrCode({ value }: { value: string }) {
 
   return (
     <div className="auth-qr-box">
-      <img alt="QR-код для налаштування двофакторної автентифікації" src={dataUrl} />
+      <Image
+        unoptimized
+        alt="QR-код для налаштування двофакторної автентифікації"
+        height={280}
+        src={dataUrl}
+        width={280}
+      />
     </div>
   );
 }
