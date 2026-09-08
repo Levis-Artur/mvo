@@ -3,6 +3,7 @@ import Image from 'next/image';
 export function PatrolPoliceLogo({ className }: { className: string }) {
   return (
     <Image
+      unoptimized
       alt="Патрульна поліція України"
       className={className}
       height={974}

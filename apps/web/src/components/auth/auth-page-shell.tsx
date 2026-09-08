@@ -10,11 +10,11 @@ export function AuthPageShell({ title, description, children }: {
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="auth-title">
         <header className="auth-panel__header">
-          <div className="auth-panel__brand" aria-label="Облік майна МВО">
+          <div className="auth-panel__brand" aria-label="Інформаційна система обліку майна">
             <PatrolPoliceLogo className="auth-panel__logo" />
             <div>
-              <strong>Облік майна МВО</strong>
-              <span>Інформаційна система обліку майна</span>
+              <strong>Інформаційна система обліку майна</strong>
+              <span>Патрульна поліція України</span>
             </div>
           </div>
           <h1 id="auth-title">{title}</h1>

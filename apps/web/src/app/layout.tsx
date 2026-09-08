@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Облік майна МВО',
+  title: 'Інформаційна система обліку майна',
   description:
     'Централізований облік надходжень, залишків, видачі та передачі майна',
 };
