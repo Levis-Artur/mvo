@@ -16,6 +16,7 @@ export function RecipientCombobox({
   targets,
   sourceId,
   value,
+  selectedLabel,
   onChange,
 }: {
   id?: string;
@@ -25,7 +26,8 @@ export function RecipientCombobox({
   targets: TransferTarget[];
   sourceId: string;
   value: string;
-  onChange: (id: string) => void;
+  selectedLabel: string;
+  onChange: (id: string, label: string) => void;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -33,19 +35,22 @@ export function RecipientCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
   const selected = targets.find((target) => target.id === value);
   const [query, setQuery] = useState(
-    selected ? personOptionLabel(selected) : '',
+    selectedLabel || (selected ? personOptionLabel(selected) : ''),
   );
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const options = filterRecipientOptions(targets, sourceId, query);
 
   useEffect(() => {
-    if (!open) setQuery(selected ? personOptionLabel(selected) : '');
-  }, [open, selected]);
+    if (!open) {
+      setQuery(selectedLabel || (selected ? personOptionLabel(selected) : ''));
+    }
+  }, [open, selected, selectedLabel]);
 
   function select(target: TransferTarget) {
-    onChange(target.id);
-    setQuery(personOptionLabel(target));
+    const label = personOptionLabel(target);
+    onChange(target.id, label);
+    setQuery(label);
     setOpen(false);
   }
 
@@ -77,13 +82,18 @@ export function RecipientCombobox({
         role="combobox"
         value={query}
         onChange={(event) => {
-          setQuery(event.target.value);
+          const nextQuery = event.target.value;
+          setQuery(nextQuery);
           setOpen(true);
           setActiveIndex(0);
-          if (value) onChange('');
+          if (!nextQuery && value) onChange('', '');
         }}
-        onFocus={() => {
-          setQuery('');
+        onFocus={(event) => {
+          if (value) {
+            event.currentTarget.select();
+            setOpen(false);
+            return;
+          }
           setOpen(true);
           setActiveIndex(0);
         }}

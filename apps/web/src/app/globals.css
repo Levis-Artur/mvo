@@ -19,6 +19,17 @@ body {
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
+h1, h2, h3, h4,
+.app-brand__title,
+.auth-panel__brand strong,
+.main-navigation__item,
+.ui-card__header,
+.btn,
+details > summary {
+  font-family: var(--font-heading);
+}
+h1, h2, .app-brand__title, .auth-panel__brand strong { font-weight: 700; }
+h3, h4, .main-navigation__item, .btn, details > summary { font-weight: 600; }
 :focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }

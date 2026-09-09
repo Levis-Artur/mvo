@@ -65,9 +65,12 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     (document?.documentDate ?? new Date().toISOString()).slice(0, 10),
   );
   const [sourceId, setSourceId] = useState(initialSource);
-  const [destinationId, setDestinationId] = useState(
-    document?.destinationResponsiblePersonId ?? '',
-  );
+  const initialDestinationId = document?.destinationResponsiblePersonId ?? '';
+  const [destinationId, setDestinationId] = useState(initialDestinationId);
+  const [destinationLabel, setDestinationLabel] = useState(() => {
+    const target = transferTargets.find(({ id }) => id === initialDestinationId);
+    return target ? personOptionLabel(target) : '';
+  });
   const [recipientName, setRecipientName] = useState(
     document?.recipientName ?? '',
   );
@@ -121,6 +124,12 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     );
   }, [document?.attachments]);
 
+  useEffect(() => {
+    if (!destinationId || destinationLabel) return;
+    const target = transferTargets.find(({ id }) => id === destinationId);
+    if (target) setDestinationLabel(personOptionLabel(target));
+  }, [destinationId, destinationLabel, transferTargets]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const input: StockDocumentInput = {
@@ -167,6 +176,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   function changeSource(id: string) {
     setSourceId(id);
     setDestinationId('');
+    setDestinationLabel('');
     setLines([]);
     setDirty(true);
     void onSourceChange(id);
@@ -332,8 +342,10 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                     sourceId={sourceId}
                     targets={transferTargets}
                     value={destinationId}
-                    onChange={(id) => {
+                    selectedLabel={destinationLabel}
+                    onChange={(id, label) => {
                       setDestinationId(id);
+                      setDestinationLabel(label);
                       setDirty(true);
                     }}
                   />

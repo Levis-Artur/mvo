@@ -60,7 +60,6 @@
   .ui-modal[data-size='fullscreen'] .ui-modal__body { padding: var(--space-3); }
   .stock-document-form-fields { grid-template-columns: minmax(0, 1fr); }
   .stock-document-form-fields > .form-field:last-child { grid-column: auto; }
-  .recipient-combobox__list { max-width: calc(100vw - (2 * var(--space-3))); }
   .attachment-preview__toolbar { justify-content: flex-start; }
   .attachment-preview__toolbar output { min-width: 0; flex: 1 1 8rem; }
   .attachment-preview__pdf { min-height: calc(100dvh - 11rem); }

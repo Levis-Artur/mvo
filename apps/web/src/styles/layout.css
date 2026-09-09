@@ -6,7 +6,7 @@
 .app-brand { display: flex; min-width: 0; align-items: center; gap: var(--space-3); }
 .app-brand__mark { display: grid; width: 38px; height: 40px; flex: 0 0 auto; place-items: center; }
 .app-brand__logo { display: block; width: 36px; height: 36px; object-fit: contain; }
-.app-brand__title { overflow: hidden; font-size: var(--text-lg); font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.app-brand__title { overflow: hidden; font-size: var(--text-lg); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .app-user { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-sm); }
 .app-topbar .btn-ghost:hover:not(:disabled) { background: var(--color-on-dark-hover); color: var(--color-on-dark); }
 .main-navigation { min-height: var(--nav-height); border-top: 1px solid var(--color-on-dark-divider); background: var(--color-navy-900); color: var(--color-header-text); }

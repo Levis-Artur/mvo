@@ -1,11 +1,17 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Roboto_Condensed } from 'next/font/google';
 import { AuthProvider } from './ui/auth-context';
 import './globals.css';
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   variable: '--font-inter',
+});
+
+const robotoCondensed = Roboto_Condensed({
+  subsets: ['latin', 'cyrillic'],
+  variable: '--font-roboto-condensed',
+  weight: ['600', '700'],
 });
 
 export const metadata: Metadata = {
@@ -21,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="uk">
-      <body className={inter.variable}>
+      <body className={`${inter.variable} ${robotoCondensed.variable}`}>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
