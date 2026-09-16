@@ -106,9 +106,6 @@ describe('role access policy', () => {
     expect(roles(InventoryItemsController.prototype.transferHistory)).toContain(
       UserRole.ORG_MANAGER,
     );
-    expect(roles(StockDocumentsController.prototype.create)).not.toContain(
-      UserRole.ORG_MANAGER,
-    );
     expect(
       roles(StockDocumentsController.prototype.createAndPostMvoTransfer),
     ).not.toContain(UserRole.ORG_MANAGER);

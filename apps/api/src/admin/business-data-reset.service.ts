@@ -28,7 +28,6 @@ LOCK TABLE
   "StockDocumentLine",
   "StockDocument",
   "StockBalance",
-  "CustodyBalance",
   "ImportRow",
   "ImportBatch",
   "InventoryItem",
@@ -65,13 +64,11 @@ export type BusinessDataCounts = {
   units: number;
   inventoryItems: number;
   stockBalances: number;
-  custodyBalances: number;
   stockDocuments: number;
   mvoTransfers: number;
   issues: number;
   childIssues: number;
   legacyIssues: number;
-  legacyDocuments: number;
   stockDocumentLines: number;
   stockDocumentAttachments: number;
   issueRealizations: number;
@@ -290,7 +287,6 @@ export class BusinessDataResetService {
     await tx.stockDocument.deleteMany({});
 
     await tx.stockBalance.deleteMany({});
-    await tx.custodyBalance.deleteMany({});
     await tx.importRow.deleteMany({});
     await tx.importBatch.deleteMany({});
     await tx.inventoryItem.deleteMany({});
@@ -352,13 +348,11 @@ export class BusinessDataResetService {
       units,
       inventoryItems,
       stockBalances,
-      custodyBalances,
       stockDocuments,
       mvoTransfers,
       issues,
       childIssues,
       legacyIssues,
-      legacyDocuments,
       stockDocumentLines,
       stockDocumentAttachments,
       issueRealizations,
@@ -383,7 +377,6 @@ export class BusinessDataResetService {
       client.unit.count(),
       client.inventoryItem.count(),
       client.stockBalance.count(),
-      client.custodyBalance.count(),
       client.stockDocument.count(),
       client.stockDocument.count({
         where: { type: StockDocumentType.MVO_TRANSFER },
@@ -399,13 +392,6 @@ export class BusinessDataResetService {
         where: {
           type: StockDocumentType.ISSUE,
           sourceTransferId: null,
-        },
-      }),
-      client.stockDocument.count({
-        where: {
-          type: {
-            in: [StockDocumentType.TRANSFER, StockDocumentType.ASSIGNMENT],
-          },
         },
       }),
       client.stockDocumentLine.count(),
@@ -431,13 +417,11 @@ export class BusinessDataResetService {
       units,
       inventoryItems,
       stockBalances,
-      custodyBalances,
       stockDocuments,
       mvoTransfers,
       issues,
       childIssues,
       legacyIssues,
-      legacyDocuments,
       stockDocumentLines,
       stockDocumentAttachments,
       issueRealizations,
@@ -529,13 +513,11 @@ function businessCountLines(counts: BusinessDataCounts) {
     `Units: ${counts.units}`,
     `InventoryItems: ${counts.inventoryItems}`,
     `StockBalances: ${counts.stockBalances}`,
-    `CustodyBalances: ${counts.custodyBalances}`,
     `StockDocuments: ${counts.stockDocuments}`,
     `MVO_TRANSFER documents: ${counts.mvoTransfers}`,
     `ISSUE documents: ${counts.issues}`,
     `Child ISSUE documents: ${counts.childIssues}`,
     `Legacy/standalone ISSUE documents: ${counts.legacyIssues}`,
-    `Legacy TRANSFER/ASSIGNMENT documents: ${counts.legacyDocuments}`,
     `StockDocumentLines: ${counts.stockDocumentLines}`,
     `StockDocumentAttachments: ${counts.stockDocumentAttachments}`,
     `IssueRealizations: ${counts.issueRealizations}`,

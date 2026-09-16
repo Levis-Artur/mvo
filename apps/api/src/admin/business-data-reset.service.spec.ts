@@ -29,13 +29,11 @@ function initialState(): ResetState {
     units: 2,
     inventoryItems: 4,
     stockBalances: 3,
-    custodyBalances: 2,
     stockDocuments: 5,
     mvoTransfers: 1,
     issues: 2,
     childIssues: 1,
     legacyIssues: 1,
-    legacyDocuments: 2,
     stockDocumentLines: 6,
     stockDocumentAttachments: 2,
     issueRealizations: 2,
@@ -133,10 +131,6 @@ function harness() {
       count: count('stockBalances'),
       deleteMany: remove('stockBalances'),
     },
-    custodyBalance: {
-      count: count('custodyBalances'),
-      deleteMany: remove('custodyBalances'),
-    },
     stockDocument: {
       count: jest.fn(
         async (args?: {
@@ -152,7 +146,6 @@ function harness() {
             if (args?.where?.sourceTransferId) return state.childIssues;
             return state.issues;
           }
-          if (typeof type === 'object') return state.legacyDocuments;
           return state.stockDocuments;
         },
       ),
@@ -164,7 +157,6 @@ function harness() {
         state.issues = 0;
         state.childIssues = 0;
         state.legacyIssues = 0;
-        state.legacyDocuments = 0;
         return { count: deleted };
       }),
     },
@@ -347,7 +339,6 @@ describe('BusinessDataResetService', () => {
     expect(tx.management.deleteMany).toHaveBeenCalledWith({});
     expect(tx.inventoryItem.deleteMany).toHaveBeenCalledWith({});
     expect(tx.stockBalance.deleteMany).toHaveBeenCalledWith({});
-    expect(tx.custodyBalance.deleteMany).toHaveBeenCalledWith({});
     expect(tx.stockTransaction.deleteMany).toHaveBeenCalledWith({});
     expect(tx.stockDocument.deleteMany).toHaveBeenCalledWith({});
     expect(tx.importRow.deleteMany).toHaveBeenCalledWith({});

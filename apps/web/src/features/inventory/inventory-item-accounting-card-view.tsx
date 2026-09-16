@@ -280,9 +280,6 @@ export function InventoryItemAccountingCardView({
           user={user}
           onCancel={() => undefined}
           onClose={() => controller.setSelectedDocument(null)}
-          onDelete={() => undefined}
-          onEdit={() => undefined}
-          onPost={() => undefined}
         />
       ) : null}
     </section>

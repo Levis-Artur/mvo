@@ -10,16 +10,16 @@ import {
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
 import { StockDocumentAttachmentList } from './stock-document-attachment-list';
 
-export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onEdit, onPost, onCancel, onDelete, onViewIssue, onOpenSourceTransfer, onClose }: {
+export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onCancel, onViewIssue, onOpenSourceTransfer, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
   readOnly?: boolean;
-  onEdit: () => void; onPost: () => void; onCancel: () => void; onDelete: () => void;
+  onCancel: () => void;
   onViewIssue?: (issueId: string) => void;
   onOpenSourceTransfer?: (transferId: string) => void;
   onClose: () => void;
 }) {
   const actions = readOnly
-    ? { edit: false, post: false, cancel: false, remove: false }
+    ? { cancel: false }
     : lifecycleActions(document, user);
   const direction = documentDirectionPresentation(document);
   const recipient = document.destinationResponsiblePerson
@@ -30,10 +30,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   return <Modal
     closeOnEscape={!loading}
     footer={<>
-      {actions.edit ? <Button disabled={loading} variant="outline" type="button" onClick={onEdit}>Редагувати</Button> : null}
-      {actions.post ? <Button disabled={loading} type="button" onClick={onPost}>Провести</Button> : null}
       {actions.cancel ? <Button disabled={loading} variant="danger" type="button" onClick={onCancel}>Скасувати документ</Button> : null}
-      {actions.remove ? <Button disabled={loading} variant="danger" type="button" onClick={onDelete}>Видалити чернетку</Button> : null}
       <Button disabled={loading} variant="outline" type="button" onClick={onClose}>Закрити</Button>
     </>}
     onClose={onClose}
@@ -43,7 +40,6 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
     <div className="grid gap-4 text-sm">
       {error ? <ErrorState message={error} /> : null}
       {document.type === 'MVO_TRANSFER' && document.accountingExportState === 'EXPORTED' ? <div className="ui-alert" data-tone="info" role="status"><strong>Передано бухгалтерії</strong><span>Звичайне скасування цієї передачі недоступне.</span></div> : null}
-      {document.type === 'TRANSFER' || document.type === 'ASSIGNMENT' ? <div className="ui-alert" data-tone="info" role="status"><strong>Стара передача</strong><span>Цей документ створено за старими правилами та доступний лише для перегляду.</span></div> : null}
       <Card title="Загальні дані">
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Detail label="Дата">{formatDateTime(document.documentDate)}</Detail>
@@ -89,7 +85,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
           line.inventoryItem.externalCode, line.inventoryItem.name,
           document.type === 'ISSUE' && document.sourceTransferId
             ? <StatusBadge key="source" tone="info">З передачі</StatusBadge>
-            : <StatusBadge key="legacy" tone="neutral">Стара логіка</StatusBadge>,
+            : <StatusBadge key="direct" tone="info">Прямий залишок</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
         ])}
       />

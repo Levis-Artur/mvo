@@ -33,52 +33,6 @@ export class StockDocumentLineDto {
   note?: string;
 }
 
-export class CreateStockDocumentDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  documentNumber?: string;
-
-  @IsDateString()
-  documentDate!: string;
-
-  @IsEnum(StockDocumentType)
-  type!: StockDocumentType;
-
-  @IsUUID()
-  sourceResponsiblePersonId!: string;
-
-  @IsOptional()
-  @IsUUID()
-  destinationResponsiblePersonId?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  recipientName?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  recipientUnit?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  basis?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(1000)
-  note?: string;
-
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => StockDocumentLineDto)
-  lines!: StockDocumentLineDto[];
-}
-
 export class CreateMvoTransferDto {
   @IsDateString()
   documentDate!: string;
@@ -140,8 +94,6 @@ export class CreateIssueDto {
   @Type(() => StockDocumentLineDto)
   lines!: StockDocumentLineDto[];
 }
-
-export class UpdateStockDocumentDto extends CreateStockDocumentDto {}
 
 export class ListStockDocumentsQueryDto extends ReadAccessPaginationQueryDto {
   @IsOptional()

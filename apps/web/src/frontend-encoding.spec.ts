@@ -19,7 +19,7 @@ describe('frontend source encoding', () => {
     );
 
     expect(dashboard).toContain('title="Головна"');
-    expect(users).toContain("'Користувачі'");
+    expect(users).toContain('Користувачі');
     expect(organization).toContain('title="Організаційна структура"');
   });
 

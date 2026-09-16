@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Card, DataTable, ErrorState, StatusBadge } from '@/components/ui';
+import { Card, DataTable, ErrorState, StatusBadge } from '@/components/ui';
 import { getErrorMessage } from '@/components/common';
 import { formatQuantity } from '@/features/inventory/quantity-format';
 import { transactionTypeLabel } from '@/features/inventory/transaction-model';
@@ -15,8 +15,6 @@ import type {
 } from '@/lib/types';
 import { responsiblePersonsService as apiClient } from './responsible-persons.service';
 
-type PersonStockSection = 'direct' | 'legacy';
-
 export function PersonStockTab({
   personId,
   onPresenceResolved,
@@ -25,7 +23,6 @@ export function PersonStockTab({
   onPresenceResolved?: (hasStock: boolean) => void;
 }) {
   const [card, setCard] = useState<ResponsiblePersonAccountingCard | null>(null);
-  const [section, setSection] = useState<PersonStockSection>('direct');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -39,7 +36,7 @@ export function PersonStockTab({
         if (!active) return;
         setCard(result);
         onPresenceResolved?.(
-          result.directBalances.length > 0 || result.legacyCustodyArchive.length > 0,
+          result.directBalances.length > 0,
         );
       })
       .catch((reason: unknown) => {
@@ -55,21 +52,11 @@ export function PersonStockTab({
 
   if (error) return <ErrorState message={error} />;
 
-  const rows = !card
-    ? []
-    : section === 'direct'
-      ? card.directBalances.map((balance) => [
-          balance.inventoryItem.externalCode,
-          balance.inventoryItem.name,
-          formatQuantity(balance.quantity),
-        ])
-      : card.legacyCustodyArchive.map((balance) => [
-          balance.inventoryItem.externalCode,
-          balance.inventoryItem.name,
-          balance.accountingOwner.fullName,
-          balance.custodian.fullName,
-          formatQuantity(balance.quantity),
-        ]);
+  const rows = card?.directBalances.map((balance) => [
+    balance.inventoryItem.externalCode,
+    balance.inventoryItem.name,
+    formatQuantity(balance.quantity),
+  ]) ?? [];
 
   return (
     <div className="grid gap-3">
@@ -80,75 +67,18 @@ export function PersonStockTab({
           </strong>
         </Card>
       ) : null}
-      <nav aria-label="Дані обліку МВО" className="flex flex-wrap gap-2">
-        <SectionButton
-          active={section === 'direct'}
-          onClick={() => setSection('direct')}
-        >
-          Поточні залишки
-        </SectionButton>
-        <SectionButton
-          active={section === 'legacy'}
-          onClick={() => setSection('legacy')}
-        >
-          Архів старої моделі
-        </SectionButton>
-      </nav>
-      {section === 'direct' ? (
-        <DataTable
-          ariaLabel="Поточні прямі залишки МВО"
-          columns={[
-            { label: 'Код' },
-            { label: 'Номенклатура' },
-            { label: 'Кількість', numeric: true },
-          ]}
-          emptyMessage="Поточних залишків немає."
-          loading={loading}
-          rows={rows}
-        />
-      ) : (
-        <>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Дані збережені лише для аудиту документів, проведених за старою моделлю.
-          </p>
-          <DataTable
-            ariaLabel="Архів старої моделі обліку"
-            columns={[
-              { label: 'Код' },
-              { label: 'Номенклатура' },
-              { label: 'Колишній обліковий власник' },
-              { label: 'Колишній утримувач' },
-              { label: 'Архівна кількість', numeric: true },
-            ]}
-            emptyMessage="Архівних записів старої моделі немає."
-            loading={loading}
-            responsiveMode="cards"
-            rows={rows}
-          />
-        </>
-      )}
+      <DataTable
+        ariaLabel="Поточні прямі залишки МВО"
+        columns={[
+          { label: 'Код' },
+          { label: 'Номенклатура' },
+          { label: 'Кількість', numeric: true },
+        ]}
+        emptyMessage="Поточних залишків немає."
+        loading={loading}
+        rows={rows}
+      />
     </div>
-  );
-}
-
-function SectionButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      aria-current={active ? 'page' : undefined}
-      variant={active ? 'primary' : 'outline'}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </Button>
   );
 }
 
@@ -240,9 +170,9 @@ export function PersonTransfersTab({ personId }: { personId: string }) {
         ) : (
           <StatusBadge
             key="transfer"
-            tone={document.type === 'MVO_TRANSFER' ? 'info' : 'neutral'}
+            tone="info"
           >
-            {document.type === 'MVO_TRANSFER' ? 'Передача' : 'Стара передача'}
+            Передача
           </StatusBadge>
         ),
         document.sourceResponsiblePerson.fullName,

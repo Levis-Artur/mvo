@@ -40,9 +40,6 @@ describe('stock document workspace modal', () => {
     expect(form).not.toContain('label="Пошук МВО"');
     expect(form).toContain("{user.role !== 'MVO' ? (");
     expect(form).toContain('<FormField label="МВО-відправник" required>');
-    expect(form).toContain("type === 'MVO_TRANSFER' || createAndPostIssue");
-    expect(form).toContain('{!transfer && !createAndPostIssue ? (');
-    expect(form).toContain('<FormField label="Мета або підстава" required>');
     expect(form).toContain("<FormField label={createAndPostIssue ? 'Коментар' : 'Примітка'}>");
     expect(form).toContain(
       "? 'За потреби вкажіть призначення або додаткову інформацію'",
@@ -88,13 +85,13 @@ describe('stock document workspace modal', () => {
   it('uses create-and-post actions for new transfers and issues', () => {
     expect(form).toContain('form="stock-document-form"');
     expect(form).toContain(
-      "const createAndPostTransfer = transfer && !document;",
+      "const createAndPostTransfer = transfer;",
     );
     expect(form).toContain('{createAndPostTransfer');
     expect(form).toContain('Підтвердити передачу');
     expect(form).toContain('Передаємо…');
     expect(form).toContain(
-      'const createAndPostIssue = issue && !document;',
+      'const createAndPostIssue = issue;',
     );
     expect(form).toContain('Підтвердити видачу');
     expect(form).toContain('Видаємо…');

@@ -37,15 +37,13 @@ describe('stock document lazy loading policy', () => {
     expect(controller).not.toMatch(/useEffect\(\(\) => \{ void loadSources\(/);
   });
 
-  it('creates MVO_TRANSFER while keeping legacy transfers read-only', () => {
+  it('creates MVO_TRANSFER', () => {
     const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
     const controller = readFileSync(join(__dirname, 'use-stock-documents-controller.ts'), 'utf8');
-    const details = readFileSync(join(__dirname, 'stock-document-details-modal.tsx'), 'utf8');
     const rules = readFileSync(join(__dirname, 'stock-document-rules.ts'), 'utf8');
     const apiClient = readFileSync(join(__dirname, '../../lib/api-client.ts'), 'utf8');
-    const success = readFileSync(join(__dirname, 'document-success-modal.tsx'), 'utf8');
-    const branchStart = controller.indexOf("if (!editing && input.type === 'MVO_TRANSFER')");
-    const branchEnd = controller.indexOf('\n      let result = editing', branchStart);
+    const branchStart = controller.indexOf('  async function save(');
+    const branchEnd = controller.indexOf('  async function perform(', branchStart);
     const createAndPostBranch = controller.slice(branchStart, branchEnd);
 
     expect(view).toContain("controller.openCreate('MVO_TRANSFER')");
@@ -67,12 +65,6 @@ describe('stock document lazy loading policy', () => {
       "new CustomEvent('mvo:refresh-stock-documents')",
     );
     expect(apiClient).toContain("'/stock-documents/mvo-transfer'");
-    expect(success).toContain(
-      "if (document.type === 'MVO_TRANSFER') return null;",
-    );
-    expect(view).toContain('Передача (стара логіка)');
-    expect(details).toContain("document.type === 'TRANSFER' || document.type === 'ASSIGNMENT'");
-    expect(details).toContain('доступний лише для перегляду');
     expect(rules).toContain("document.type === 'MVO_TRANSFER'");
   });
 
@@ -98,7 +90,7 @@ describe('stock document lazy loading policy', () => {
     expect(apiClient).toContain("formData.set('lines', JSON.stringify(body.lines))");
     expect(apiClient).toContain("formData.append('files', file)");
     expect(view).toContain('+ Нова видача');
-    expect(form).toContain('const createAndPostIssue = issue && !document;');
+    expect(form).toContain('const createAndPostIssue = issue;');
     expect(view).not.toContain('sourceTransferId');
     expect(view).not.toContain('sourceTransferLineId');
   });
@@ -166,19 +158,14 @@ describe('stock document lazy loading policy', () => {
     expect(css).toContain('text-overflow: ellipsis; white-space: nowrap;');
   });
 
-  it('hides dates behind additional filters and renders human success actions', () => {
+  it('hides dates behind additional filters and confirms closing an unsaved form', () => {
     const view = readFileSync(join(__dirname, 'stock-documents-view.tsx'), 'utf8');
     const form = readFileSync(join(__dirname, 'stock-document-form.tsx'), 'utf8');
-    const success = readFileSync(join(__dirname, 'document-success-modal.tsx'), 'utf8');
 
     expect(view).toContain('advancedFilters');
     expect(view).toContain('Додаткові фільтри');
-    expect(form).toContain('Ви внесли дані, але ще не зберегли чернетку.');
+    expect(form).toContain('Ви внесли дані, але ще не підтвердили операцію.');
     expect(form).toContain('Продовжити заповнення');
     expect(form).toContain('Закрити без збереження');
-    expect(success).toContain('Чернетку збережено. Ви можете повернутися до неї пізніше або провести документ зараз.');
-    expect(success).toContain('Переглянути документ');
-    expect(success).toContain('Повернутися до мого майна');
-    expect(success).not.toContain('requestId');
   });
 });

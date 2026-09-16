@@ -54,7 +54,6 @@ function transferForm(overrides: { error?: string; onClose?: () => void } = {}) 
   return (
     <StockDocumentForm
       availableSources={[source]}
-      document={null}
       error={overrides.error ?? ''}
       initialSourceId={sourceId}
       loadingSources={false}
@@ -67,7 +66,6 @@ function transferForm(overrides: { error?: string; onClose?: () => void } = {}) 
       type="MVO_TRANSFER"
       user={authUser}
       onClose={overrides.onClose ?? jest.fn()}
-      onRemoveAttachment={jest.fn(async () => undefined)}
       onSourceChange={jest.fn(async () => undefined)}
       onSubmit={jest.fn(async () => undefined)}
     />

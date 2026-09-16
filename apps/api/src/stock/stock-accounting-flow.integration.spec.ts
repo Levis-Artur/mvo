@@ -5,6 +5,7 @@ import {
   StockTransactionType,
 } from '@prisma/client';
 import { buildAccountingTransferCsvV2 } from '../accounting/accounting-transfer.csv';
+import { AccessControlService } from '../auth/access-control.service';
 import { StockService } from './stock.service';
 
 const personA = '11111111-1111-4111-8111-111111111111';
@@ -98,7 +99,7 @@ function createDirectBalanceHarness() {
   };
 
   return {
-    service: new StockService({} as never),
+    service: new StockService({} as never, new AccessControlService({} as never)),
     tx: tx as never,
     transactions,
     attachments,

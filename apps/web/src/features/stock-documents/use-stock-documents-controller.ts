@@ -17,7 +17,7 @@ import type {
 } from '@/lib/types';
 import { stockDocumentsService } from './stock-documents.service';
 import { shouldLoadGlobalResponsiblePersons } from './stock-document-loading-policy';
-import { successfulDocumentActionMessage } from './stock-document-rules';
+import { documentCancellationMessage } from './stock-document-rules';
 import { loadTransferTargets } from './transfer-targets';
 import { submitNewMvoTransfer } from './mvo-transfer-submit';
 
@@ -50,8 +50,7 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
   const [selected, setSelected] = useState<StockDocument | null>(null);
   const [formType, setFormType] = useState<StockDocumentType | null>(null);
   const [formSourceId, setFormSourceId] = useState('');
-  const [editing, setEditing] = useState<StockDocument | null>(null);
-  const [confirming, setConfirming] = useState<'post' | 'cancel' | 'remove' | null>(null);
+  const [confirming, setConfirming] = useState<'cancel' | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSources, setLoadingSources] = useState(false);
   const [loadingTargets, setLoadingTargets] = useState(false);
@@ -63,7 +62,6 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
   const [targetsError, setTargetsError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState('');
-  const [success, setSuccess] = useState<{ document: StockDocument; mode: 'draft' | 'post' } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -154,7 +152,7 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
 
   function openCreate(nextType: StockDocumentType) {
     if (nextType !== 'MVO_TRANSFER') return;
-    setActionError(''); setEditing(null); setSelected(null); setSuccess(null);
+    setActionError(''); setSelected(null);
     const source = user.role === 'MVO' ? (user.responsiblePersonId ?? '') : '';
     setFormSourceId(source); setFormType(nextType);
     void loadSources(source);
@@ -162,78 +160,24 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
   }
 
   async function openDetails(document: Pick<StockDocument, 'id'>) {
-    setActionError(''); setConfirming(null); setSuccess(null);
+    setActionError(''); setConfirming(null);
     try { setSelected(await stockDocumentsService.findOne(document.id, accessMode)); }
     catch (reason) { setError(errorMessage(reason)); }
   }
 
-  async function openEdit(document: StockDocument) {
-    if (
-      (document.type !== 'ISSUE' && document.type !== 'MVO_TRANSFER') ||
-      document.lines.some((line) => !line.sourceBalanceId)
-    ) {
-      return;
-    }
-    setSelected(null); setEditing(document); setFormSourceId(document.sourceResponsiblePersonId);
-    setFormType(document.type); setActionError('');
-    await loadSources(document.sourceResponsiblePersonId);
-    if (document.type === 'MVO_TRANSFER') await loadTargets();
-  }
-
-  async function save(input: StockDocumentInput, files: File[]) {
+  async function save(input: StockDocumentInput) {
+    if (input.type !== 'MVO_TRANSFER') return;
     setSaving(true); setActionError('');
-    let savedDocument: StockDocument | null = null;
     try {
-      if (!editing && input.type === 'MVO_TRANSFER') {
-        await submitNewMvoTransfer(
-          input,
-          stockDocumentsService.createAndPostMvoTransfer,
-        );
-        setFormType(null);
-        setSelected(null);
-        setSuccess(null);
-        setToast('Передачу проведено. Залишки оновлено.');
-        await load();
-        window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
-        window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
-        return;
-      }
-      let result = editing
-        ? await stockDocumentsService.update(editing.id, input)
-        : await stockDocumentsService.create(input);
-      savedDocument = result;
-      if (!editing) setEditing(result);
-      for (const file of files) {
-        await stockDocumentsService.uploadAttachment(result.id, file);
-        result = await stockDocumentsService.findOne(result.id);
-        savedDocument = result;
-        setEditing(result);
-      }
-      setFormType(null); setEditing(null); setSelected(result);
-      setSuccess({ document: result, mode: 'draft' });
+      await submitNewMvoTransfer(input, stockDocumentsService.createAndPostMvoTransfer);
+      setFormType(null);
+      setSelected(null);
+      setToast('Передачу проведено. Залишки оновлено.');
       await load();
-    } catch (reason) {
-      setActionError(errorMessage(reason));
-      if (savedDocument) {
-        try {
-          setEditing(await stockDocumentsService.findOne(savedDocument.id));
-        } catch {
-          setEditing(savedDocument);
-        }
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeAttachment(attachmentId: string) {
-    if (!editing) return;
-    setSaving(true); setActionError('');
-    try {
-      await stockDocumentsService.removeAttachment(editing.id, attachmentId);
-      setEditing(await stockDocumentsService.findOne(editing.id));
+      window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
+      window.dispatchEvent(new CustomEvent('mvo:refresh-transactions'));
+      window.dispatchEvent(new CustomEvent('mvo:refresh-accounting-cards'));
+      window.dispatchEvent(new CustomEvent('mvo:refresh-stock-documents'));
     } catch (reason) {
       setActionError(errorMessage(reason));
     } finally {
@@ -241,19 +185,13 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
     }
   }
 
-  async function perform(action: 'post' | 'cancel' | 'remove') {
+  async function perform() {
     if (!selected) return;
     setActionLoading(true); setActionError('');
     try {
-      if (action === 'remove') {
-        await stockDocumentsService.remove(selected.id);
-        setSelected(null); setToast('Чернетку видалено');
-      } else {
-        const result = await stockDocumentsService[action](selected.id);
-        setSelected(result);
-        if (action === 'post') setSuccess({ document: result, mode: 'post' });
-        else setToast(successfulDocumentActionMessage(result, action));
-      }
+      const result = await stockDocumentsService.cancel(selected.id);
+      setSelected(result);
+      setToast(documentCancellationMessage(result));
       setConfirming(null);
       await load();
       window.dispatchEvent(new CustomEvent('mvo:refresh-stock'));
@@ -267,8 +205,8 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
     }
   }
 
-  function openConfirmation(action: 'post' | 'cancel' | 'remove', document: StockDocument) {
-    setSelected(document); setActionError(''); setConfirming(action);
+  function openConfirmation(document: StockDocument) {
+    setSelected(document); setActionError(''); setConfirming('cancel');
   }
 
   function closeConfirmation() {
@@ -283,10 +221,10 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
   return {
     documents: filteredDocuments, persons, transferTargets, availableSources, pagination,
     page, setPage, limit, setLimit, draftFilters, setDraftFilters, appliedFilters, setAppliedFilters,
-    selected, setSelected, formType, setFormType, formSourceId, editing,
+    selected, setSelected, formType, setFormType, formSourceId,
     confirming, setConfirming, loading, loadingSources, loadingTargets, saving,
-    actionLoading, error, personsError, sourcesError, targetsError, actionError, toast, setToast, success, setSuccess,
-    load, loadReferences, loadSources, loadTargets, openCreate, openDetails, openEdit, save, removeAttachment, perform,
+    actionLoading, error, personsError, sourcesError, targetsError, actionError, toast, setToast,
+    load, loadReferences, loadSources, loadTargets, openCreate, openDetails, save, perform,
     openConfirmation, closeConfirmation, closeForm,
   };
 }

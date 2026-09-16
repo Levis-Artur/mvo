@@ -89,6 +89,7 @@ async function createFixture(prisma: PrismaClient) {
     data: {
       lastName: 'Тестовий',
       firstName: 'Реалізатор',
+      externalAccountingCode: '9003',
       managementId: management.id,
       serviceId: service.id,
     },

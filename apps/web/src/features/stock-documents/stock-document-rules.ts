@@ -75,9 +75,6 @@ export function validateDocumentInput(
   options: { requireIssueBasis?: boolean } = {},
 ) {
   if (!input.sourceResponsiblePersonId) return 'Виберіть МВО-відправника';
-  if (input.type === 'TRANSFER' || input.type === 'ASSIGNMENT') {
-    return 'Старі типи передач доступні лише для перегляду';
-  }
   if (input.type === 'MVO_TRANSFER' && !input.destinationResponsiblePersonId) {
     return 'Виберіть МВО-одержувача';
   }
@@ -117,9 +114,7 @@ export function validateDocumentInput(
 }
 
 export function documentDirection(document: StockDocument) {
-  if (document.type === 'ISSUE') return 'Видача';
-  if (document.type === 'MVO_TRANSFER') return 'Передача';
-  return 'Стара логіка';
+  return document.type === 'ISSUE' ? 'Видача' : 'Передача';
 }
 
 export function documentDirectionPresentation(
@@ -128,14 +123,12 @@ export function documentDirectionPresentation(
   const label = documentDirection(document);
   return {
     label,
-    tone: label === 'Видача' ? 'warning' : label === 'Передача' ? 'info' : 'neutral',
+    tone: label === 'Видача' ? 'warning' : 'info',
   };
 }
 
 export function documentTypeLabel(type: StockDocumentType) {
-  if (type === 'ISSUE') return 'Видача';
-  if (type === 'MVO_TRANSFER') return 'Передача';
-  return 'Стара передача';
+  return type === 'ISSUE' ? 'Видача' : 'Передача';
 }
 
 export function documentNumberLabel(displayNumber: number) {
@@ -171,25 +164,10 @@ export function documentCounterparty(
   return `Кому: ${destination ? `${destination.externalAccountingCode ?? '—'} — ${destination.lastName} ${destination.firstName}` : 'Не вказано'}`;
 }
 
-export function successfulDocumentActionMessage(
-  document: StockDocument,
-  action: 'post' | 'cancel' | 'remove',
-) {
-  if (action === 'remove') return 'Чернетку видалено.';
-  if (action === 'cancel') {
-    return document.type === 'ISSUE' && document.sourceTransferId
-      ? 'Видачу скасовано. Доступну для оформлення кількість передачі відновлено.'
-      : 'Документ скасовано. Попередній стан майна відновлено.';
-  }
-  const firstItem = document.lines[0]?.inventoryItem.name ?? 'майно';
-  const extra = document.lines.length > 1 ? ` та ще ${document.lines.length - 1}` : '';
-  const quantity = document.totalQuantity;
-  if (document.type === 'ISSUE') {
-    return `Видачу проведено: ${firstItem}${extra}, кількість ${quantity}. Кому: ${document.recipientName ?? 'одержувачу'}.`;
-  }
-  const destination = document.destinationResponsiblePerson;
-  const recipient = destination ? `${destination.lastName} ${destination.firstName}` : 'обраному МВО';
-  return `Передачу проведено: ${firstItem}${extra}, кількість ${quantity}. Кому: ${recipient}.`;
+export function documentCancellationMessage(document: StockDocument) {
+  return document.type === 'ISSUE' && document.sourceTransferId
+    ? 'Видачу скасовано. Доступну для оформлення кількість передачі відновлено.'
+    : 'Документ скасовано. Попередній стан майна відновлено.';
 }
 
 const statusPresentation: Record<StockDocumentStatus, { label: string; tone: StatusTone }> = {
@@ -210,14 +188,6 @@ export function shouldConfirmUnsavedDocument(dirty: boolean, saving: boolean) {
   return dirty && !saving;
 }
 
-export function documentPostingBlocker(
-  document: Pick<StockDocument, 'type' | 'attachments'>,
-) {
-  return document.type === 'ISSUE' && document.attachments.length === 0
-    ? 'Для проведення видачі потрібно додати щонайменше одне фото або PDF накладної.'
-    : '';
-}
-
 export function lifecycleActions(
   document: Pick<StockDocument, 'status' | 'sourceResponsiblePersonId' | 'type'> &
     Partial<Pick<StockDocument, 'accountingExportState' | 'lines' | 'sourceTransferId'>>,
@@ -231,9 +201,6 @@ export function lifecycleActions(
     user.role !== 'MVO' || document.sourceResponsiblePersonId === user.responsiblePersonId
   );
   return {
-    edit: writable && transferDocument && document.status === 'DRAFT',
-    post: writable && transferDocument && document.status === 'DRAFT',
-    remove: writable && transferDocument && document.status === 'DRAFT',
     cancel:
       writable &&
       (transferDocument || issueDocument) &&

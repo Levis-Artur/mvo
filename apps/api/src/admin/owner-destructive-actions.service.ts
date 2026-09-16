@@ -13,13 +13,10 @@ import {
   StockAccountingModel,
   StockDocumentStatus,
   StockDocumentType,
-  StockSourceKind,
-  StockTransactionType,
   UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentUser } from '../auth/auth.types';
-import { StockService } from '../stock/stock.service';
 import { StockDocumentsService } from '../stock-documents/stock-documents.service';
 import {
   StockDocumentAttachmentStorageService,
@@ -66,7 +63,6 @@ export class OwnerDestructiveActionsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly businessDataReset: BusinessDataResetService,
-    private readonly stockService: StockService,
     private readonly stockDocuments: StockDocumentsService,
     private readonly attachmentStorage: StockDocumentAttachmentStorageService,
   ) {}
@@ -273,8 +269,7 @@ export class OwnerDestructiveActionsService {
       deletedResponsiblePersons: deleted.responsiblePersons,
       deletedInventoryItems: deleted.inventoryItems,
       deletedStockBalances: deleted.stockBalances,
-      deletedCustodyBalances: deleted.custodyBalances,
-      deletedBalances: deleted.stockBalances + deleted.custodyBalances,
+      deletedBalances: deleted.stockBalances,
       deletedTransactions: deleted.stockTransactions,
       deletedDocuments: deleted.stockDocuments,
       deletedTransfers: deleted.mvoTransfers,
@@ -475,17 +470,8 @@ export class OwnerDestructiveActionsService {
     const documentWhere: Prisma.StockDocumentWhereInput = {
       OR: [directlyAffectedDocuments, { sourceTransfer: directlyAffectedDocuments }],
     };
-    const [custodyBalances, custodyReturns, documents, documentLines,
+    const [documents, documentLines,
       attachments, realizations, accountingExportBatches] = await Promise.all([
-      this.prisma.custodyBalance.count({ where: { OR: [
-        { accountingOwnerResponsiblePersonId: id },
-        { custodianResponsiblePersonId: id },
-      ] } }),
-      this.prisma.custodyBalance.count({ where: {
-        custodianResponsiblePersonId: id,
-        accountingOwnerResponsiblePersonId: { not: id },
-        quantity: { gt: 0 },
-      } }),
       this.prisma.stockDocument.count({ where: documentWhere }),
       this.prisma.stockDocumentLine.count({ where: { document: documentWhere } }),
       this.prisma.stockDocumentAttachment.count({ where: { document: documentWhere } }),
@@ -507,8 +493,6 @@ export class OwnerDestructiveActionsService {
           action: person.user?.role === UserRole.MVO ? 'DELETE' : 'DETACH',
         },
         { type: 'stockBalances', count: person.stockBalances.length, action: 'DELETE' },
-        { type: 'custodyBalances', count: custodyBalances, action: 'DELETE' },
-        { type: 'custodyReturnsToOwners', count: custodyReturns, action: 'DETACH' },
         {
           type: 'stockTransactions',
           count: person._count.stockTransactions,
@@ -531,7 +515,6 @@ export class OwnerDestructiveActionsService {
         _count: {
           select: {
             stockBalances: true,
-            custodyBalances: true,
             stockTransactions: true,
             stockDocumentLines: true,
             importRows: true,
@@ -580,7 +563,6 @@ export class OwnerDestructiveActionsService {
       `${item.externalCode} — ${item.name}`,
       [
         { type: 'stockBalances', count: item._count.stockBalances, action: 'DELETE' },
-        { type: 'custodyBalances', count: item._count.custodyBalances, action: 'DELETE' },
         { type: 'transactions', count: item._count.stockTransactions, action: 'DELETE' },
         { type: 'documentLines', count: item._count.stockDocumentLines, action: 'DELETE' },
         { type: 'affectedDocuments', count: affectedDocuments, action: 'RETAIN' },
@@ -967,23 +949,14 @@ export class OwnerDestructiveActionsService {
       },
     });
 
-    const custody = await tx.custodyBalance.findMany({
-      where: { inventoryItemId: id },
-      select: { id: true },
-    });
     const stockBalances = await tx.stockBalance.findMany({
       where: { inventoryItemId: id },
       select: { id: true },
     });
     await tx.stockDocumentLine.updateMany({
-      where: { sourceCustodyBalanceId: { in: custody.map((item) => item.id) } },
-      data: { sourceCustodyBalanceId: null },
-    });
-    await tx.stockDocumentLine.updateMany({
       where: { sourceBalanceId: { in: stockBalances.map((item) => item.id) } },
       data: { sourceBalanceId: null },
     });
-    await tx.custodyBalance.deleteMany({ where: { inventoryItemId: id } });
     await tx.stockBalance.deleteMany({ where: { inventoryItemId: id } });
     await tx.importRow.updateMany({
       where: { inventoryItemId: id },
@@ -1003,38 +976,6 @@ export class OwnerDestructiveActionsService {
     });
     if (linkedUser?.id === actor.id || linkedUser?.role === UserRole.OWNER) {
       throw new ConflictException('Пов’язаний OWNER не може бути видалений.');
-    }
-
-    const custody = await tx.custodyBalance.findMany({
-      where: { OR: [
-        { accountingOwnerResponsiblePersonId: id },
-        { custodianResponsiblePersonId: id },
-      ] },
-    });
-    const displayName = [person.lastName, person.firstName, person.middleName]
-      .filter(Boolean).join(' ');
-    for (const balance of custody) {
-      if (
-        balance.custodianResponsiblePersonId === id &&
-        balance.accountingOwnerResponsiblePersonId !== id &&
-        balance.quantity.greaterThan(0)
-      ) {
-        await this.stockService.createIncreasingTransactionInTx(tx, {
-          type: StockTransactionType.ASSIGNMENT_REVERSAL,
-          responsiblePersonId: balance.accountingOwnerResponsiblePersonId,
-          inventoryItemId: balance.inventoryItemId,
-          quantity: balance.quantity,
-          occurredAt: new Date(),
-          sourceDocument: `OWNER DELETE MVO ${id}`,
-          comment: `Повернення від видаленого custodian ${displayName} (${id})`,
-          documentId: null,
-          documentLineId: null,
-          importBatchId: null,
-          importRowId: null,
-          accountingModel: StockAccountingModel.DIRECT_BALANCE,
-          bucketKind: StockSourceKind.DIRECT,
-        });
-      }
     }
 
     const baseDocumentWhere = this.responsiblePersonDocumentWhere(id);
@@ -1114,7 +1055,7 @@ export class OwnerDestructiveActionsService {
     ] } });
     await tx.stockDocumentLine.updateMany({
       where: { documentId: { in: documentIds } },
-      data: { sourceTransferLineId: null, sourceCustodyBalanceId: null, sourceBalanceId: null },
+      data: { sourceTransferLineId: null, sourceBalanceId: null },
     });
     await tx.stockDocumentLine.deleteMany({ where: { documentId: { in: issueIds } } });
     await tx.stockDocument.updateMany({
@@ -1125,7 +1066,6 @@ export class OwnerDestructiveActionsService {
     await tx.stockDocument.deleteMany({ where: { id: { in: issueIds } } });
     await tx.stockDocument.deleteMany({ where: { id: { in: documentIds } } });
 
-    await tx.custodyBalance.deleteMany({ where: { id: { in: custody.map((item) => item.id) } } });
     await tx.importRow.updateMany({
       where: { responsiblePersonId: id }, data: { responsiblePersonId: null },
     });

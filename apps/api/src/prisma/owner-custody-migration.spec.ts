@@ -31,14 +31,14 @@ const importAuditMigration = readFileSync(
 );
 
 describe('owner/custody Prisma model and migration', () => {
-  it('defines a unique Decimal CustodyBalance with indexed relations', () => {
-    expect(schema).toContain('model CustodyBalance');
-    expect(schema).toContain('quantity                              Decimal');
-    expect(schema).toContain(
-      '@@unique([inventoryItemId, accountingOwnerResponsiblePersonId, custodianResponsiblePersonId])',
-    );
+  it('historically defines a unique Decimal CustodyBalance with indexed relations', () => {
+    expect(migration).toContain('CREATE TABLE "CustodyBalance"');
+    expect(migration).toContain('"quantity" DECIMAL(18,4) NOT NULL DEFAULT 0');
     expect(migration).toContain(
-      'CONSTRAINT "CustodyBalance_quantity_nonnegative_check" CHECK ("quantity" >= 0)',
+      'ON "CustodyBalance"("inventoryItemId", "accountingOwnerResponsiblePersonId", "custodianResponsiblePersonId")',
+    );
+    expect(migration).toMatch(
+      /CONSTRAINT "CustodyBalance_quantity_nonnegative_check"\s+CHECK \("quantity" >= 0\)/,
     );
     expect(migration).toContain(
       'CONSTRAINT "CustodyBalance_owner_differs_from_custodian_check"',
@@ -109,7 +109,6 @@ describe('owner/custody Prisma model and migration', () => {
   });
 
   it('adds an explicit transaction type for custody returning to owner direct', () => {
-    expect(schema).toContain('ASSIGNMENT_IN_DIRECT');
     expect(assignmentInDirectMigration).toContain(
       "ALTER TYPE \"StockTransactionType\" ADD VALUE 'ASSIGNMENT_IN_DIRECT'",
     );

@@ -447,7 +447,6 @@ export function MvoIssuesView() {
       {creating ? (
         <StockDocumentForm
           availableSources={sources}
-          document={null}
           error={actionError}
           initialSourceId={user.responsiblePersonId ?? ''}
           loadingSources={sourcesLoading}
@@ -462,7 +461,6 @@ export function MvoIssuesView() {
           onClose={() => {
             if (!saving) setCreating(false);
           }}
-          onRemoveAttachment={async () => undefined}
           onSourceChange={() => loadSources()}
           onSubmit={submitIssue}
         />

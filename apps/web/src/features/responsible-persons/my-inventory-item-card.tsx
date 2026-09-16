@@ -322,7 +322,6 @@ export function MyInventoryItemCard({
           onClose={() => {
             if (!saving) setFormType(null);
           }}
-          onRemoveAttachment={async () => undefined}
           onSourceChange={() => refreshSources()}
           onSubmit={submitOperation}
         />

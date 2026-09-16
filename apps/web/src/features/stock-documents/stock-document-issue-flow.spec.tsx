@@ -50,7 +50,6 @@ function issueForm({
   return (
     <StockDocumentForm
       availableSources={[source]}
-      document={null}
       error=""
       initialInventoryItemId={initialInventoryItemId}
       initialSourceId={sourceId}
@@ -64,7 +63,6 @@ function issueForm({
       type="ISSUE"
       user={user}
       onClose={jest.fn()}
-      onRemoveAttachment={jest.fn(async () => undefined)}
       onSourceChange={jest.fn(async () => undefined)}
       onSubmit={onSubmit}
     />
@@ -160,15 +158,16 @@ describe('new ISSUE form', () => {
       expect.objectContaining({
         type: 'ISSUE',
         sourceResponsiblePersonId: sourceId,
+        destinationResponsiblePersonId: undefined,
+        documentDate: expect.any(String),
         recipientName: 'Служба забезпечення',
-        recipientUnit: undefined,
-        basis: undefined,
         note: 'Для роботи',
         lines: [
           expect.objectContaining({
             inventoryItemId: itemId,
             sourceBalanceId: balanceId,
             quantity: '2',
+            note: undefined,
           }),
         ],
       }),

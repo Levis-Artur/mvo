@@ -12,15 +12,12 @@ import {
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
 
-export function StockDocumentsTable({ documents, user, loading, onView, onEdit, onPost, onCancel, onRemove }: {
+export function StockDocumentsTable({ documents, user, loading, onView, onCancel }: {
   documents: StockDocument[];
   user: AuthUser;
   loading: boolean;
   onView: (document: StockDocument) => void;
-  onEdit: (document: StockDocument) => void;
-  onPost: (document: StockDocument) => void;
   onCancel: (document: StockDocument) => void;
-  onRemove: (document: StockDocument) => void;
 }) {
   if (user.role === 'MVO') {
     return <DataTable
@@ -83,7 +80,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onEdit, 
         document.postedAt
           ? <span key="posted">{formatDateTime(document.postedAt)} · {document.postedByUser?.username ?? '—'}</span>
           : '—',
-        <DocumentActions key="actions" actions={actions} document={document} onView={onView} onEdit={onEdit} onPost={onPost} onCancel={onCancel} onRemove={onRemove} />,
+        <DocumentActions key="actions" actions={actions} document={document} onView={onView} onCancel={onCancel} />,
       ];
     })}
   />;
@@ -102,22 +99,16 @@ function MvoDocumentActions({ actions, document, onView, onCancel }: {
   </div>;
 }
 
-function DocumentActions({ actions, document, onView, onEdit, onPost, onCancel, onRemove }: {
+function DocumentActions({ actions, document, onView, onCancel }: {
   actions: ReturnType<typeof lifecycleActions>;
   document: StockDocument;
   onView: (document: StockDocument) => void;
-  onEdit: (document: StockDocument) => void;
-  onPost: (document: StockDocument) => void;
   onCancel: (document: StockDocument) => void;
-  onRemove: (document: StockDocument) => void;
 }) {
   return <div className="stock-document-actions">
     <Button aria-label={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} size="compact" title="Переглянути документ" variant="outline" type="button" onClick={() => onView(document)}>Переглянути</Button>
-    {actions.edit ? <Button size="compact" title="Редагувати чернетку" variant="outline" type="button" onClick={() => onEdit(document)}>Редагувати</Button> : null}
-    {actions.post ? <Button size="compact" title="Провести документ" type="button" onClick={() => onPost(document)}>Провести</Button> : null}
     {actions.cancel ? <Button size="compact" title="Скасувати документ" variant="danger" type="button" onClick={() => onCancel(document)}>Скасувати</Button> : null}
     {isExportedTransfer(document) ? <StatusBadge tone="info">Передано бухгалтерії</StatusBadge> : null}
-    {actions.remove ? <Button size="compact" title="Видалити чернетку" variant="danger" type="button" onClick={() => onRemove(document)}>Видалити</Button> : null}
   </div>;
 }
 

@@ -2,7 +2,6 @@ import type {
   AuthUser,
   AvailableStockSource,
   ResponsiblePerson,
-  StockDocument,
   StockDocumentInput,
   StockDocumentType,
   TransferTarget,
@@ -18,7 +17,6 @@ export type DocumentFormLine = {
 export type StockDocumentFormProps = {
   user: AuthUser;
   type: StockDocumentType;
-  document?: StockDocument | null;
   initialInventoryItemId?: string;
   initialSourceId: string;
   persons: ResponsiblePerson[];
@@ -32,6 +30,5 @@ export type StockDocumentFormProps = {
   targetsError: string;
   onSourceChange: (id: string) => Promise<void> | void;
   onSubmit: (input: StockDocumentInput, files: File[]) => Promise<void>;
-  onRemoveAttachment: (attachmentId: string) => Promise<void>;
   onClose: () => void;
 };

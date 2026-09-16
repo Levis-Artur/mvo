@@ -82,12 +82,6 @@ const transactionInclude = {
   },
 } satisfies Prisma.StockTransactionInclude;
 
-const legacyCustodyInclude = {
-  inventoryItem: true,
-  accountingOwnerResponsiblePerson: true,
-  custodianResponsiblePerson: true,
-} satisfies Prisma.CustodyBalanceInclude;
-
 @Injectable()
 export class StockService {
   constructor(
@@ -392,28 +386,15 @@ export class StockService {
       throw new NotFoundException('Картку обліку МВО не знайдено');
     }
 
-    const [directBalances, legacyCustodyArchive, recentTransfers, recentIssues] =
+    const [directBalances, recentTransfers, recentIssues] =
       await Promise.all([
         this.prisma.stockBalance.findMany({
           where: { responsiblePersonId: id, quantity: { gt: 0 } },
           include: { inventoryItem: true },
           orderBy: { inventoryItem: { name: 'asc' } },
         }),
-        this.prisma.custodyBalance.findMany({
-          where: {
-            quantity: { gt: 0 },
-            OR: [
-              { accountingOwnerResponsiblePersonId: id },
-              { custodianResponsiblePersonId: id },
-            ],
-          },
-          include: legacyCustodyInclude,
-          orderBy: { inventoryItem: { name: 'asc' } },
-        }),
         this.recentDocumentsForPerson(id, [
           StockDocumentType.MVO_TRANSFER,
-          StockDocumentType.TRANSFER,
-          StockDocumentType.ASSIGNMENT,
         ], user.role === UserRole.MVO && user.responsiblePersonId === id),
         this.recentDocumentsForPerson(
           id,
@@ -430,9 +411,6 @@ export class StockService {
         inventoryItem: balance.inventoryItem,
         quantity: balance.quantity.toString(),
       })),
-      legacyCustodyArchive: legacyCustodyArchive.map((balance) =>
-        this.serializeLegacyCustodyBalance(balance),
-      ),
       totalDirectQuantity: directTotal.toString(),
       recentTransfers,
       recentIssues,
@@ -462,23 +440,6 @@ export class StockService {
     );
   }
 
-  private serializeLegacyCustodyBalance(
-    balance: Prisma.CustodyBalanceGetPayload<{
-      include: typeof legacyCustodyInclude;
-    }>,
-  ) {
-    return {
-      id: balance.id,
-      inventoryItem: balance.inventoryItem,
-      accountingOwner: this.personReference(
-        balance.accountingOwnerResponsiblePerson,
-      ),
-      custodian: this.personReference(balance.custodianResponsiblePerson),
-      quantity: balance.quantity.toString(),
-      updatedAt: balance.updatedAt,
-    };
-  }
-
   private async recentDocumentsForPerson(
     responsiblePersonId: string,
     types: StockDocumentType[],
@@ -495,13 +456,6 @@ export class StockService {
           : [
               { sourceResponsiblePersonId: responsiblePersonId },
               { destinationResponsiblePersonId: responsiblePersonId },
-              {
-                lines: {
-                  some: {
-                    accountingOwnerResponsiblePersonId: responsiblePersonId,
-                  },
-                },
-              },
             ],
       },
       include: {

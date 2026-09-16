@@ -2,7 +2,6 @@
 
 import type { ReadAccessMode } from '@/lib/types';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/app/ui/auth-context';
 import { fullName } from '@/components/common/formatters';
 import { PageHeader } from '@/components/layout/page-header';
@@ -18,13 +17,10 @@ import {
 import { canChangeStockDocuments } from './stock-document-rules';
 import { canUseGlobalResponsiblePersonFilters } from './stock-document-loading-policy';
 import { CancelDocumentModal } from './cancel-document-modal';
-import { DeleteDocumentModal } from './delete-document-modal';
-import { PostDocumentModal } from './post-document-modal';
 import { StockDocumentDetailsModal } from './stock-document-details-modal';
 import { StockDocumentForm } from './stock-document-form';
 import { StockDocumentsTable } from './stock-documents-table';
 import { DEFAULT_DOCUMENT_FILTERS, useStockDocumentsController } from './use-stock-documents-controller';
-import { DocumentSuccessModal } from './document-success-modal';
 import { getManagerReadOnlyPresentationUser } from '@/lib/authz';
 
 export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnly?: boolean } = {}) {
@@ -38,7 +34,6 @@ export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnl
 
 function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; accessMode?: ReadAccessMode }) {
   const controller = useStockDocumentsController(user, accessMode);
-  const router = useRouter();
   const [advancedFilters, setAdvancedFilters] = useState(false);
   const writable = canChangeStockDocuments(user);
   const globalPersonFilters = canUseGlobalResponsiblePersonFilters(user.role);
@@ -73,7 +68,7 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
       onSearchChange={(search) => controller.setDraftFilters((current) => ({ ...current, search }))}
     >
       {user.role !== 'MVO' ? <FilterField label="Тип"><Select value={controller.draftFilters.type} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, type: event.target.value as typeof current.type }))}>
-        <option value="">Усі типи</option><option value="MVO_TRANSFER">Передача</option><option value="ISSUE">Видача</option><option value="ASSIGNMENT">Передача (стара логіка)</option><option value="TRANSFER">Архівна передача</option>
+        <option value="">Усі типи</option><option value="MVO_TRANSFER">Передача</option><option value="ISSUE">Видача</option>
       </Select></FilterField> : null}
       <FilterField label="Статус"><Select value={controller.draftFilters.status} onChange={(event) => controller.setDraftFilters((current) => ({ ...current, status: event.target.value as typeof current.status }))}>
         <option value="">Усі статуси</option><option value="DRAFT">Чернетки</option><option value="POSTED">Проведені</option><option value="CANCELLED">Скасовані</option>
@@ -92,10 +87,7 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
       documents={controller.documents}
       loading={controller.loading}
       user={user}
-      onCancel={(document) => controller.openConfirmation('cancel', document)}
-      onEdit={(document) => void controller.openEdit(document)}
-      onPost={(document) => controller.openConfirmation('post', document)}
-      onRemove={(document) => controller.openConfirmation('remove', document)}
+      onCancel={(document) => controller.openConfirmation(document)}
       onView={(document) => void controller.openDetails(document)}
     />
     <Pagination
@@ -108,7 +100,6 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
     />
     {controller.formType ? <StockDocumentForm
       availableSources={controller.availableSources}
-      document={controller.editing}
       error={controller.actionError}
       initialSourceId={controller.formSourceId}
       loadingSources={controller.loadingSources}
@@ -121,31 +112,19 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
       type={controller.formType}
       user={user}
       onClose={controller.closeForm}
-      onRemoveAttachment={controller.removeAttachment}
       onSourceChange={controller.loadSources}
       onSubmit={controller.save}
     /> : null}
-    {controller.selected && !controller.confirming && !controller.formType && !controller.success ? <StockDocumentDetailsModal
+    {controller.selected && !controller.confirming && !controller.formType ? <StockDocumentDetailsModal
       document={controller.selected}
       error={controller.actionError}
       loading={controller.actionLoading}
       user={user}
-      onCancel={() => controller.openConfirmation('cancel', controller.selected!)}
+      onCancel={() => controller.openConfirmation(controller.selected!)}
       onClose={() => controller.setSelected(null)}
-      onDelete={() => controller.openConfirmation('remove', controller.selected!)}
-      onEdit={() => void controller.openEdit(controller.selected!)}
       onOpenSourceTransfer={(transferId) => void controller.openDetails({ id: transferId })}
-      onPost={() => controller.openConfirmation('post', controller.selected!)}
     /> : null}
-    {controller.selected && controller.confirming === 'post' ? <PostDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('post')} /> : null}
-    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('cancel')} /> : null}
-    {controller.selected && controller.confirming === 'remove' ? <DeleteDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform('remove')} /> : null}
-    {controller.success ? <DocumentSuccessModal
-      document={controller.success.document}
-      mode={controller.success.mode}
-      onReturn={() => { controller.setSuccess(null); controller.setSelected(null); router.push('/my-stock'); }}
-      onView={() => controller.setSuccess(null)}
-    /> : null}
+    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform()} /> : null}
     {controller.toast ? <Toast message={controller.toast} onClose={() => controller.setToast('')} /> : null}
   </section>;
 }

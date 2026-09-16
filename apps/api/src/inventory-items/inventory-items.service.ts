@@ -90,10 +90,7 @@ const CURRENT_MOVEMENT_TYPES = [
   StockTransactionType.MANUAL_RECEIPT,
   StockTransactionType.MVO_TRANSFER_OUT,
   StockTransactionType.MVO_TRANSFER_REVERSAL,
-  StockTransactionType.ISSUE,
   StockTransactionType.ISSUE_OUT,
-  StockTransactionType.ISSUE_FROM_DIRECT,
-  StockTransactionType.ISSUE_FROM_CUSTODY,
   StockTransactionType.ISSUE_REVERSAL,
 ] as const;
 
@@ -702,10 +699,7 @@ export class InventoryItemsService {
       return {
         type: {
           in: [
-            StockTransactionType.ISSUE,
             StockTransactionType.ISSUE_OUT,
-            StockTransactionType.ISSUE_FROM_DIRECT,
-            StockTransactionType.ISSUE_FROM_CUSTODY,
           ],
         },
       };
@@ -846,10 +840,7 @@ export class InventoryItemsService {
     }
     if (
       ([
-        StockTransactionType.ISSUE,
         StockTransactionType.ISSUE_OUT,
-        StockTransactionType.ISSUE_FROM_DIRECT,
-        StockTransactionType.ISSUE_FROM_CUSTODY,
       ] as StockTransactionType[]).includes(movement.type)
     ) {
       return 'ISSUE';

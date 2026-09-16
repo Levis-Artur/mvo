@@ -6,6 +6,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { AccessControlService } from '../auth/access-control.service';
 import { StockService } from '../stock/stock.service';
 import { StockDocumentsService } from './stock-documents.service';
 
@@ -104,7 +105,7 @@ function createService(prisma: PrismaClient) {
   };
   return new StockDocumentsService(
     prisma as never,
-    new StockService(prisma as never),
+    new StockService(prisma as never, new AccessControlService(prisma as never)),
     storage as never,
   );
 }

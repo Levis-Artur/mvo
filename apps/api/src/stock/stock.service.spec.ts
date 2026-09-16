@@ -469,7 +469,7 @@ describe('StockService', () => {
     };
 
     await service.createDecreasingTransactionInTx(tx as never, {
-      type: StockTransactionType.TRANSFER_OUT,
+      type: StockTransactionType.MVO_TRANSFER_OUT,
       responsiblePersonId: '11111111-1111-4111-8111-111111111111',
       inventoryItemId: '22222222-2222-4222-8222-222222222222',
       quantity: '2',
@@ -508,7 +508,7 @@ describe('StockService', () => {
 
     await expect(
       service.createDecreasingTransactionInTx(tx as never, {
-        type: StockTransactionType.ISSUE,
+        type: StockTransactionType.ISSUE_OUT,
         responsiblePersonId: '11111111-1111-4111-8111-111111111111',
         inventoryItemId: '22222222-2222-4222-8222-222222222222',
         quantity: '2',
@@ -570,7 +570,7 @@ describe('StockService', () => {
     expect(prisma).not.toHaveProperty('custodyBalance');
   });
 
-  it('builds an MVO accounting card from direct balances and exposes custody only as legacy archive', async () => {
+  it('builds an MVO accounting card from direct balances', async () => {
     const person = {
       id: '11111111-1111-4111-8111-111111111111',
       lastName: 'Левіс',
@@ -582,19 +582,6 @@ describe('StockService', () => {
       stockBalance: {
         findMany: jest.fn().mockResolvedValue([
           { id: 'direct', quantity: new Prisma.Decimal(2), inventoryItem: item },
-        ]),
-      },
-      custodyBalance: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: 'legacy-custody',
-            quantity: new Prisma.Decimal(2),
-            inventoryItem: item,
-            accountingOwnerResponsiblePerson: person,
-            custodianResponsiblePerson: { ...person, id: 'other' },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
         ]),
       },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
@@ -612,12 +599,6 @@ describe('StockService', () => {
 
     expect(result.totalDirectQuantity).toBe('2');
     expect(result.directBalances).toHaveLength(1);
-    expect(result.legacyCustodyArchive).toHaveLength(1);
-    expect(prisma.custodyBalance.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ quantity: { gt: 0 } }),
-      }),
-    );
   });
 
   it('scopes MVO accounting-card documents to outgoing records only', async () => {
@@ -627,7 +608,6 @@ describe('StockService', () => {
         findFirst: jest.fn().mockResolvedValue({ id: personId }),
       },
       stockBalance: { findMany: jest.fn().mockResolvedValue([]) },
-      custodyBalance: { findMany: jest.fn().mockResolvedValue([]) },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = createService(prisma);

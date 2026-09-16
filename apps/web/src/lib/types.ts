@@ -214,17 +214,7 @@ export type StockTransactionType =
   | 'MANUAL_RECEIPT'
   | 'ADJUSTMENT_INCREASE'
   | 'ADJUSTMENT_DECREASE'
-  | 'TRANSFER_OUT'
-  | 'TRANSFER_IN'
-  | 'ISSUE'
   | 'DOCUMENT_REVERSAL'
-  | 'ASSIGNMENT_OUT_DIRECT'
-  | 'ASSIGNMENT_OUT_CUSTODY'
-  | 'ASSIGNMENT_IN_DIRECT'
-  | 'ASSIGNMENT_IN_CUSTODY'
-  | 'ISSUE_FROM_DIRECT'
-  | 'ISSUE_FROM_CUSTODY'
-  | 'ASSIGNMENT_REVERSAL'
   | 'ISSUE_REVERSAL'
   | 'MVO_TRANSFER_OUT'
   | 'MVO_TRANSFER_REVERSAL'
@@ -268,10 +258,8 @@ export type PersonReference = {
   externalAccountingCode: string | null;
 };
 
-export type StockSourceKind = 'DIRECT' | 'ASSIGNED';
+export type StockSourceKind = 'DIRECT';
 export type StockDocumentType =
-  | 'TRANSFER'
-  | 'ASSIGNMENT'
   | 'MVO_TRANSFER'
   | 'ISSUE';
 export type StockDocumentStatus = 'DRAFT' | 'POSTED' | 'CANCELLED';
@@ -297,7 +285,6 @@ export type StockDocumentLine = {
   sourceKind: StockSourceKind | null;
   accountingOwnerResponsiblePersonId: string | null;
   sourceCustodianResponsiblePersonId: string | null;
-  sourceCustodyBalanceId: string | null;
   sourceBalanceId: string | null;
   sourceTransferLineId?: string | null;
   quantityBefore: string | null;
@@ -560,15 +547,6 @@ export type MyPropertyQuery = {
   sortOrder: SortOrder;
 };
 
-export type LegacyCustodyArchiveEntry = {
-  id: string;
-  inventoryItem: InventoryItem;
-  accountingOwner: PersonReference;
-  custodian: PersonReference;
-  quantity: string;
-  updatedAt: string;
-};
-
 export type AccountingCardDocument = {
   id: string;
   documentNumber: string;
@@ -589,7 +567,6 @@ export type AccountingCardDocument = {
 
 export type ResponsiblePersonAccountingCard = {
   directBalances: { id: string; inventoryItem: InventoryItem; quantity: string }[];
-  legacyCustodyArchive: LegacyCustodyArchiveEntry[];
   totalDirectQuantity: string;
   recentTransfers: AccountingCardDocument[];
   recentIssues: AccountingCardDocument[];
@@ -936,7 +913,7 @@ export type StockTransaction = {
   importBatchId: string | null;
   documentId?: string | null;
   documentLineId?: string | null;
-  accountingModel?: 'LEGACY_BALANCE' | 'OWNER_CUSTODY' | null;
+  accountingModel?: 'DIRECT_BALANCE' | null;
   bucketKind?: StockSourceKind | null;
   accountingOwnerResponsiblePersonId?: string | null;
   sourceCustodianResponsiblePersonId?: string | null;

@@ -40,7 +40,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const {
     user,
     type,
-    document,
     initialInventoryItemId,
     initialSourceId,
     persons,
@@ -54,40 +53,18 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     targetsError,
     onSourceChange,
     onSubmit,
-    onRemoveAttachment,
     onClose,
   } = props;
-  const initialSource = resolveSourceId(
-    user,
-    document?.sourceResponsiblePersonId ?? initialSourceId,
-  );
+  const initialSource = resolveSourceId(user, initialSourceId);
   const [documentDate, setDocumentDate] = useState(
-    (document?.documentDate ?? new Date().toISOString()).slice(0, 10),
+    new Date().toISOString().slice(0, 10),
   );
   const [sourceId, setSourceId] = useState(initialSource);
-  const initialDestinationId = document?.destinationResponsiblePersonId ?? '';
-  const [destinationId, setDestinationId] = useState(initialDestinationId);
-  const [destinationLabel, setDestinationLabel] = useState(() => {
-    const target = transferTargets.find(({ id }) => id === initialDestinationId);
-    return target ? personOptionLabel(target) : '';
-  });
-  const [recipientName, setRecipientName] = useState(
-    document?.recipientName ?? '',
-  );
-  const [recipientUnit, setRecipientUnit] = useState(
-    document?.recipientUnit ?? '',
-  );
-  const [basis, setBasis] = useState(document?.basis ?? '');
-  const [note, setNote] = useState(document?.note ?? '');
+  const [destinationId, setDestinationId] = useState('');
+  const [destinationLabel, setDestinationLabel] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [note, setNote] = useState('');
   const [lines, setLines] = useState<DocumentFormLine[]>(() => {
-    if (document) {
-      return document.lines.map((line) => ({
-        inventoryItemId: line.inventoryItemId,
-        sourceBalanceId: line.sourceBalanceId ?? '',
-        quantity: line.quantity,
-        note: line.note ?? '',
-      }));
-    }
     const initialSource = initialInventoryItemId
       ? availableSources.find(
           (source) =>
@@ -106,23 +83,8 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   const recipientMode = documentRecipientMode(type);
   const transfer = type === 'MVO_TRANSFER';
   const issue = type === 'ISSUE';
-  const createAndPostTransfer = transfer && !document;
-  const createAndPostIssue = issue && !document;
-
-  useEffect(() => {
-    const uploaded = document?.attachments ?? [];
-    if (!uploaded.length) return;
-    setFiles((current) =>
-      current.filter(
-        (file) =>
-          !uploaded.some(
-            (attachment) =>
-              attachment.originalFileName === file.name &&
-              attachment.sizeBytes === file.size,
-          ),
-      ),
-    );
-  }, [document?.attachments]);
+  const createAndPostTransfer = transfer;
+  const createAndPostIssue = issue;
 
   useEffect(() => {
     if (!destinationId || destinationLabel) return;
@@ -140,14 +102,6 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         recipientMode === 'MVO' ? destinationId : undefined,
       recipientName:
         recipientMode === 'EXTERNAL' ? recipientName.trim() : undefined,
-      recipientUnit:
-        recipientMode === 'EXTERNAL' && !createAndPostIssue
-          ? recipientUnit.trim() || undefined
-          : undefined,
-      basis:
-        type === 'MVO_TRANSFER' || createAndPostIssue
-          ? undefined
-          : basis.trim() || undefined,
       note: note.trim() || undefined,
       lines: lines.map((line) => ({
         inventoryItemId: line.inventoryItemId,
@@ -240,19 +194,13 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         title="Закрити форму без збереження?"
       >
         <p>
-          {createAndPostTransfer || createAndPostIssue
-            ? 'Ви внесли дані, але ще не підтвердили операцію. Закрити форму без підтвердження?'
-            : 'Ви внесли дані, але ще не зберегли чернетку. Закрити форму без збереження?'}
+          Ви внесли дані, але ще не підтвердили операцію. Закрити форму без підтвердження?
         </p>
       </Modal>
     );
   }
 
-  const title = document
-    ? `Редагування ${transfer ? 'передачі' : 'видачі'}`
-    : transfer
-      ? 'Нова передача'
-      : 'Нова видача';
+  const title = transfer ? 'Нова передача' : 'Нова видача';
   return (
     <Modal
       closeOnEscape={!saving}
@@ -275,15 +223,9 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
               ? saving
                 ? 'Передаємо…'
                 : 'Підтвердити передачу'
-              : createAndPostIssue
-                ? saving
-                  ? 'Видаємо…'
-                  : 'Підтвердити видачу'
               : saving
-                ? files.length
-                  ? 'Завантаження вкладень…'
-                  : 'Збереження…'
-                : 'Зберегти чернетку'}
+                ? 'Видаємо…'
+                : 'Підтвердити видачу'}
           </Button>
         </>
       }
@@ -338,7 +280,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                     disabled={
                       loadingTargets || Boolean(targetsError)
                     }
-                    initialFocus={!document}
+                    initialFocus
                     sourceId={sourceId}
                     targets={transferTargets}
                     value={destinationId}
@@ -371,31 +313,8 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                     }}
                   />
                 </FormField>
-                {!createAndPostIssue ? (
-                  <FormField label="Підрозділ одержувача">
-                    <Input
-                      value={recipientUnit}
-                      onChange={(event) => {
-                        setRecipientUnit(event.target.value);
-                        setDirty(true);
-                      }}
-                    />
-                  </FormField>
-                ) : null}
               </>
             )}
-            {!transfer && !createAndPostIssue ? (
-              <FormField label="Мета або підстава" required>
-                <Input
-                  required
-                  value={basis}
-                  onChange={(event) => {
-                    setBasis(event.target.value);
-                    setDirty(true);
-                  }}
-                />
-              </FormField>
-            ) : null}
             <FormField label={createAndPostIssue ? 'Коментар' : 'Примітка'}>
               <Textarea
                 placeholder={
@@ -440,14 +359,12 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
           />
           {type === 'ISSUE' ? (
             <StockDocumentAttachments
-              attachments={document?.attachments ?? []}
               disabled={saving}
               files={files}
               onFilesChange={(nextFiles) => {
                 setFiles(nextFiles);
                 setDirty(true);
               }}
-              onRemoveAttachment={onRemoveAttachment}
             />
           ) : null}
           {validationError || error || sourcesError ? (

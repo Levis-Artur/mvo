@@ -4,7 +4,6 @@ import {
   Delete,
   Get,
   Param,
-  Patch,
   Post,
   Query,
   Req,
@@ -31,9 +30,7 @@ import { attachmentFileSizeLimitBytes } from '../config/env';
 import {
   CreateMvoTransferDto,
   CreateIssueDto,
-  CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
-  UpdateStockDocumentDto,
 } from './dto/stock-document.dto';
 import { StockDocumentsService } from './stock-documents.service';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
@@ -345,47 +342,6 @@ export class StockDocumentsController {
   @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   findOne(@Param('id') id: string, @CurrentUserParam() actor: CurrentUser, @Query() query: ReadAccessQueryDto) {
     return this.service.findOne(id, actor, query.accessMode);
-  }
-
-  @Post()
-  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
-  create(
-    @Body() dto: CreateStockDocumentDto,
-    @CurrentUserParam() actor: CurrentUser,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.service.create(dto, actor, getRequestContext(request));
-  }
-
-  @Patch(':id')
-  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateStockDocumentDto,
-    @CurrentUserParam() actor: CurrentUser,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.service.update(id, dto, actor, getRequestContext(request));
-  }
-
-  @Delete(':id')
-  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
-  remove(
-    @Param('id') id: string,
-    @CurrentUserParam() actor: CurrentUser,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.service.remove(id, actor, getRequestContext(request));
-  }
-
-  @Post(':id/post')
-  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
-  post(
-    @Param('id') id: string,
-    @CurrentUserParam() actor: CurrentUser,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.service.post(id, actor, getRequestContext(request));
   }
 
   @Post(':id/cancel')

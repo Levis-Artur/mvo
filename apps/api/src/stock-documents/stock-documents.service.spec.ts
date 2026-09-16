@@ -91,14 +91,14 @@ describe('StockDocumentsService OWNER destructive cancellation', () => {
 });
 
 describe('StockDocumentsService scoped MVO manager reads', () => {
-  it.each(['post', 'cancel'] as const)('still forbids %s of a foreign document with MVO scopes', async (action) => {
+  it.each(['cancel'] as const)('still forbids %s of a foreign document with MVO scopes', async (action) => {
     const h = harness();
     const actor = user(UserRole.MVO, sourceId, [{ managementId: null, serviceCode: 'IT' }]);
     h.tx.stockDocument.findUnique.mockResolvedValue({
       id: documentId,
       type: StockDocumentType.MVO_TRANSFER,
       accountingModel: StockAccountingModel.DIRECT_BALANCE,
-      status: action === 'post' ? StockDocumentStatus.DRAFT : StockDocumentStatus.POSTED,
+      status: StockDocumentStatus.POSTED,
       sourceResponsiblePersonId: destinationId,
     });
     await expect(h.service[action](documentId, actor, {})).rejects.toBeInstanceOf(ForbiddenException);
@@ -177,7 +177,6 @@ function line(overrides: Record<string, unknown> = {}) {
     sourceKind: null,
     accountingOwnerResponsiblePersonId: null,
     sourceCustodianResponsiblePersonId: null,
-    sourceCustodyBalanceId: null,
     sourceBalanceId: balanceId,
     sourceTransferLineId: null,
     quantityBefore: null,
@@ -264,7 +263,6 @@ function viewDocument(
       },
       accountingOwnerResponsiblePerson: null,
       sourceCustodianResponsiblePerson: null,
-      sourceCustodyBalance: null,
       issueLines: entry.issueLines ?? [],
     })),
   };

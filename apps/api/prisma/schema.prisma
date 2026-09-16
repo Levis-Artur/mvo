@@ -36,19 +36,7 @@ enum StockTransactionType {
   MANUAL_RECEIPT
   ADJUSTMENT_INCREASE
   ADJUSTMENT_DECREASE
-  TRANSFER_OUT
-  TRANSFER_IN
-  ISSUE
-  TRANSFER_REVERSAL_OUT
-  TRANSFER_REVERSAL_IN
   ISSUE_REVERSAL
-  ASSIGNMENT_OUT_DIRECT
-  ASSIGNMENT_OUT_CUSTODY
-  ASSIGNMENT_IN_DIRECT
-  ASSIGNMENT_IN_CUSTODY
-  ISSUE_FROM_DIRECT
-  ISSUE_FROM_CUSTODY
-  ASSIGNMENT_REVERSAL
   MVO_TRANSFER_OUT
   MVO_TRANSFER_REVERSAL
   ISSUE_OUT
@@ -56,8 +44,6 @@ enum StockTransactionType {
 }
 
 enum StockDocumentType {
-  TRANSFER
-  ASSIGNMENT
   MVO_TRANSFER
   ISSUE
 }
@@ -68,8 +54,6 @@ enum StockSourceKind {
 }
 
 enum StockAccountingModel {
-  LEGACY_BALANCE
-  OWNER_CUSTODY
   DIRECT_BALANCE
 }
 
@@ -205,8 +189,6 @@ model ResponsiblePerson {
   user                   User?
   sourceStockDocuments   StockDocument[]    @relation("StockDocumentSource")
   destinationStockDocuments StockDocument[] @relation("StockDocumentDestination")
-  accountingOwnedCustodyBalances CustodyBalance[] @relation("CustodyBalanceAccountingOwner")
-  custodialBalances              CustodyBalance[] @relation("CustodyBalanceCustodian")
   accountingOwnedDocumentLines   StockDocumentLine[] @relation("StockDocumentLineAccountingOwner")
   sourceCustodianDocumentLines   StockDocumentLine[] @relation("StockDocumentLineSourceCustodian")
   accountingOwnedTransactions    StockTransaction[] @relation("StockTransactionAccountingOwner")
@@ -359,7 +341,6 @@ model InventoryItem {
   stockTransactions StockTransaction[]
   importRows        ImportRow[]
   stockDocumentLines StockDocumentLine[]
-  custodyBalances    CustodyBalance[]
 
   @@index([name])
   @@index([reviewStatus])
@@ -380,27 +361,6 @@ model StockBalance {
   @@unique([responsiblePersonId, inventoryItemId])
   @@index([responsiblePersonId])
   @@index([inventoryItemId])
-}
-
-model CustodyBalance {
-  id                                    String            @id @default(uuid()) @db.Uuid
-  inventoryItemId                       String            @db.Uuid
-  accountingOwnerResponsiblePersonId    String            @db.Uuid
-  custodianResponsiblePersonId           String            @db.Uuid
-  quantity                              Decimal           @default(0) @db.Decimal(18, 4)
-  createdAt                             DateTime          @default(now())
-  updatedAt                             DateTime          @updatedAt
-  inventoryItem                         InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  accountingOwnerResponsiblePerson      ResponsiblePerson @relation("CustodyBalanceAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
-  custodianResponsiblePerson             ResponsiblePerson @relation("CustodyBalanceCustodian", fields: [custodianResponsiblePersonId], references: [id], onDelete: Restrict)
-  sourceDocumentLines                    StockDocumentLine[]
-
-  @@unique([inventoryItemId, accountingOwnerResponsiblePersonId, custodianResponsiblePersonId])
-  @@index([inventoryItemId])
-  @@index([accountingOwnerResponsiblePersonId])
-  @@index([custodianResponsiblePersonId])
-  @@index([accountingOwnerResponsiblePersonId, inventoryItemId])
-  @@index([custodianResponsiblePersonId, inventoryItemId])
 }
 
 model StockTransaction {
@@ -510,7 +470,6 @@ model StockDocumentLine {
   sourceKind      StockSourceKind?
   accountingOwnerResponsiblePersonId String? @db.Uuid
   sourceCustodianResponsiblePersonId String? @db.Uuid
-  sourceCustodyBalanceId String?      @db.Uuid
   sourceBalanceId String?             @db.Uuid
   sourceTransferLineId String?         @db.Uuid
   quantityBefore Decimal?             @db.Decimal(18, 4)
@@ -522,7 +481,6 @@ model StockDocumentLine {
   inventoryItem   InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
   accountingOwnerResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineAccountingOwner", fields: [accountingOwnerResponsiblePersonId], references: [id], onDelete: Restrict)
   sourceCustodianResponsiblePerson ResponsiblePerson? @relation("StockDocumentLineSourceCustodian", fields: [sourceCustodianResponsiblePersonId], references: [id], onDelete: Restrict)
-  sourceCustodyBalance CustodyBalance? @relation(fields: [sourceCustodyBalanceId], references: [id], onDelete: Restrict)
   sourceBalance StockBalance?          @relation("StockDocumentLineSourceBalance", fields: [sourceBalanceId], references: [id], onDelete: Restrict)
   sourceTransferLine StockDocumentLine? @relation("TransferIssueLines", fields: [sourceTransferLineId], references: [id], onDelete: Restrict)
   issueLines       StockDocumentLine[]  @relation("TransferIssueLines")
@@ -533,7 +491,6 @@ model StockDocumentLine {
   @@index([inventoryItemId])
   @@index([accountingOwnerResponsiblePersonId])
   @@index([sourceCustodianResponsiblePersonId])
-  @@index([sourceCustodyBalanceId])
   @@index([sourceBalanceId])
   @@index([sourceTransferLineId])
 }

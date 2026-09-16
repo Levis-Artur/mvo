@@ -3,6 +3,7 @@
 import { StrictMode } from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Button } from '@/components/ui';
 import type { ResponsiblePerson, ResponsiblePersonAccountingCard } from '@/lib/types';
 import { PersonsView } from './persons-view';
 import { responsiblePersonsService } from './responsible-persons.service';
@@ -32,7 +33,7 @@ jest.mock('./persons-table', () => ({
     <div>
       {persons.map((person) => (
         <div key={person.id}>
-          <button onClick={() => onView(person)}>Відкрити картку МВО</button>
+          <Button type="button" onClick={() => onView(person)}>Відкрити картку МВО</Button>
           <output data-testid="stock-presence">
             {String(stockPresence[person.id] ?? 'unknown')}
           </output>
@@ -66,7 +67,6 @@ it('shows stock rows after reporting presence and does not reload on a parent re
       inventoryItem: { externalCode: 'INV-001', name: 'Тестовий ноутбук' },
       quantity: '3',
     }],
-    legacyCustodyArchive: [],
     totalDirectQuantity: '3',
   } as ResponsiblePersonAccountingCard;
   const pending: Array<(result: ResponsiblePersonAccountingCard) => void> = [];

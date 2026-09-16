@@ -11,7 +11,6 @@ import {
   documentActionState,
   documentDirection,
   documentNumberLabel,
-  documentPostingBlocker,
   documentRecipientMode,
   documentStatusPresentation,
   documentTypeLabel,
@@ -22,7 +21,7 @@ import {
   recipientOptions,
   resolveSourceId,
   shouldConfirmUnsavedDocument,
-  successfulDocumentActionMessage,
+  documentCancellationMessage,
   validateDocumentInput,
 } from './stock-document-rules';
 
@@ -92,10 +91,8 @@ describe('stock document frontend rules', () => {
       .toBe('Для нового документа можна вибирати лише власний поточний залишок');
   });
 
-  it('забороняє кількість понад доступне джерело та обидва legacy типи передач', () => {
+  it('забороняє кількість понад доступне джерело', () => {
     expect(validateDocumentInput(input(), [source('item-1', '1')])).toBe('Кількість не може перевищувати доступний залишок');
-    expect(validateDocumentInput(input({ type: 'TRANSFER' }), [source('item-1', '5')])).toBe('Старі типи передач доступні лише для перегляду');
-    expect(validateDocumentInput(input({ type: 'ASSIGNMENT' }), [source('item-1', '5')])).toBe('Старі типи передач доступні лише для перегляду');
   });
 
   it('перевіряє обов’язкові поля ISSUE', () => {
@@ -103,15 +100,6 @@ describe('stock document frontend rules', () => {
     expect(validateDocumentInput(input({ type: 'ISSUE', destinationResponsiblePersonId: undefined, recipientName: 'Одержувач', basis: '' }), [source('item-1', '5')])).toBe('Вкажіть мету або підставу видачі');
   });
 
-  it('блокує POST ISSUE без attachment', () => {
-    expect(documentPostingBlocker({ type: 'ISSUE', attachments: [] })).toContain('щонайменше одне фото');
-    expect(documentPostingBlocker({ type: 'ISSUE', attachments: [{ id: 'file-1' }] as StockDocument['attachments'] })).toBe('');
-  });
-
-  it('обидва старі типи передач завжди read-only', () => {
-    expect(lifecycleActions({ type: 'TRANSFER', status: 'DRAFT', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
-    expect(lifecycleActions({ type: 'ASSIGNMENT', status: 'POSTED', sourceResponsiblePersonId: 'person-1' }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
-  });
 
   it('не дозволяє скасувати передачу після бухгалтерського експорту', () => {
     expect(lifecycleActions({
@@ -128,15 +116,15 @@ describe('stock document frontend rules', () => {
     }, mvoUser).cancel).toBe(true);
   });
 
-  it('не редагує ISSUE та дозволяє скасувати власну проведену видачу', () => {
+  it('не скасовує DRAFT ISSUE та дозволяє скасувати власну проведену видачу', () => {
     expect(lifecycleActions({
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
-    }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+    }, mvoUser)).toEqual({ cancel: false });
     expect(lifecycleActions({
       type: 'ISSUE', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
       sourceTransferId: 'transfer-1',
-    }, mvoUser)).toEqual({ edit: false, post: false, remove: false, cancel: false });
+    }, mvoUser)).toEqual({ cancel: false });
     expect(lifecycleActions({
       type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: 'person-1',
       lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
@@ -145,17 +133,13 @@ describe('stock document frontend rules', () => {
       type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: 'person-1',
       sourceTransferId: 'transfer-1',
     }, mvoUser).cancel).toBe(true);
-    expect(lifecycleActions({
-      type: 'MVO_TRANSFER', status: 'DRAFT', sourceResponsiblePersonId: 'person-1',
-      lines: [{ sourceBalanceId: 'balance-1' }] as StockDocument['lines'],
-    }, mvoUser).edit).toBe(true);
   });
 
   it('пояснює скасування child ISSUE без заяви про відновлення StockBalance', () => {
-    const message = successfulDocumentActionMessage({
+    const message = documentCancellationMessage({
       type: 'ISSUE',
       sourceTransferId: 'transfer-1',
-    } as StockDocument, 'cancel');
+    } as StockDocument);
 
     expect(message).toBe('Видачу скасовано. Доступну для оформлення кількість передачі відновлено.');
     expect(message).not.toContain('стан майна відновлено');
@@ -163,10 +147,7 @@ describe('stock document frontend rules', () => {
 
   it('показує точний action error і розрізняє типи документів', () => {
     expect(documentActionState('Недостатній залишок для reversal', false).error).toBe('Недостатній залишок для reversal');
-    const document = { type: 'ASSIGNMENT', destinationResponsiblePersonId: 'person-1' } as StockDocument;
-    expect(documentDirection(document)).toBe('Стара логіка');
-    expect(documentDirection({ ...document, type: 'ISSUE' })).toBe('Видача');
-    expect(documentDirection({ ...document, type: 'TRANSFER' })).toBe('Стара логіка');
+    expect(documentDirection({ type: 'ISSUE' } as StockDocument)).toBe('Видача');
   });
 
   it('оформлює статуси документа стабільно', () => {
@@ -178,9 +159,7 @@ describe('stock document frontend rules', () => {
   });
 
   it('не показує технічні типи та формує послідовний номер документа', () => {
-    expect(documentTypeLabel('ASSIGNMENT')).toBe('Стара передача');
     expect(documentTypeLabel('ISSUE')).toBe('Видача');
-    expect(documentTypeLabel('TRANSFER')).toBe('Стара передача');
     expect(documentNumberLabel(1)).toBe('№ 1');
     expect(documentNumberLabel(42)).toBe('№ 42');
   });
@@ -199,17 +178,6 @@ describe('stock document frontend rules', () => {
     expect(documentVolumePresentation(11, '20').full).toBe(
       '11 позицій, загальна кількість 20 одиниць',
     );
-  });
-
-  it('формує людський підсумок успішної передачі', () => {
-    const document = {
-      type: 'MVO_TRANSFER', totalQuantity: '2', recipientName: null,
-      destinationResponsiblePerson: person('person-2'),
-      lines: [{ inventoryItem: { name: 'Клавіатура' } }],
-    } as StockDocument;
-    expect(successfulDocumentActionMessage(document, 'post')).toContain('Клавіатура');
-    expect(successfulDocumentActionMessage(document, 'post')).toContain('кількість 2');
-    expect(successfulDocumentActionMessage(document, 'post')).toContain('Кому:');
   });
 
   it('підтверджує закриття лише для зміненої незбереженої форми', () => {

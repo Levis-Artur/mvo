@@ -120,12 +120,6 @@ describeWithPostgres(
         createDocument(firstClient, fixture, {
           type: StockDocumentType.ISSUE,
         }),
-        createDocument(firstClient, fixture, {
-          type: StockDocumentType.ASSIGNMENT,
-        }),
-        createDocument(firstClient, fixture, {
-          type: StockDocumentType.TRANSFER,
-        }),
       ]);
       const service = new AccountingService(firstClient as never);
 
@@ -182,6 +176,7 @@ async function createFixture(prisma: PrismaClient) {
       data: {
         lastName: 'Тестовий',
         firstName: 'Відправник',
+        externalAccountingCode: '9001',
         managementId: management.id,
         serviceId: service.id,
       },
@@ -190,6 +185,7 @@ async function createFixture(prisma: PrismaClient) {
       data: {
         lastName: 'Тестовий',
         firstName: 'Одержувач',
+        externalAccountingCode: '9002',
         managementId: management.id,
         serviceId: service.id,
       },
@@ -272,10 +268,7 @@ async function createDocument(
       type,
       status,
       accountingExportState,
-      accountingModel:
-        type === StockDocumentType.MVO_TRANSFER
-          ? StockAccountingModel.DIRECT_BALANCE
-          : StockAccountingModel.LEGACY_BALANCE,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
       sourceResponsiblePersonId: fixture.source.id,
       destinationResponsiblePersonId:
         type === StockDocumentType.ISSUE ? null : fixture.destination.id,

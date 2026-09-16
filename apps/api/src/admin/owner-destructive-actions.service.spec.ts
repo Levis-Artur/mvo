@@ -28,7 +28,6 @@ function createService() {
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
-    custodyBalance: { findMany: jest.fn(), deleteMany: jest.fn() },
     importRow: {
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
@@ -75,7 +74,6 @@ function createService() {
     user: { findUnique: jest.fn(), count: jest.fn() },
     importBatch: { findUnique: jest.fn() },
     responsiblePerson: { findUnique: jest.fn() },
-    custodyBalance: { count: jest.fn() },
     stockDocument: { count: jest.fn() },
     stockDocumentLine: { count: jest.fn() },
     stockDocumentAttachment: { count: jest.fn(), findMany: jest.fn() },
@@ -104,7 +102,6 @@ function createService() {
         responsiblePersons: 4,
         inventoryItems: 5,
         stockBalances: 6,
-        custodyBalances: 1,
         stockTransactions: 8,
         stockDocuments: 7,
         mvoTransfers: 3,
@@ -124,7 +121,6 @@ function createService() {
       orphanAttachmentFiles: 1,
     }),
   };
-  const stockService = { createIncreasingTransactionInTx: jest.fn() };
   const stockDocuments = { cancelForOwnerDeletionInTx: jest.fn() };
   const attachmentStorage = {
     stageForDeletion: jest.fn(),
@@ -136,14 +132,12 @@ function createService() {
     service: new OwnerDestructiveActionsService(
       prisma as never,
       businessDataReset as never,
-      stockService as never,
       stockDocuments as never,
       attachmentStorage as never,
     ),
     prisma,
     tx,
     businessDataReset,
-    stockService,
     stockDocuments,
     attachmentStorage,
   };
@@ -153,7 +147,7 @@ function prepareInventoryDelete(h: ReturnType<typeof createService>) {
   h.prisma.inventoryItem.findUnique.mockResolvedValue({
     id: 'item-x', externalCode: 'X', name: 'Item X',
     _count: {
-      stockBalances: 1, custodyBalances: 1, stockTransactions: 1,
+      stockBalances: 1, stockTransactions: 1,
       stockDocumentLines: 1, importRows: 1,
     },
   });
@@ -180,7 +174,6 @@ function prepareInventoryDelete(h: ReturnType<typeof createService>) {
   h.tx.stockTransaction.findMany.mockResolvedValue([
     { id: 'transaction-x' },
   ]);
-  h.tx.custodyBalance.findMany.mockResolvedValue([{ id: 'custody-x' }]);
   h.tx.stockBalance.findMany.mockResolvedValue([{ id: 'balance-x' }]);
 }
 
@@ -320,96 +313,6 @@ describe('OwnerDestructiveActionsService', () => {
     );
   });
 
-  it('returns shared custody to a surviving accounting owner before deleting MVO', async () => {
-    const { service, prisma, tx, stockService } = createService();
-    prisma.responsiblePerson.findUnique.mockResolvedValue({
-      id: 'person-a', lastName: 'A', firstName: 'MVO', middleName: null,
-      stockBalances: [], user: null,
-      _count: { stockTransactions: 0, importRows: 0 },
-    });
-    prisma.custodyBalance.count
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1);
-    prisma.stockDocument.count.mockResolvedValue(0);
-    prisma.stockDocumentLine.count.mockResolvedValue(0);
-    prisma.stockDocumentAttachment.count.mockResolvedValue(0);
-    prisma.issueRealization.count.mockResolvedValue(0);
-    prisma.accountingTransferExportBatch.count.mockResolvedValue(0);
-    prisma.stockDocumentAttachment.findMany.mockResolvedValue([]);
-    prisma.issueRealizationAttachment.findMany.mockResolvedValue([]);
-    tx.responsiblePerson.findUniqueOrThrow.mockResolvedValue({
-      id: 'person-a', lastName: 'A', firstName: 'MVO', middleName: null,
-    });
-    tx.user.findUnique.mockResolvedValue(null);
-    tx.custodyBalance.findMany.mockResolvedValue([{
-      id: 'custody-id', inventoryItemId: 'item-id',
-      accountingOwnerResponsiblePersonId: 'person-b',
-      custodianResponsiblePersonId: 'person-a',
-      quantity: new Prisma.Decimal(5),
-    }]);
-    tx.stockDocument.findMany.mockResolvedValue([]);
-    tx.accountingTransferExportBatchDocument.findMany.mockResolvedValue([]);
-    tx.issueRealization.findMany.mockResolvedValue([]);
-
-    await service.delete(owner, 'responsible-persons', 'person-a', {
-      confirmation: 'DELETE responsible-persons:person-a',
-    }, {});
-
-    expect(stockService.createIncreasingTransactionInTx).toHaveBeenCalledWith(
-      tx,
-      expect.objectContaining({
-        type: 'ASSIGNMENT_REVERSAL',
-        responsiblePersonId: 'person-b',
-        inventoryItemId: 'item-id',
-        quantity: expect.anything(),
-        documentId: null,
-      }),
-    );
-    expect(tx.custodyBalance.deleteMany).toHaveBeenCalledWith({
-      where: { id: { in: ['custody-id'] } },
-    });
-  });
-
-  it.each([
-    ['owner with surviving custodian', 'person-a', 'person-b'],
-    ['owner and custodian', 'person-a', 'person-a'],
-  ])('deletes custody without crediting another balance when A is %s', async (
-    _caseName, accountingOwnerResponsiblePersonId, custodianResponsiblePersonId,
-  ) => {
-    const { service, prisma, tx, stockService } = createService();
-    prisma.responsiblePerson.findUnique.mockResolvedValue({
-      id: 'person-a', lastName: 'A', firstName: 'MVO', middleName: null,
-      stockBalances: [], user: null,
-      _count: { stockTransactions: 0, importRows: 0 },
-    });
-    prisma.custodyBalance.count.mockResolvedValue(1);
-    prisma.stockDocument.count.mockResolvedValue(0);
-    prisma.stockDocumentLine.count.mockResolvedValue(0);
-    prisma.stockDocumentAttachment.count.mockResolvedValue(0);
-    prisma.issueRealization.count.mockResolvedValue(0);
-    prisma.accountingTransferExportBatch.count.mockResolvedValue(0);
-    prisma.stockDocumentAttachment.findMany.mockResolvedValue([]);
-    prisma.issueRealizationAttachment.findMany.mockResolvedValue([]);
-    tx.responsiblePerson.findUniqueOrThrow.mockResolvedValue({
-      id: 'person-a', lastName: 'A', firstName: 'MVO', middleName: null,
-    });
-    tx.user.findUnique.mockResolvedValue(null);
-    tx.custodyBalance.findMany.mockResolvedValue([{
-      id: 'custody-id', inventoryItemId: 'item-id',
-      accountingOwnerResponsiblePersonId, custodianResponsiblePersonId,
-      quantity: new Prisma.Decimal(5),
-    }]);
-    tx.stockDocument.findMany.mockResolvedValue([]);
-    tx.accountingTransferExportBatchDocument.findMany.mockResolvedValue([]);
-    tx.issueRealization.findMany.mockResolvedValue([]);
-
-    await service.delete(owner, 'responsible-persons', 'person-a', {
-      confirmation: 'DELETE responsible-persons:person-a',
-    }, {});
-
-    expect(stockService.createIncreasingTransactionInTx).not.toHaveBeenCalled();
-    expect(tx.custodyBalance.deleteMany).toHaveBeenCalled();
-  });
 
   it('cancels affected posted documents, removes whole export batch, detaches imports and deletes linked MVO user', async () => {
     const { service, prisma, tx, stockDocuments } = createService();
@@ -418,7 +321,6 @@ describe('OwnerDestructiveActionsService', () => {
       stockBalances: [], user: { id: 'mvo-user', role: UserRole.MVO },
       _count: { stockTransactions: 2, importRows: 1 },
     });
-    prisma.custodyBalance.count.mockResolvedValue(0);
     prisma.stockDocument.count.mockResolvedValue(2);
     prisma.stockDocumentLine.count.mockResolvedValue(2);
     prisma.stockDocumentAttachment.count.mockResolvedValue(0);
@@ -430,7 +332,6 @@ describe('OwnerDestructiveActionsService', () => {
       id: 'person-a', lastName: 'A', firstName: 'MVO', middleName: null,
     });
     tx.user.findUnique.mockResolvedValue({ id: 'mvo-user', role: UserRole.MVO });
-    tx.custodyBalance.findMany.mockResolvedValue([]);
     tx.stockDocument.findMany.mockResolvedValue([
       {
         id: 'transfer-b-a', type: 'MVO_TRANSFER', status: 'POSTED',
@@ -490,7 +391,6 @@ describe('OwnerDestructiveActionsService', () => {
       stockBalances: [], user: { id: 'linked-user', role: UserRole.ACCOUNTANT },
       _count: { stockTransactions: 0, importRows: 0 },
     });
-    prisma.custodyBalance.count.mockResolvedValue(0);
     prisma.stockDocument.count.mockResolvedValue(0);
     prisma.stockDocumentLine.count.mockResolvedValue(0);
     prisma.stockDocumentAttachment.count.mockResolvedValue(0);
@@ -504,7 +404,6 @@ describe('OwnerDestructiveActionsService', () => {
     tx.user.findUnique.mockResolvedValue({
       id: 'linked-user', role: UserRole.ACCOUNTANT,
     });
-    tx.custodyBalance.findMany.mockResolvedValue([]);
     tx.stockDocument.findMany.mockResolvedValue([]);
     tx.accountingTransferExportBatchDocument.findMany.mockResolvedValue([]);
     tx.issueRealization.findMany.mockResolvedValue([]);
@@ -695,9 +594,6 @@ describe('OwnerDestructiveActionsService', () => {
     expect(h.tx.stockBalance.deleteMany).toHaveBeenCalledWith({
       where: { inventoryItemId: 'item-x' },
     });
-    expect(h.tx.custodyBalance.deleteMany).toHaveBeenCalledWith({
-      where: { inventoryItemId: 'item-x' },
-    });
     expect(h.tx.importRow.updateMany).toHaveBeenCalledWith({
       where: { inventoryItemId: 'item-x' },
       data: { inventoryItemId: null },
@@ -718,7 +614,6 @@ describe('OwnerDestructiveActionsService', () => {
     expect(preview.canDelete).toBe(true);
     expect(preview.dependencies).toEqual(expect.arrayContaining([
       { type: 'stockBalances', count: 1, action: 'DELETE' },
-      { type: 'custodyBalances', count: 1, action: 'DELETE' },
       { type: 'documentsToDelete', count: 1, action: 'DELETE' },
       { type: 'documentsToKeep', count: 0, action: 'RETAIN' },
       { type: 'importRows', count: 1, action: 'DETACH' },
@@ -756,7 +651,7 @@ describe('OwnerDestructiveActionsService', () => {
       deletedServices: 3,
       deletedResponsiblePersons: 4,
       deletedInventoryItems: 5,
-      deletedBalances: 7,
+      deletedBalances: 6,
       deletedTransactions: 8,
       deletedDocuments: 7,
       deletedTransfers: 3,

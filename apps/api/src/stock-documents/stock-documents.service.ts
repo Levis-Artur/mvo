@@ -24,16 +24,23 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StockService } from '../stock/stock.service';
 import {
   type StoredAttachment,
-  type StagedAttachmentFile,
   StockDocumentAttachmentStorageService,
 } from './stock-document-attachment-storage.service';
 import {
   CreateIssueDto,
   CreateMvoTransferDto,
-  CreateStockDocumentDto,
   ListStockDocumentsQueryDto,
-  UpdateStockDocumentDto,
 } from './dto/stock-document.dto';
+
+type NewStockDocumentInput = {
+  type: Extract<StockDocumentType, 'MVO_TRANSFER' | 'ISSUE'>;
+  sourceResponsiblePersonId: string;
+  destinationResponsiblePersonId?: string;
+  recipientName?: string;
+  recipientUnit?: string;
+  basis?: string;
+  lines: CreateMvoTransferDto['lines'];
+};
 
 type AuditContext = {
   requestId?: string;
@@ -50,9 +57,6 @@ const documentInclude = {
   lines: {
     include: {
       inventoryItem: true,
-      accountingOwnerResponsiblePerson: true,
-      sourceCustodianResponsiblePerson: true,
-      sourceCustodyBalance: true,
       issueLines: {
         select: {
           quantity: true,
@@ -212,54 +216,6 @@ export class StockDocumentsService {
     if (!document) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
-    return this.serialize(document);
-  }
-
-  async create(
-    dto: CreateStockDocumentDto,
-    actor: CurrentUser,
-    context: AuditContext,
-  ) {
-    this.assertCanWrite(actor);
-    this.assertNewDocumentType(dto.type);
-    if (dto.type === StockDocumentType.MVO_TRANSFER) {
-      throw new BadRequestException(
-        'Нову передачу потрібно одразу підтвердити та провести',
-      );
-    }
-    if (dto.type === StockDocumentType.ISSUE) {
-      throw new BadRequestException(
-        'Нову видачу потрібно одразу підтвердити та провести',
-      );
-    }
-    const normalized = this.validateDto(dto, actor);
-    await this.assertActiveTransferRecipient(
-      this.prisma,
-      dto.type,
-      normalized.sourceResponsiblePersonId,
-      normalized.destinationResponsiblePersonId ?? null,
-    );
-    const document = await this.prisma.stockDocument.create({
-      data: {
-        documentNumber:
-          dto.documentNumber?.trim() ??
-          `MOV-${randomUUID().slice(0, 8).toUpperCase()}`,
-        documentDate: new Date(dto.documentDate),
-        type: dto.type,
-        accountingModel: normalized.accountingModel,
-        sourceResponsiblePersonId: normalized.sourceResponsiblePersonId,
-        destinationResponsiblePersonId:
-          normalized.destinationResponsiblePersonId,
-        recipientName: normalized.recipientName,
-        recipientUnit: normalized.recipientUnit,
-        basis: dto.basis?.trim() || null,
-        note: dto.note?.trim() || null,
-        createdByUserId: actor.id,
-        lines: { create: normalized.lines },
-      },
-      include: documentInclude,
-    });
-    await this.audit(actor, document.id, 'CREATE', document.status, true, context);
     return this.serialize(document);
   }
 
@@ -499,191 +455,6 @@ export class StockDocumentsService {
     return this.findOne(documentId, actor);
   }
 
-  async update(
-    id: string,
-    dto: UpdateStockDocumentDto,
-    actor: CurrentUser,
-    context: AuditContext,
-  ) {
-    this.assertCanWrite(actor);
-    const current = await this.findRaw(id);
-    this.assertDraftWorkflowDocument(current);
-    this.assertNewDocumentType(dto.type);
-    if (dto.type !== current.type) {
-      throw new BadRequestException('Тип документа не можна змінювати');
-    }
-    this.assertDraft(current.status);
-    this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-    const normalized = this.validateDto(dto, actor);
-    await this.assertActiveTransferRecipient(
-      this.prisma,
-      dto.type,
-      normalized.sourceResponsiblePersonId,
-      normalized.destinationResponsiblePersonId ?? null,
-    );
-    const document = await this.prisma.$transaction(async (tx) => {
-      const claim = await tx.stockDocument.updateMany({
-        where: { id, status: StockDocumentStatus.DRAFT },
-        data: { updatedAt: new Date() },
-      });
-      if (claim.count !== 1) this.assertDraft(StockDocumentStatus.POSTED);
-      await tx.stockDocumentLine.deleteMany({ where: { documentId: id } });
-      return tx.stockDocument.update({
-        where: { id },
-        data: {
-          documentNumber: dto.documentNumber?.trim() ?? current.documentNumber,
-          documentDate: new Date(dto.documentDate),
-          type: dto.type,
-          accountingModel: normalized.accountingModel,
-          sourceResponsiblePersonId: normalized.sourceResponsiblePersonId,
-          destinationResponsiblePersonId:
-            normalized.destinationResponsiblePersonId,
-          recipientName: normalized.recipientName,
-          recipientUnit: normalized.recipientUnit,
-          basis: dto.basis?.trim() || null,
-          note: dto.note?.trim() || null,
-          lines: { create: normalized.lines },
-        },
-        include: documentInclude,
-      });
-    });
-    await this.audit(actor, id, 'UPDATE', document.status, true, context);
-    return this.serialize(document);
-  }
-
-  async remove(id: string, actor: CurrentUser, context: AuditContext) {
-    this.assertCanWrite(actor);
-    const document = await this.findRaw(id);
-    this.assertDraftWorkflowDocument(document);
-    this.assertDraft(document.status);
-    this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
-    const attachments = await this.prisma.stockDocumentAttachment.findMany({
-      where: { documentId: id },
-      select: { storagePath: true },
-    });
-    const staged = await this.stageAttachmentFiles(
-      attachments.map((attachment) => attachment.storagePath),
-    );
-    try {
-      await this.prisma.$transaction(async (tx) => {
-        const claim = await tx.stockDocument.updateMany({
-          where: { id, status: StockDocumentStatus.DRAFT },
-          data: { updatedAt: new Date() },
-        });
-        if (claim.count !== 1) this.assertDraft(StockDocumentStatus.POSTED);
-        await tx.stockDocumentAttachment.deleteMany({
-          where: { documentId: id },
-        });
-        await tx.stockDocument.delete({ where: { id } });
-        await this.auditInTx(
-          tx,
-          actor,
-          id,
-          'DELETE',
-          document.status,
-          true,
-          context,
-        );
-      });
-    } catch (error) {
-      await this.attachmentStorage.restoreStaged(staged);
-      throw error;
-    }
-    await this.attachmentStorage.finalizeDeletion(staged);
-    return { deleted: true, id };
-  }
-
-  async post(id: string, actor: CurrentUser, context: AuditContext) {
-    this.assertCanWrite(actor);
-    try {
-      const posted = await this.prisma.$transaction(async (tx) => {
-        const current = await tx.stockDocument.findUnique({
-          where: { id },
-          select: {
-            type: true,
-            accountingModel: true,
-            status: true,
-            sourceResponsiblePersonId: true,
-            sourceTransferId: true,
-          },
-        });
-        if (!current) {
-          throw new NotFoundException('Документ руху майна не знайдено');
-        }
-        this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
-        this.assertDraftWorkflowDocument(current);
-        if (current.status === StockDocumentStatus.POSTED) return false;
-        this.assertDraft(current.status);
-
-        const claim = await tx.stockDocument.updateMany({
-          where: { id, status: StockDocumentStatus.DRAFT },
-          data: { updatedAt: new Date() },
-        });
-        if (claim.count === 0) {
-          const concurrent = await tx.stockDocument.findUnique({
-            where: { id },
-            select: { status: true, sourceResponsiblePersonId: true },
-          });
-          if (!concurrent) {
-            throw new NotFoundException('Документ руху майна не знайдено');
-          }
-          this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
-          if (concurrent.status === StockDocumentStatus.POSTED) return false;
-          this.assertDraft(concurrent.status);
-        }
-
-        const document = await tx.stockDocument.findUnique({
-          where: { id },
-          include: {
-            lines: true,
-            attachments: { select: { id: true, storagePath: true } },
-          },
-        });
-        if (!document) {
-          throw new NotFoundException('Документ руху майна не знайдено');
-        }
-        this.assertMvoOwnSource(actor, document.sourceResponsiblePersonId);
-        await this.assertActiveTransferRecipient(
-          tx,
-          document.type,
-          document.sourceResponsiblePersonId,
-          document.destinationResponsiblePersonId,
-        );
-        if (!document.lines.length) {
-          throw new BadRequestException(
-            'Документ повинен містити хоча б один рядок',
-          );
-        }
-        for (const line of document.lines) {
-          await this.postLine(tx, document, line);
-        }
-        await tx.stockDocument.update({
-          where: { id },
-          data: {
-            status: StockDocumentStatus.POSTED,
-            postedByUserId: actor.id,
-            postedAt: new Date(),
-          },
-        });
-        await this.auditInTx(
-          tx,
-          actor,
-          id,
-          'POST',
-          StockDocumentStatus.POSTED,
-          true,
-          context,
-        );
-        return true;
-      });
-      if (!posted) return this.findOne(id, actor);
-    } catch (error) {
-      await this.audit(actor, id, 'POST', 'FAILED', false, context, error);
-      throw error;
-    }
-    return this.findOne(id, actor);
-  }
-
   async cancel(id: string, actor: CurrentUser, context: AuditContext) {
     this.assertCanWrite(actor);
     try {
@@ -907,7 +678,7 @@ export class StockDocumentsService {
       return;
     }
     throw new BadRequestException(
-      'Документ старої моделі доступний лише для перегляду',
+      'Непідтримуваний тип або модель документа',
     );
   }
 
@@ -982,7 +753,7 @@ export class StockDocumentsService {
       return;
     }
     throw new BadRequestException(
-      'Документ старої моделі доступний лише для перегляду',
+      'Непідтримуваний тип або модель документа',
     );
   }
 
@@ -1137,7 +908,7 @@ export class StockDocumentsService {
   }
 
   private validateDto(
-    dto: CreateStockDocumentDto,
+    dto: NewStockDocumentInput,
     actor: CurrentUser,
     options: { requireIssueBasis?: boolean } = {},
   ) {
@@ -1231,7 +1002,6 @@ export class StockDocumentsService {
         sourceKind: null,
         accountingOwnerResponsiblePersonId: null,
         sourceCustodianResponsiblePersonId: null,
-        sourceCustodyBalanceId: null,
         sourceBalanceId: line.sourceBalanceId,
         sourceTransferLineId: null,
         quantityBefore: null,
@@ -1259,21 +1029,6 @@ export class StockDocumentsService {
     };
   }
 
-  private async stageAttachmentFiles(storagePaths: string[]) {
-    const staged: StagedAttachmentFile[] = [];
-    try {
-      for (const storagePath of storagePaths) {
-        staged.push(
-          await this.attachmentStorage.stageForDeletion(storagePath),
-        );
-      }
-      return staged;
-    } catch (error) {
-      await this.attachmentStorage.restoreStaged(staged);
-      throw error;
-    }
-  }
-
   private assertCanWrite(actor: CurrentUser) {
     if (actor.role === UserRole.ACCOUNTANT) {
       throw new ForbiddenException(
@@ -1296,18 +1051,10 @@ export class StockDocumentsService {
     }
   }
 
-  private assertDraft(status: StockDocumentStatus) {
-    if (status !== StockDocumentStatus.DRAFT) {
-      throw new BadRequestException(
-        'Змінювати або видаляти можна лише чернетку',
-      );
-    }
-  }
-
   private assertNewDocumentType(type: StockDocumentType) {
     if (type !== StockDocumentType.MVO_TRANSFER && type !== StockDocumentType.ISSUE) {
       throw new BadRequestException(
-        'Старі документи TRANSFER та ASSIGNMENT доступні лише для перегляду',
+        'Непідтримуваний тип документа',
       );
     }
   }
@@ -1320,30 +1067,9 @@ export class StockDocumentsService {
     this.assertNewDocumentType(document.type);
     if (document.accountingModel !== StockAccountingModel.DIRECT_BALANCE) {
       throw new BadRequestException(
-        'Документ старої моделі доступний лише для перегляду',
+        'Непідтримуваний тип або модель документа',
       );
     }
-  }
-
-  private assertDraftWorkflowDocument(document: {
-    type: StockDocumentType;
-    accountingModel: StockAccountingModel | null;
-    sourceTransferId?: string | null;
-  }) {
-    this.assertMutableDocument(document);
-    if (document.type === StockDocumentType.ISSUE) {
-      throw new BadRequestException(
-        'Видача створюється і проводиться однією операцією без чернетки',
-      );
-    }
-  }
-
-  private async findRaw(id: string) {
-    const document = await this.prisma.stockDocument.findUnique({ where: { id } });
-    if (!document) {
-      throw new NotFoundException('Документ руху майна не знайдено');
-    }
-    return document;
   }
 
   private serialize(

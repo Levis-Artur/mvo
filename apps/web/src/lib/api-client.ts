@@ -48,7 +48,6 @@ import type {
   StockBalancesQuery,
   StockDocument,
   StockDocumentAttachment,
-  StockDocumentInput,
   StockDocumentsQuery,
   ReadAccessMode,
   StockTransaction,
@@ -552,8 +551,6 @@ export const apiClient = {
     downloadRequest(`/accounting/mvo-transfer-exports/${encodeURIComponent(id)}/download`),
   stockDocument: (id: string, accessMode?: ReadAccessMode) =>
     request<StockDocument>(`/stock-documents/${id}`, {}, { accessMode }),
-  createStockDocument: (body: StockDocumentInput) =>
-    request<StockDocument>('/stock-documents', mutation('POST', body)),
   createAndPostMvoTransfer: (body: CreateMvoTransferInput) =>
     request<StockDocument>(
       '/stock-documents/mvo-transfer',
@@ -576,16 +573,6 @@ export const apiClient = {
       formData,
     );
   },
-  updateStockDocument: (id: string, body: StockDocumentInput) =>
-    request<StockDocument>(`/stock-documents/${id}`, mutation('PATCH', body)),
-  deleteStockDocument: (id: string) =>
-    request<{ success: boolean }>(`/stock-documents/${id}`, {
-      method: 'DELETE',
-    }),
-  postStockDocument: (id: string) =>
-    request<StockDocument>(`/stock-documents/${id}/post`, {
-      method: 'POST',
-    }),
   cancelStockDocument: (id: string) =>
     request<StockDocument>(`/stock-documents/${id}/cancel`, {
       method: 'POST',
