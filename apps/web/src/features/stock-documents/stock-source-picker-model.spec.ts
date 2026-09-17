@@ -98,7 +98,7 @@ describe('stock source picker model', () => {
     expect(lines).not.toMatch(/availableSourceOptions\([^)]*\)\[0\]/);
     expect(form).toContain('<StockSourcePickerModal');
     expect(form).toContain('onConfirm={(selectedSource) =>');
-    expect(picker).toContain('title="Вибір майна"');
+    expect(picker).toContain("title={operationContextName ? `Вибір майна — МВО: ${operationContextName}` : 'Вибір майна'}");
     expect(picker).toContain('Додати вибране');
     expect(picker).not.toContain('ASSIGNED');
     expect(picker).not.toContain('Обліковий власник');

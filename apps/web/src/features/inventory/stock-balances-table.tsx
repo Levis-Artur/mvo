@@ -18,8 +18,6 @@ export function StockBalancesTable({
         { label: 'Найменування' },
         { label: 'Одиниця' },
         { label: 'Поточна кількість', numeric: true },
-        { label: 'Остання операція' },
-        { label: 'Оновлено' },
       ]}
       emptyMessage="Залишків за вказаними фільтрами не знайдено."
       loading={loading}
@@ -44,10 +42,6 @@ export function StockBalancesTable({
           >
             {quantity}
           </StatusBadge>,
-          <span key="operation" title="Тип останньої операції не повертається API залишків">
-            Зміна залишку
-          </span>,
-          new Date(balance.updatedAt).toLocaleString('uk-UA'),
         ];
       })}
     />

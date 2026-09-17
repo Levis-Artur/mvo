@@ -47,6 +47,8 @@ describe('StockDocumentLines responsive table', () => {
       name: 'Рядки документа видачі майна',
     });
     expect(table.getAttribute('data-responsive')).toBe('cards-wide');
+    expect(table.parentElement?.classList.contains('data-table-scroll')).toBe(true);
+    expect(screen.getByText(source.inventoryItem.name).closest('td')?.classList.contains('break-words')).toBe(true);
     expect(
       screen.getByRole('spinbutton', { name: 'Кількість рядка 1' }).closest('td')
         ?.dataset.label,

@@ -25,10 +25,16 @@ export function MvoIssueDetailsModal({
   onCancelRealization,
   onClose,
   onRealize,
+  readOnly = false,
+  canCreateRealization = false,
+  canManagerCancel = false,
 }: {
   document: StockDocument;
   loading: boolean;
   error: string;
+  readOnly?: boolean;
+  canCreateRealization?: boolean;
+  canManagerCancel?: boolean;
   onCancel: () => void;
   onCancelRealization: (realization: IssueRealization) => void;
   onClose: () => void;
@@ -38,7 +44,7 @@ export function MvoIssueDetailsModal({
     useState<IssueRealization | null>(null);
   const realizations = document.realizations ?? [];
   const canRealize =
-    document.status === 'POSTED' && Number(document.availableToRealize ?? 0) > 0;
+    (!readOnly || canCreateRealization) && document.status === 'POSTED' && Number(document.availableToRealize ?? 0) > 0;
   const hasActiveRealizations = realizations.some(
     (realization) => realization.status === 'POSTED',
   );
@@ -53,7 +59,7 @@ export function MvoIssueDetailsModal({
               Реалізувати
             </Button>
           ) : null}
-          {document.status === 'POSTED' ? (
+          {(!readOnly || canManagerCancel) && document.status === 'POSTED' ? (
             <Button
               disabled={loading || hasActiveRealizations}
               title={
@@ -65,7 +71,7 @@ export function MvoIssueDetailsModal({
               variant="danger"
               onClick={onCancel}
             >
-              Скасувати видачу
+              {readOnly ? 'Скасувати' : 'Скасувати видачу'}
             </Button>
           ) : null}
           <Button
@@ -109,7 +115,7 @@ export function MvoIssueDetailsModal({
               {formatQuantity(document.availableToRealize ?? document.totalQuantity)}
             </Detail>
           </dl>
-          {hasActiveRealizations ? (
+          {!readOnly && hasActiveRealizations ? (
             <p className="form-field__hint">
               Щоб скасувати видачу, спочатку скасуйте всі проведені реалізації.
             </p>
@@ -124,7 +130,7 @@ export function MvoIssueDetailsModal({
               { label: 'Назва', className: 'issue-lines__name' },
               { label: 'Видано', numeric: true, className: 'issue-lines__quantity' },
               { label: 'Реалізовано', numeric: true, className: 'issue-lines__quantity' },
-              { label: 'Залишилось', numeric: true, className: 'issue-lines__quantity' },
+              { label: 'Не реалізовано', numeric: true, className: 'issue-lines__quantity' },
               { label: 'Одиниця', className: 'issue-lines__unit' },
             ]}
             responsiveMode="cards-wide"
@@ -201,6 +207,7 @@ export function MvoIssueDetailsModal({
           issueId={document.id}
           realization={selectedRealization}
           saving={loading}
+          readOnly={readOnly}
           onCancel={() => {
             onCancelRealization(selectedRealization);
             setSelectedRealization(null);
@@ -219,11 +226,13 @@ function IssueRealizationDetailsModal({
   saving,
   onCancel,
   onClose,
+  readOnly = false,
 }: {
   issueId: string;
   issueDisplayNumber: number;
   realization: IssueRealization;
   saving: boolean;
+  readOnly?: boolean;
   onCancel: () => void;
   onClose: () => void;
 }) {
@@ -232,7 +241,7 @@ function IssueRealizationDetailsModal({
       closeOnEscape={!saving}
       footer={
         <>
-          {realization.status === 'POSTED' ? (
+          {!readOnly && realization.status === 'POSTED' ? (
             <Button disabled={saving} type="button" variant="danger" onClick={onCancel}>
               Скасувати реалізацію
             </Button>

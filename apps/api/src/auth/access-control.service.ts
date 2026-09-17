@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SecurityEventType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CurrentUser } from './auth.types';
@@ -147,6 +147,50 @@ export class AccessControlService {
     }
 
     return { id: { in: [] } };
+  }
+
+  async assertManagerStockDocumentRead(user: CurrentUser, documentId: string) {
+    if (user.role !== UserRole.ORG_MANAGER) return;
+    const document = await this.prisma.stockDocument.findFirst({
+      where: { AND: [{ id: documentId }, this.stockDocumentFilter(user)] },
+      select: { id: true },
+    });
+    if (!document) throw new NotFoundException('Документ руху майна не знайдено');
+  }
+
+  async managerCanManageStockDocument(
+    user: CurrentUser, documentId: string,
+    client: Pick<PrismaService, 'stockDocument'> | Prisma.TransactionClient = this.prisma,
+  ): Promise<boolean> {
+    if (user.role !== UserRole.ORG_MANAGER) return false;
+    return Boolean(await client.stockDocument.findFirst({
+      where: { AND: [
+        { id: documentId }, this.stockDocumentFilter(user),
+        { sourceResponsiblePerson: this.responsiblePersonFilter(user) },
+      ] },
+      select: { id: true },
+    }));
+  }
+
+  async operationResponsiblePersonId(
+    actor: CurrentUser, targetResponsiblePersonId?: string,
+    client: Pick<PrismaService, 'responsiblePerson'> | Prisma.TransactionClient = this.prisma,
+  ): Promise<string> {
+    if (actor.role === UserRole.MVO && actor.responsiblePersonId) {
+      if (targetResponsiblePersonId !== undefined) {
+        throw new ForbiddenException('МВО може виконувати операції лише від свого імені');
+      }
+      return actor.responsiblePersonId;
+    }
+    if (actor.role !== UserRole.ORG_MANAGER || !targetResponsiblePersonId) {
+      throw new ForbiddenException('Для операції менеджера виберіть МВО в області доступу');
+    }
+    const person = await client.responsiblePerson.findFirst({
+      where: { AND: [{ id: targetResponsiblePersonId, isActive: true }, this.responsiblePersonFilter(actor)] },
+      select: { id: true },
+    });
+    if (!person) throw new NotFoundException('Картку МВО не знайдено в області доступу');
+    return person.id;
   }
 
   stockTransactionFilter(user: CurrentUser): Prisma.StockTransactionWhereInput {

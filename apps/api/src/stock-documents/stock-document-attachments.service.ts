@@ -13,6 +13,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import type { CurrentUser } from '../auth/auth.types';
+import { AccessControlService } from '../auth/access-control.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StockDocumentAttachmentStorageService } from './stock-document-attachment-storage.service';
 
@@ -58,6 +59,7 @@ export class StockDocumentAttachmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StockDocumentAttachmentStorageService,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   async upload(
@@ -111,6 +113,7 @@ export class StockDocumentAttachmentsService {
   }
 
   async list(documentId: string, actor: CurrentUser) {
+    await this.accessControl.assertManagerStockDocumentRead(actor, documentId);
     const document = await this.findDocument(documentId);
     this.assertReadAccess(actor, document);
     return this.prisma.stockDocumentAttachment.findMany({
@@ -164,7 +167,8 @@ export class StockDocumentAttachmentsService {
       include: { document: { select: attachmentDocumentSelect } },
     });
     if (!attachment) throw new NotFoundException('Вкладення не знайдено');
-    if (requireIssue && attachment.document.type !== StockDocumentType.ISSUE) {
+    await this.accessControl.assertManagerStockDocumentRead(actor, documentId);
+    if (requireIssue && attachment.document.type !== StockDocumentType.ISSUE && attachment.document.type !== StockDocumentType.MVO_TRANSFER) {
       throw new NotFoundException('Підтверджуючий документ не знайдено');
     }
     if (requireIssue) {

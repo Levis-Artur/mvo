@@ -19,6 +19,7 @@ import {
 } from './dto/my-property-query.dto';
 import { MyPropertyService } from './my-property.service';
 import { StockService } from './stock.service';
+import { OperationTargetDto } from '../auth/dto/operation-target.dto';
 
 @Controller()
 @Roles(...STOCK_READ_ROLES)
@@ -38,9 +39,9 @@ export class StockController {
   }
 
   @Get('stock/available-to-me')
-  @Roles(UserRole.MVO)
-  availableToMe(@CurrentUserParam() user: CurrentUser) {
-    return this.stockService.availableToMe(user);
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
+  availableToMe(@CurrentUserParam() user: CurrentUser, @Query() query: OperationTargetDto) {
+    return this.stockService.availableToMe(user, query.targetResponsiblePersonId);
   }
 
   @Get('stock/my-property')

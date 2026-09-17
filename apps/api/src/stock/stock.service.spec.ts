@@ -585,6 +585,7 @@ describe('StockService', () => {
         ]),
       },
       stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
+      stockDocumentLine: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const service = createService(prisma);
 
@@ -599,6 +600,38 @@ describe('StockService', () => {
 
     expect(result.totalDirectQuantity).toBe('2');
     expect(result.directBalances).toHaveLength(1);
+    expect(result.directBalances[0].unrealizedQuantity).toBe('0');
+  });
+
+  it('returns scoped manager stock with the self-view POSTED unrealized data', async () => {
+    const manager = {
+      id: 'manager', username: 'manager', role: UserRole.ORG_MANAGER,
+      isActive: true, mustChangePassword: false, responsiblePersonId: null,
+      accessScopes: [{ managementId: scopeIds.management, serviceCode: null }],
+    };
+    const prisma = {
+      responsiblePerson: { findFirst: jest.fn().mockResolvedValue({ id: scopeIds.responsiblePerson }) },
+      stockBalance: { findMany: jest.fn().mockResolvedValue([
+        { id: 'balance', quantity: new Prisma.Decimal(2), inventoryItem: { id: 'item' } },
+      ]) },
+      stockDocument: { findMany: jest.fn().mockResolvedValue([]) },
+      stockDocumentLine: { findMany: jest.fn().mockResolvedValue([
+        { inventoryItemId: 'item', quantity: new Prisma.Decimal(5), realizationLines: [{ quantity: new Prisma.Decimal(2) }] },
+      ]) },
+    };
+    const service = createService(prisma);
+    const result = await service.responsiblePersonAccountingCard(scopeIds.responsiblePerson, manager);
+    expect(result.directBalances[0]).toMatchObject({ quantity: '2', unrealizedQuantity: '3' });
+    expect(prisma.responsiblePerson.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [{ id: scopeIds.responsiblePerson }, { OR: [{ managementId: scopeIds.management }] }] },
+    }));
+    expect(prisma.stockDocumentLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ document: { type: 'ISSUE', status: 'POSTED', sourceResponsiblePersonId: scopeIds.responsiblePerson } }),
+      select: expect.objectContaining({ realizationLines: { where: { realization: { status: 'POSTED' } }, select: { quantity: true } } }),
+    }));
+    prisma.responsiblePerson.findFirst.mockResolvedValueOnce(null as never);
+    await expect(service.responsiblePersonAccountingCard('foreign-person', manager)).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.stockBalance.findMany).toHaveBeenCalledTimes(1);
   });
 
   it('scopes MVO accounting-card documents to outgoing records only', async () => {

@@ -10,15 +10,18 @@ import {
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
 import { StockDocumentAttachmentList } from './stock-document-attachment-list';
 
-export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, onCancel, onViewIssue, onOpenSourceTransfer, onClose }: {
+export function StockDocumentDetailsModal({ document, user, loading, error, readOnly = false, canManagerCancel = false, onCancel, onViewIssue, onOpenSourceTransfer, onClose }: {
   document: StockDocument; user: AuthUser; loading: boolean; error: string;
   readOnly?: boolean;
+  canManagerCancel?: boolean;
   onCancel: () => void;
   onViewIssue?: (issueId: string) => void;
   onOpenSourceTransfer?: (transferId: string) => void;
   onClose: () => void;
 }) {
-  const actions = readOnly
+  const actions = user.role === 'ORG_MANAGER' && canManagerCancel
+    ? { cancel: true }
+    : readOnly
     ? { cancel: false }
     : lifecycleActions(document, user);
   const direction = documentDirectionPresentation(document);
@@ -30,7 +33,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   return <Modal
     closeOnEscape={!loading}
     footer={<>
-      {actions.cancel ? <Button disabled={loading} variant="danger" type="button" onClick={onCancel}>Скасувати документ</Button> : null}
+      {actions.cancel ? <Button disabled={loading} variant="danger" type="button" onClick={onCancel}>{user.role === 'ORG_MANAGER' ? 'Скасувати' : 'Скасувати документ'}</Button> : null}
       <Button disabled={loading} variant="outline" type="button" onClick={onClose}>Закрити</Button>
     </>}
     onClose={onClose}
@@ -68,9 +71,11 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
         ] : user.role === 'MVO' ? [
           { label: 'Код' }, { label: 'Назва' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
+          ...(document.type === 'ISSUE' ? [{ label: 'Не реалізовано', numeric: true }] : []),
         ] : [
           { label: 'Код' }, { label: 'Номенклатура' }, { label: 'Джерело' }, { label: 'Одиниця' },
           { label: 'Кількість', numeric: true }, { label: 'Примітка' },
+          ...(document.type === 'ISSUE' ? [{ label: 'Не реалізовано', numeric: true }] : []),
         ]}
         responsiveMode="cards-wide"
         rows={document.lines.map((line) => showLegacyIssueTracking ? [
@@ -81,12 +86,14 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
         ] : user.role === 'MVO' ? [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
+          ...(document.type === 'ISSUE' ? [formatQuantity(line.availableToRealize ?? line.quantity)] : []),
         ] : [
           line.inventoryItem.externalCode, line.inventoryItem.name,
           document.type === 'ISSUE' && document.sourceTransferId
             ? <StatusBadge key="source" tone="info">З передачі</StatusBadge>
             : <StatusBadge key="direct" tone="info">Прямий залишок</StatusBadge>,
           line.inventoryItem.unitOfMeasure ?? '—', formatQuantity(line.quantity), line.note ?? '—',
+          ...(document.type === 'ISSUE' ? [formatQuantity(line.availableToRealize ?? line.quantity)] : []),
         ])}
       />
       {showLegacyIssueTracking && (document.issues?.length ?? 0) > 0 ? (
@@ -96,6 +103,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
             columns={[
               { label: 'Дата' }, { label: 'Документ' }, { label: 'Кому видано' },
               { label: 'Позицій', numeric: true }, { label: 'Статус' },
+              { label: 'Видано', numeric: true }, { label: 'Не реалізовано', numeric: true },
               { label: 'Документ/файл' }, { label: 'Дія', actions: true },
             ]}
             responsiveMode="cards-wide"
@@ -105,6 +113,8 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
               issue.recipientName ?? '—',
               String(issue.totalPositions),
               <StockDocumentStatusBadge key="status" status={issue.status} />,
+              formatQuantity(issue.totalQuantity),
+              formatQuantity(issue.availableToRealize ?? issue.totalQuantity),
               issue.attachments.length ? <StatusBadge key="attachment" tone="info">Є документ</StatusBadge> : '—',
               onViewIssue ? <Button key="view" size="compact" type="button" variant="outline" onClick={() => onViewIssue(issue.id)}>Переглянути видачу</Button> : null,
             ])}

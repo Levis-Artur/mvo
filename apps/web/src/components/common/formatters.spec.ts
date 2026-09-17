@@ -9,6 +9,8 @@ describe('MVO error presentation', () => {
     [new ApiError('ASSIGNED bucket unavailable', 409), 'Ця позиція вже була змінена. Оновіть список і повторіть спробу.'],
     [new ApiError('Insufficient quantity', 409), 'Недостатньо майна для цієї операції.'],
     [new ApiError('File too large', 413), 'Файл накладної перевищує допустимий розмір.'],
+    [new ApiError('Сумарний розмір вкладень перевищує максимально допустимі 50 МБ.', 400), 'Сумарний розмір вкладень перевищує максимально допустимі 50 МБ.'],
+    [new ApiError('Файл перевищує максимально допустимий розмір 15 МБ.', 413), 'Файл перевищує максимально допустимий розмір 15 МБ.'],
     [new ApiError('Attachment required', 400), 'Спочатку додайте фото або PDF накладної.'],
   ])('перетворює очікувану технічну помилку', (error, expected) => {
     expect(getMvoErrorMessage(error)).toBe(expected);

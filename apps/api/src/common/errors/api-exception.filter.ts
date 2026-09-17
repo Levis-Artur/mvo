@@ -14,6 +14,7 @@ import {
 import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { attachmentFileSizeErrorMessage } from '../../config/env';
 import type { AuthenticatedRequest } from '../../auth/auth.types';
 import type {
   ApiErrorCode,
@@ -36,7 +37,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const request = context.getRequest<AuthenticatedRequest>();
     const response = context.getResponse<Response>();
     const requestId = request.requestId ?? randomUUID();
-    const descriptor = this.describe(exception);
+    const descriptor = this.describe(exception, request.originalUrl);
 
     if (descriptor.statusCode === HttpStatus.INTERNAL_SERVER_ERROR) {
       const stack = exception instanceof Error ? exception.stack : undefined;
@@ -57,7 +58,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
     response.status(descriptor.statusCode).json(body);
   }
 
-  private describe(exception: unknown): ErrorDescriptor {
+  private describe(exception: unknown, path: string): ErrorDescriptor {
+    if (exception instanceof HttpException && exception.getStatus() === HttpStatus.PAYLOAD_TOO_LARGE
+      && exception.message === 'File too large' && /(?:^|\/)stock-documents(?:\/|$)/.test(path)) {
+      return {
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        code: 'HTTP_ERROR',
+        message: attachmentFileSizeErrorMessage(),
+        details: null,
+      };
+    }
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       return this.describePrisma(exception);
     }

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StockDocumentAttachmentStorageService } from './stock-document-attachment-storage.service';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
+import { AccessControlService } from '../auth/access-control.service';
 
 const owner = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -46,10 +47,10 @@ describe('StockDocumentAttachmentStorageService', () => {
 
   beforeEach(async () => {
     previousDirectory = process.env.STOCK_DOCUMENT_ATTACHMENTS_DIR;
-    previousLimit = process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES;
+    previousLimit = process.env.MAX_ATTACHMENT_FILE_SIZE_MB;
     directory = await mkdtemp(join(tmpdir(), 'mvo-attachment-'));
     process.env.STOCK_DOCUMENT_ATTACHMENTS_DIR = directory;
-    process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES = '1024';
+    process.env.MAX_ATTACHMENT_FILE_SIZE_MB = String(1 / 1024);
   });
 
   afterEach(async () => {
@@ -59,9 +60,9 @@ describe('StockDocumentAttachmentStorageService', () => {
       process.env.STOCK_DOCUMENT_ATTACHMENTS_DIR = previousDirectory;
     }
     if (previousLimit === undefined) {
-      delete process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES;
+      delete process.env.MAX_ATTACHMENT_FILE_SIZE_MB;
     } else {
-      process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES = previousLimit;
+      process.env.MAX_ATTACHMENT_FILE_SIZE_MB = previousLimit;
     }
     await rm(directory, { recursive: true, force: true });
   });
@@ -94,7 +95,7 @@ describe('StockDocumentAttachmentStorageService', () => {
       service.store(
         uploadedFile({ buffer: largeBuffer, size: largeBuffer.length }),
       ),
-    ).rejects.toThrow('перевищує дозволені');
+    ).rejects.toThrow('Файл перевищує максимально допустимий розмір');
 
     await expect(
       service.store(uploadedFile({ originalname: '../invoice.pdf' })),
@@ -108,6 +109,16 @@ describe('StockDocumentAttachmentStorageService', () => {
       service.store(uploadedFile({ buffer, size: buffer.length })),
     ).rejects.toThrow('Вміст файлу не відповідає');
   });
+
+  it.each([
+    ['application/pdf', 'document.pdf', Buffer.from('%PDF-1.7\n')],
+    ['image/jpeg', 'photo.jpg', Buffer.from([0xff, 0xd8, 0xff])],
+  ])('accepts %s below the configured limit', async (mimetype, originalname, header) => {
+    const buffer = Buffer.concat([header, Buffer.alloc(1023 - header.length)]);
+    const service = new StockDocumentAttachmentStorageService();
+    await expect(service.store(uploadedFile({ mimetype, originalname, buffer, size: buffer.length })))
+      .resolves.toEqual(expect.objectContaining({ mimeType: mimetype }));
+  });
 });
 
 describe('StockDocumentAttachmentsService authorization', () => {
@@ -116,7 +127,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
   ) {
     const document = {
       id: 'document-id',
-      type: StockDocumentType.ISSUE,
+      type: StockDocumentType.ISSUE as StockDocumentType,
       status,
       createdByUserId: owner.id,
       sourceResponsiblePersonId: sourceId,
@@ -147,7 +158,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
       securityEvent: { create: jest.fn() },
     };
     const prisma = {
-      stockDocument: { findUnique: jest.fn().mockResolvedValue(document) },
+      stockDocument: { findUnique: jest.fn().mockResolvedValue(document), findFirst: jest.fn().mockResolvedValue({ id: 'document-id' }) },
       stockDocumentAttachment: {
         findFirst: jest.fn().mockResolvedValue(attachment),
         findMany: jest.fn(),
@@ -174,6 +185,7 @@ describe('StockDocumentAttachmentsService authorization', () => {
       service: new StockDocumentAttachmentsService(
         prisma as never,
         storage as never,
+        new AccessControlService(prisma as never),
       ),
       prisma,
       storage,
@@ -202,6 +214,36 @@ describe('StockDocumentAttachmentsService authorization', () => {
         data: expect.objectContaining({ requestId: 'request-1' }),
       }),
     );
+  });
+
+  it.each(['preview', 'download'] as const)('allows scoped manager %s and rejects foreign files before storage', async (action) => {
+    const { service, prisma, storage } = createService(StockDocumentStatus.POSTED);
+    const manager = {
+      ...owner, role: UserRole.ORG_MANAGER,
+      accessScopes: [{ managementId: 'manager-management', serviceCode: null }],
+    };
+    await expect(service[action]('document-id', 'attachment-id', manager, {})).resolves.toBeDefined();
+    expect(prisma.stockDocument.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ id: 'document-id' }, { OR: [
+        { sourceResponsiblePerson: { OR: [{ managementId: 'manager-management' }] } },
+        { destinationResponsiblePerson: { OR: [{ managementId: 'manager-management' }] } },
+      ] }] }, select: { id: true },
+    });
+    storage.assertStoredFilesExist.mockClear();
+    storage.createDownloadStream.mockClear();
+    prisma.stockDocument.findFirst.mockResolvedValueOnce(null as never);
+    await expect(service[action]('document-id', 'attachment-id', manager, {})).rejects.toBeInstanceOf(NotFoundException);
+    expect(storage.assertStoredFilesExist).not.toHaveBeenCalled();
+    expect(storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+
+  it('allows manager preview of transfer attachments through the same private flow', async () => {
+    const { service, document } = createService(StockDocumentStatus.POSTED);
+    document.type = StockDocumentType.MVO_TRANSFER;
+    await expect(service.preview('document-id', 'attachment-id', {
+      ...owner, role: UserRole.ORG_MANAGER,
+      accessScopes: [{ managementId: 'manager-management', serviceCode: null }],
+    }, {})).resolves.toBeDefined();
   });
 
   it.each([UserRole.OWNER, UserRole.ACCOUNTANT])(

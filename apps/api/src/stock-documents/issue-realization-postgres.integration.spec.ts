@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { IssueRealizationsService } from './issue-realizations.service';
+import { AccessControlService } from '../auth/access-control.service';
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithPostgres = testDatabaseUrl ? describe : describe.skip;
@@ -70,7 +71,7 @@ function createService(prisma: PrismaClient) {
     store: jest.fn(),
     assertStoredFilesExist: jest.fn(),
     removeAfterMetadataFailure: jest.fn(),
-  } as never);
+  } as never, new AccessControlService(prisma as never));
 }
 
 async function createFixture(prisma: PrismaClient) {

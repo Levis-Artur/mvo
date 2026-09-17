@@ -34,8 +34,8 @@ export const transactionTypeLabel = (type: StockTransactionType) => labels[type]
 export const transactionDirection = (type: StockTransactionType) =>
   ['ADJUSTMENT_DECREASE', 'MVO_TRANSFER_OUT', 'ISSUE_OUT']
     .includes(type) ? 'Зменшення' : 'Збільшення';
-export const transactionSource = (item: StockTransaction) =>
-  item.sourceDocument || (item.importBatchId ? `Імпорт ${item.importBatchId}` : 'Системна операція');
+export const transactionSource = (item: StockTransaction, showInternalIds = true) =>
+  item.sourceDocument || (item.importBatchId ? (showInternalIds ? `Імпорт ${item.importBatchId}` : 'Імпорт CSV') : 'Системна операція');
 
 export function transactionApiQuery(filters: TransactionFilterDraft): Omit<StockTransactionsQuery, 'page' | 'limit'> {
   return {

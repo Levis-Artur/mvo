@@ -259,6 +259,7 @@ export function MyInventoryItemCard({
                   numeric: true,
                   className: 'my-inventory-item-card__quantity',
                 },
+                ...(data.items.some((movement) => movement.category === 'ISSUE') ? [{ label: 'Не реалізовано', numeric: true }] : []),
                 {
                   label: 'МВО-відправник',
                   className: 'my-inventory-item-card__sender',
@@ -286,6 +287,7 @@ export function MyInventoryItemCard({
                   {movement.typeLabel}
                 </StatusBadge>,
                 formatMovementQuantity(movementDisplayQuantity(movement)),
+                ...(data.items.some((item) => item.category === 'ISSUE') ? [movement.category === 'ISSUE' ? formatQuantity(movement.availableToRealize ?? movement.quantity) : '—'] : []),
                 <MovementText key="sender" value={movement.from} />,
                 <MovementText key="recipient" value={movement.to} />,
                 <MovementText key="note" value={movement.note ?? '—'} />,

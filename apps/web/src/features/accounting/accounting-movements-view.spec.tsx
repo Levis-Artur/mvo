@@ -80,6 +80,7 @@ const rows: AccountingMovementRow[] = [
   {
     ...baseRow,
     id: 'movement-3',
+    availableToRealize: '0',
     operationType: 'ISSUE',
     operationLabel: 'Видача',
     documentLabel: '№ 8',
@@ -131,6 +132,7 @@ const details: AccountingMovementDetails = {
     quantity: '3',
     issuedQuantity: null,
     availableToIssue: null,
+    availableToRealize: '0',
     note: null,
   }],
   attachments: [{
@@ -177,6 +179,9 @@ describe('AccountingMovementsView', () => {
     expect(screen.getByText('+10')).toBeTruthy();
     expect(screen.getByText('−2')).toBeTruthy();
     expect(screen.getByText('3')).toBeTruthy();
+    const journal = screen.getByRole('table', { name: 'Бухгалтерський журнал руху майна' });
+    expect(within(journal).getByRole('columnheader', { name: 'Не реалізовано' })).toBeTruthy();
+    expect(within(journal).getByText('0')).toBeTruthy();
     expect(screen.getAllByText('Є документ').length).toBeGreaterThan(0);
   });
 
@@ -221,6 +226,9 @@ describe('AccountingMovementsView', () => {
 
     await user.click(screen.getByRole('button', { name: '№ 8' }));
     expect(await screen.findByRole('dialog', { name: 'Видача: № 8' })).toBeTruthy();
+    const lines = screen.getByRole('table', { name: 'Позиції документа руху майна' });
+    expect(within(lines).getByRole('columnheader', { name: 'Не реалізовано' })).toBeTruthy();
+    expect(within(lines).getByText('0')).toBeTruthy();
     expect(screen.getByText('накладна.pdf')).toBeTruthy();
     expect(screen.getByText(/PDF · 1\.0 КБ/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Редагувати|Провести|Скасувати документ|Видалити/ })).toBeNull();

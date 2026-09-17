@@ -110,6 +110,7 @@ export function AccountingMovementDetailsModal({
                     { label: 'Назва' },
                     { label: 'Одиниця' },
                     { label: 'Кількість', numeric: true },
+                    ...(issue ? [{ label: 'Не реалізовано', numeric: true }] : []),
                     { label: 'Примітка' },
                   ]
             }
@@ -130,6 +131,7 @@ export function AccountingMovementDetailsModal({
                     line.inventoryItem.name,
                     line.inventoryItem.unitOfMeasure ?? '—',
                     formatQuantity(line.quantity),
+                    ...(issue ? [formatQuantity(line.availableToRealize ?? line.quantity)] : []),
                     line.note ?? '—',
                   ],
             )}
@@ -145,6 +147,7 @@ export function AccountingMovementDetailsModal({
                 { label: 'Дата' },
                 { label: 'Кому видано' },
                 { label: 'Кількість', numeric: true },
+                { label: 'Не реалізовано', numeric: true },
                 { label: 'Статус' },
                 { label: 'Документ/файл' },
                 { label: 'Дія', actions: true },
@@ -156,6 +159,7 @@ export function AccountingMovementDetailsModal({
                 formatDateTime(childIssue.documentDate),
                 childIssue.recipientName ?? '—',
                 formatQuantity(childIssue.quantity),
+                formatQuantity(childIssue.availableToRealize ?? childIssue.quantity),
                 <StatusBadge
                   key="status"
                   tone={childIssue.status === 'CANCELLED' ? 'danger' : 'success'}

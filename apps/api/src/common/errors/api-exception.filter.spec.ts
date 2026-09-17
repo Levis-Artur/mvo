@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  PayloadTooLargeException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -14,9 +15,9 @@ import { ApiExceptionFilter } from './api-exception.filter';
 describe('ApiExceptionFilter', () => {
   const requestId = 'request-123';
 
-  function execute(exception: unknown) {
+  function execute(exception: unknown, path = '/api/test?value=1') {
     const request = {
-      originalUrl: '/api/test?value=1',
+      originalUrl: path,
       requestId,
     } as AuthenticatedRequest;
     const response = {
@@ -61,6 +62,19 @@ describe('ApiExceptionFilter', () => {
         timestamp: expect.any(String),
       }),
     );
+  });
+
+  it('localizes Multer attachment size errors and includes the configured limit', () => {
+    const previous = process.env.MAX_ATTACHMENT_FILE_SIZE_MB;
+    process.env.MAX_ATTACHMENT_FILE_SIZE_MB = '15';
+    try {
+      const { body } = execute(new PayloadTooLargeException('File too large'), '/api/stock-documents/issue');
+      expect(body).toMatchObject({ statusCode: 413, message: 'Файл перевищує максимально допустимий розмір 15 МБ.' });
+      expect(execute(new PayloadTooLargeException('File too large'), '/api/imports/upload').body.message).toBe('File too large');
+    } finally {
+      if (previous === undefined) delete process.env.MAX_ATTACHMENT_FILE_SIZE_MB;
+      else process.env.MAX_ATTACHMENT_FILE_SIZE_MB = previous;
+    }
   });
 
   it.each([

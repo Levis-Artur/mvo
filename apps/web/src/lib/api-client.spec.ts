@@ -340,13 +340,38 @@ describe('owner/custody API URLs', () => {
   });
 
   it('uses authorized attachment endpoints without serializing the file as JSON', async () => {
+    jest.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ maxFileSizeBytes: 20 * 1024 * 1024, maxTotalSizeBytes: 50 * 1024 * 1024 }), { status: 200 }));
     const file = new File(['scan'], 'накладна.pdf', { type: 'application/pdf' });
     await apiClient.uploadStockDocumentAttachment('document-1', file);
-    const options = (fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/stock-documents/attachment-limits', expect.any(Object));
+    const options = (fetch as jest.Mock).mock.calls[1][1] as RequestInit;
     expect((options.body as FormData).get('file')).toBe(file);
     expect(options.headers).toBeUndefined();
     expect(apiClient.stockDocumentAttachmentDownloadUrl('document-1', 'attachment-1'))
       .toBe('/api/stock-documents/document-1/attachments/attachment-1/download');
+  });
+
+  it.each(['issue', 'realization', 'attachment'])('rejects an oversized %s attachment before the upload POST', async (kind) => {
+    jest.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ maxFileSizeBytes: 1024, maxTotalSizeBytes: 2048 }), { status: 200 }));
+    const file = new File([new Uint8Array(1025)], 'document.pdf', { type: 'application/pdf' });
+    const result = kind === 'issue'
+      ? apiClient.createAndPostIssue({ documentDate: '2026-09-16T00:00:00.000Z', recipientName: 'Одержувач', lines: [] }, [file])
+      : kind === 'realization'
+        ? apiClient.createIssueRealization('issue-1', { realizationDate: '2026-09-16', lines: [] }, [file])
+        : apiClient.uploadStockDocumentAttachment('issue-1', file);
+    await expect(result).rejects.toThrow('Файл перевищує максимально допустимий розмір');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('/api/stock-documents/attachment-limits', expect.any(Object));
+  });
+
+  it.each(['issue', 'realization'])('uses the endpoint total limit before a multi-file %s upload', async (kind) => {
+    jest.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify({ maxFileSizeBytes: 1024, maxTotalSizeBytes: 2048 }), { status: 200 }));
+    const files = [1, 2, 3].map((id) => new File([new Uint8Array(800)], `scan-${id}.pdf`, { type: 'application/pdf' }));
+    const result = kind === 'issue'
+      ? apiClient.createAndPostIssue({ documentDate: '2026-09-17T00:00:00.000Z', recipientName: 'Одержувач', lines: [] }, files)
+      : apiClient.createIssueRealization('issue-1', { realizationDate: '2026-09-17', lines: [] }, files);
+    await expect(result).rejects.toThrow('Сумарний розмір вкладень перевищує максимально допустимі');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -55,7 +55,8 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     onSubmit,
     onClose,
   } = props;
-  const initialSource = resolveSourceId(user, initialSourceId);
+  const operationContext = user.role === 'ORG_MANAGER' ? props.operationContext : undefined;
+  const initialSource = operationContext?.responsiblePersonId ?? resolveSourceId(user, initialSourceId);
   const [documentDate, setDocumentDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -97,7 +98,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     const input: StockDocumentInput = {
       type,
       documentDate: new Date(`${documentDate}T00:00:00.000Z`).toISOString(),
-      sourceResponsiblePersonId: resolveSourceId(user, sourceId),
+      sourceResponsiblePersonId: operationContext?.responsiblePersonId ?? resolveSourceId(user, sourceId),
       destinationResponsiblePersonId:
         recipientMode === 'MVO' ? destinationId : undefined,
       recipientName:
@@ -150,6 +151,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
   if (sourcePickerOpen) {
     return (
       <StockSourcePickerModal
+        operationContextName={operationContext?.fullName}
         error={sourcesError}
         loading={loadingSources}
         selectedSourceKeys={selectedSourceKeys}
@@ -191,7 +193,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
         }
         onClose={() => setDiscardConfirmation(false)}
         size="small"
-        title="Закрити форму без збереження?"
+        title={operationContext ? `Закрити форму без збереження? МВО: ${operationContext.fullName}` : 'Закрити форму без збереження?'}
       >
         <p>
           Ви внесли дані, але ще не підтвердили операцію. Закрити форму без підтвердження?
@@ -231,13 +233,14 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
       }
       onClose={requestClose}
       size="fullscreen"
-      title={title}
+      title={operationContext ? `${title} — ${operationContext.fullName}` : title}
     >
       <form
         className="stock-document-form-layout"
         id="stock-document-form"
         onSubmit={submit}
       >
+        {operationContext ? <div className="ui-alert" role="status">Операція від імені МВО: <strong>{operationContext.fullName}</strong></div> : null}
         <Card title="Основні реквізити">
           <div className="stock-document-form-fields">
             <FormField label="Дата" required>
@@ -251,7 +254,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
                 }}
               />
             </FormField>
-            {user.role !== 'MVO' ? (
+            {user.role !== 'MVO' && !operationContext ? (
               <FormField label="МВО-відправник" required>
                 <Select
                   required

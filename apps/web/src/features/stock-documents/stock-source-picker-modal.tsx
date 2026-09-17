@@ -25,6 +25,7 @@ export function StockSourcePickerModal({
   onRefresh,
   onConfirm,
   onClose,
+  operationContextName,
 }: {
   sources: AvailableStockSource[];
   selectedSourceKeys: string[];
@@ -34,6 +35,7 @@ export function StockSourcePickerModal({
   onRefresh: () => Promise<void> | void;
   onConfirm: (source: AvailableStockSource) => void;
   onClose: () => void;
+  operationContextName?: string;
 }) {
   const [search, setSearch] = useState('');
   const [selectedKey, setSelectedKey] = useState('');
@@ -78,7 +80,7 @@ export function StockSourcePickerModal({
       }
       onClose={onClose}
       size="large"
-      title="Вибір майна"
+      title={operationContextName ? `Вибір майна — МВО: ${operationContextName}` : 'Вибір майна'}
     >
       <div className="stock-source-picker">
         <div className="stock-source-picker__filters">

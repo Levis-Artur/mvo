@@ -17,6 +17,9 @@
   .ui-modal[data-size='fullscreen'] { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); max-height: calc(100dvh - 1rem); }
   .filter-bar { align-items: stretch; flex-direction: column; }
   .filter-bar__field { min-width: 0; flex-basis: auto; }
+  .stock-documents-page--mvo .filter-bar > .filter-bar__field { min-width: 0; flex-basis: auto; }
+  .ui-toast { position: fixed; right: var(--space-2); bottom: calc(var(--footer-height) + var(--space-2) + env(safe-area-inset-bottom, 0px)); width: min(390px, calc(100vw - 2 * var(--space-2))); max-width: 100%; max-height: 25dvh; overflow-y: auto; pointer-events: none; }
+  .ui-toast > .btn { pointer-events: auto; }
   .filter-bar__actions { display: grid; grid-template-columns: 1fr; }
   .form-field { grid-template-columns: minmax(0, 1fr); }
   .form-field__hint, .form-field__error { grid-column: 1; }

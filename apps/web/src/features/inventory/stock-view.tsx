@@ -31,7 +31,7 @@ import {
   type StockFilterDraft,
 } from './stock-model';
 
-export function StockView({ accessMode }: { accessMode?: ReadAccessMode } = {}) {
+export function StockView({ accessMode, showSystemSummary = true }: { accessMode?: ReadAccessMode; showSystemSummary?: boolean } = {}) {
   const [balances, setBalances] = useState<StockBalance[]>([]);
   const [persons, setPersons] = useState<ResponsiblePerson[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -138,7 +138,7 @@ export function StockView({ accessMode }: { accessMode?: ReadAccessMode } = {}) 
         icon="database"
         title="Залишки"
       />
-      <StockSummaryCards balances={filteredBalances} />
+      <StockSummaryCards balances={filteredBalances} showSystemSummary={showSystemSummary} />
       <StockFilterBar
         filters={draft}
         items={items}

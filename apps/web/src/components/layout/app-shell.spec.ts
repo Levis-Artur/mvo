@@ -149,7 +149,7 @@ describe('AppShell presentation model', () => {
       'utf8',
     );
     expect(manager).toContain('<PersonsView accessMode="SCOPED_READ" />');
-    expect(manager).toContain('<StockView accessMode="SCOPED_READ" />');
+    expect(manager).toContain('<StockView accessMode="SCOPED_READ" showSystemSummary={false} />');
     expect(manager).toContain('<TransactionsView accessMode="SCOPED_READ" />');
     expect(manager).toContain('<StockDocumentsView managerReadOnly />');
   });

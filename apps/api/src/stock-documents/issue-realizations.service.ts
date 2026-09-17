@@ -15,7 +15,9 @@ import {
   UserRole,
 } from '@prisma/client';
 import type { CurrentUser } from '../auth/auth.types';
+import { AccessControlService } from '../auth/access-control.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { validateAttachmentUploadSizes } from './attachment-upload-validation';
 import {
   type StoredAttachment,
   StockDocumentAttachmentStorageService,
@@ -26,6 +28,7 @@ import {
 } from './dto/issue-realization.dto';
 
 type AuditContext = {
+  targetResponsiblePersonId?: string;
   requestId?: string;
   ipAddress?: string;
   userAgent?: string;
@@ -62,6 +65,7 @@ export class IssueRealizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly attachmentStorage: StockDocumentAttachmentStorageService,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   async create(
@@ -71,8 +75,18 @@ export class IssueRealizationsService {
     actor: CurrentUser,
     context: AuditContext,
   ) {
-    const sourceResponsiblePersonId = this.requireMvo(actor);
+    const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
+    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
+    validateAttachmentUploadSizes(files);
     await this.assertCanReadIssue(issueId, actor);
+    if (actor.role === UserRole.ORG_MANAGER) {
+      const targetIssue = await this.prisma.stockDocument.findUnique({
+        where: { id: issueId }, select: { sourceResponsiblePersonId: true },
+      });
+      if (!targetIssue || targetIssue.sourceResponsiblePersonId !== sourceResponsiblePersonId) {
+        throw new ForbiddenException('Видача не належить вибраному МВО');
+      }
+    }
     const lines = this.normalizeLines(dto);
     const storedAttachments: StoredAttachment[] = [];
 
@@ -87,6 +101,7 @@ export class IssueRealizationsService {
       const realization = await this.runSerializable(() =>
         this.prisma.$transaction(
           async (tx) => {
+          await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId, tx);
           await this.lockIssue(tx, issueId);
           const issue = await tx.stockDocument.findUnique({
             where: { id: issueId },
@@ -376,6 +391,7 @@ export class IssueRealizationsService {
   }
 
   private async assertCanReadIssue(issueId: string, actor: CurrentUser) {
+    await this.accessControl.assertManagerStockDocumentRead(actor, issueId);
     const issue = await this.prisma.stockDocument.findUnique({
       where: { id: issueId },
       select: { type: true, sourceResponsiblePersonId: true },
@@ -384,6 +400,7 @@ export class IssueRealizationsService {
       throw new NotFoundException('Видачу не знайдено');
     }
     if (actor.role === UserRole.OWNER) return;
+    if (actor.role === UserRole.ORG_MANAGER) return;
     if (
       actor.role !== UserRole.MVO ||
       !actor.responsiblePersonId ||
@@ -473,6 +490,7 @@ export class IssueRealizationsService {
         success: true,
         metadata: {
           action: `ISSUE_REALIZATION_${action}`,
+          ...(context.targetResponsiblePersonId ? { targetResponsiblePersonId: context.targetResponsiblePersonId } : {}),
           issueId,
           realizationId,
         },

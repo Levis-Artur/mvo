@@ -26,13 +26,14 @@ import { CurrentUserParam } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import type { AuthenticatedRequest, CurrentUser } from '../auth/auth.types';
 import { getRequestContext } from '../auth/request-context';
-import { attachmentFileSizeLimitBytes } from '../config/env';
+import { attachmentFileSizeLimitBytes, attachmentUploadLimits } from '../config/env';
 import {
   CreateMvoTransferDto,
   CreateIssueDto,
   ListStockDocumentsQueryDto,
 } from './dto/stock-document.dto';
 import { StockDocumentsService } from './stock-documents.service';
+import { CancelStockDocumentDto } from './dto/cancel-stock-document.dto';
 import { StockDocumentAttachmentsService } from './stock-document-attachments.service';
 import { ListIssueHistoryQueryDto } from './dto/issue-history-query.dto';
 import { IssueHistoryService } from './issue-history.service';
@@ -59,6 +60,12 @@ export class StockDocumentsController {
     @CurrentUserParam() actor: CurrentUser,
   ) {
     return this.service.list(query, actor);
+  }
+
+  @Get('attachment-limits')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
+  attachmentLimits() {
+    return attachmentUploadLimits();
   }
 
   @Get('maintenance/attachment-orphans')
@@ -97,7 +104,7 @@ export class StockDocumentsController {
   }
 
   @Post('mvo-transfer')
-  @Roles(UserRole.MVO)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
   createAndPostMvoTransfer(
     @Body() dto: CreateMvoTransferDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -111,7 +118,7 @@ export class StockDocumentsController {
   }
 
   @Post('issue')
-  @Roles(UserRole.MVO)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: memoryStorage(),
@@ -133,7 +140,7 @@ export class StockDocumentsController {
   }
 
   @Post(':id/realizations')
-  @Roles(UserRole.MVO)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: memoryStorage(),
@@ -157,7 +164,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/realizations')
-  @Roles(UserRole.OWNER, UserRole.MVO)
+  @Roles(UserRole.OWNER, UserRole.MVO, UserRole.ORG_MANAGER)
   issueRealizations(
     @Param('id') id: string,
     @Query() query: ListIssueRealizationsQueryDto,
@@ -167,7 +174,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/realizations/:realizationId')
-  @Roles(UserRole.OWNER, UserRole.MVO)
+  @Roles(UserRole.OWNER, UserRole.MVO, UserRole.ORG_MANAGER)
   issueRealization(
     @Param('id') id: string,
     @Param('realizationId') realizationId: string,
@@ -193,7 +200,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/realizations/:realizationId/attachments/:attachmentId/download')
-  @Roles(UserRole.OWNER, UserRole.MVO)
+  @Roles(UserRole.OWNER, UserRole.MVO, UserRole.ORG_MANAGER)
   async downloadIssueRealizationAttachment(
     @Param('id') id: string,
     @Param('realizationId') realizationId: string,
@@ -220,7 +227,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/realizations/:realizationId/attachments/:attachmentId/preview')
-  @Roles(UserRole.OWNER, UserRole.MVO)
+  @Roles(UserRole.OWNER, UserRole.MVO, UserRole.ORG_MANAGER)
   async previewIssueRealizationAttachment(
     @Param('id') id: string,
     @Param('realizationId') realizationId: string,
@@ -269,6 +276,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/attachments')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   attachments(
     @Param('id') id: string,
     @CurrentUserParam() actor: CurrentUser,
@@ -277,6 +285,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/attachments/:attachmentId/download')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   async downloadAttachment(
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
@@ -300,6 +309,7 @@ export class StockDocumentsController {
   }
 
   @Get(':id/attachments/:attachmentId/preview')
+  @Roles(...STOCK_DOCUMENT_READ_ROLES, UserRole.ORG_MANAGER)
   async previewAttachment(
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
@@ -345,12 +355,13 @@ export class StockDocumentsController {
   }
 
   @Post(':id/cancel')
-  @Roles(...STOCK_DOCUMENT_WRITE_ROLES)
+  @Roles(...STOCK_DOCUMENT_WRITE_ROLES, UserRole.ORG_MANAGER)
   cancel(
     @Param('id') id: string,
+    @Body() dto: CancelStockDocumentDto,
     @CurrentUserParam() actor: CurrentUser,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.service.cancel(id, actor, getRequestContext(request));
+    return this.service.cancel(id, actor, getRequestContext(request), dto?.reason);
   }
 }

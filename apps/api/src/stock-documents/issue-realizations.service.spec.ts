@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   IssueRealizationStatus,
@@ -11,6 +13,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { IssueRealizationsService } from './issue-realizations.service';
+import { AccessControlService } from '../auth/access-control.service';
 
 const issueId = '11111111-1111-4111-8111-111111111111';
 const issueLineId = '22222222-2222-4222-8222-222222222222';
@@ -86,6 +89,7 @@ function harness() {
   const tx = {
     $queryRaw: jest.fn().mockResolvedValue([]),
     stockDocument: { findUnique: jest.fn().mockResolvedValue(issue()) },
+    responsiblePerson: { findFirst: jest.fn().mockResolvedValue({ id: sourceId }) },
     issueRealizationLine: { groupBy: jest.fn().mockResolvedValue([]) },
     issueRealization: {
       create: jest.fn().mockResolvedValue(realization()),
@@ -102,6 +106,7 @@ function harness() {
       async (callback: (client: typeof tx) => unknown) => callback(tx),
     ),
     stockDocument: {
+      findFirst: jest.fn().mockResolvedValue({ id: issueId }),
       findUnique: jest.fn().mockResolvedValue({
         type: StockDocumentType.ISSUE,
         sourceResponsiblePersonId: sourceId,
@@ -113,6 +118,8 @@ function harness() {
       findFirst: jest.fn(),
     },
     issueRealizationAttachment: { findFirst: jest.fn() },
+    responsiblePerson: { findFirst: jest.fn().mockResolvedValue({ id: sourceId }) },
+    securityEvent: { create: jest.fn() },
   };
   const storage = {
     store: jest.fn(),
@@ -121,14 +128,82 @@ function harness() {
     createDownloadStream: jest.fn(),
   };
   return {
-    service: new IssueRealizationsService(prisma as never, storage as never),
+    service: new IssueRealizationsService(prisma as never, storage as never, new AccessControlService(prisma as never)),
     prisma,
     tx,
     storage,
   };
 }
 
+describe('manager realization attachment read scope', () => {
+  it.each(['PREVIEW', 'DOWNLOAD'] as const)('permits scoped %s and rejects foreign attachments before storage', async (action) => {
+    const h = harness();
+    const manager = { ...actor, role: UserRole.ORG_MANAGER, responsiblePersonId: null,
+      accessScopes: [{ managementId: 'manager-management', serviceCode: null }] };
+    h.prisma.issueRealizationAttachment.findFirst.mockResolvedValue({
+      id: 'attachment', originalFileName: 'реалізація.pdf', mimeType: 'application/pdf',
+      sizeBytes: 100, storagePath: 'private.pdf',
+    });
+    await expect(h.service.attachment(issueId, realizationId, 'attachment', manager, {}, action)).resolves.toBeDefined();
+    expect(h.prisma.stockDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [{ id: issueId }, { OR: [
+        { sourceResponsiblePerson: { OR: [{ managementId: 'manager-management' }] } },
+        { destinationResponsiblePerson: { OR: [{ managementId: 'manager-management' }] } },
+      ] }] },
+    }));
+    h.storage.assertStoredFilesExist.mockClear();
+    h.storage.createDownloadStream.mockClear();
+    h.prisma.stockDocument.findFirst.mockResolvedValueOnce(null as never);
+    await expect(h.service.attachment(issueId, realizationId, 'attachment', manager, {}, action)).rejects.toBeInstanceOf(NotFoundException);
+    expect(h.storage.assertStoredFilesExist).not.toHaveBeenCalled();
+    expect(h.storage.createDownloadStream).not.toHaveBeenCalled();
+  });
+});
+
 describe('IssueRealizationsService', () => {
+  it('creates realization for scoped target while keeping the authenticated manager attribution', async () => {
+    const h = harness();
+    const manager = { ...actor, id: 'manager-user', role: UserRole.ORG_MANAGER, responsiblePersonId: null,
+      accessScopes: [{ managementId: 'manager-management', serviceCode: null }] };
+    await h.service.create(issueId, { realizationDate: '2026-08-11', targetResponsiblePersonId: sourceId,
+      lines: [{ issueLineId, quantity: '8' }] }, [], manager, {});
+    expect(h.tx.issueRealization.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ issueId, createdByUserId: manager.id }) }));
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      actorUserId: manager.id, metadata: expect.objectContaining({ targetResponsiblePersonId: sourceId, action: 'ISSUE_REALIZATION_CREATE' }),
+    }) }));
+    expect(h.tx).not.toHaveProperty('stockBalance');
+    expect(h.tx).not.toHaveProperty('stockTransaction');
+    h.tx.issueRealizationLine.groupBy.mockResolvedValue([{ issueLineId, _sum: { quantity: new Prisma.Decimal(8) } }]);
+    await expect(h.service.create(issueId, { realizationDate: '2026-08-11', targetResponsiblePersonId: sourceId,
+      lines: [{ issueLineId, quantity: '3' }] }, [], manager, {})).rejects.toBeInstanceOf(ConflictException);
+    expect(h.tx.issueRealization.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects out-of-scope or mismatched ISSUE targets and crafted MVO targets before storage', async () => {
+    const h = harness();
+    const manager = { ...actor, role: UserRole.ORG_MANAGER, responsiblePersonId: null,
+      accessScopes: [{ managementId: 'manager-management', serviceCode: null }] };
+    const input = { realizationDate: '2026-08-11', targetResponsiblePersonId: sourceId, lines: [{ issueLineId, quantity: '1' }] };
+    h.prisma.responsiblePerson.findFirst.mockResolvedValueOnce(null as never);
+    await expect(h.service.create(issueId, input, [], manager, {})).rejects.toBeInstanceOf(NotFoundException);
+    h.prisma.stockDocument.findFirst.mockResolvedValueOnce(null as never);
+    await expect(h.service.create(issueId, input, [], manager, {})).rejects.toBeInstanceOf(NotFoundException);
+    await expect(h.service.create(issueId, input, [], actor, {})).rejects.toBeInstanceOf(ForbiddenException);
+    h.prisma.responsiblePerson.findFirst.mockResolvedValueOnce({ id: 'other-scoped-mvo' });
+    await expect(h.service.create(issueId, { ...input, targetResponsiblePersonId: 'other-scoped-mvo' }, [], manager, {})).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+  it('rejects excessive total size before storing any realization attachments', async () => {
+    const h = harness();
+    const files = [20, 20, 11].map((size) => ({ size: size * 1024 * 1024 })) as Express.Multer.File[];
+    await expect(h.service.create(issueId, {
+      realizationDate: '2026-09-17', lines: [{ issueLineId, quantity: '1' }],
+    }, files, actor, {})).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.tx.issueRealization.create).not.toHaveBeenCalled();
+  });
   it('creates a POSTED partial realization without touching stock', async () => {
     const h = harness();
     const result = await h.service.create(
@@ -256,7 +331,7 @@ describe('IssueRealizationsService', () => {
       sha256: 'a'.repeat(64),
       storagePath: 'uuid.pdf',
     });
-    const file = { originalname: 'акт.pdf' } as Express.Multer.File;
+    const file = { originalname: 'акт.pdf', size: 12 } as Express.Multer.File;
 
     await h.service.create(
       issueId,

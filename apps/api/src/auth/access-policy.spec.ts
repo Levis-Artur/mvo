@@ -54,12 +54,32 @@ describe('role access policy', () => {
     ).toBe(false);
   });
 
-  it('opens ORG_MANAGER only explicitly scoped read endpoints', () => {
+  it('opens scoped manager reads, explicit target creation and document cancellation without attachment editing', () => {
     const roles = (target: object) =>
       Reflect.getMetadata(ROLES_KEY, target) as UserRole[] | undefined;
 
     expect(RESPONSIBLE_PERSON_READ_ROLES).toContain(UserRole.ORG_MANAGER);
     expect(STOCK_BALANCE_READ_ROLES).toContain(UserRole.ORG_MANAGER);
+    for (const method of [
+      StockDocumentsController.prototype.attachments,
+      StockDocumentsController.prototype.downloadAttachment,
+      StockDocumentsController.prototype.previewAttachment,
+      StockDocumentsController.prototype.issueRealizations,
+      StockDocumentsController.prototype.issueRealization,
+      StockDocumentsController.prototype.downloadIssueRealizationAttachment,
+      StockDocumentsController.prototype.previewIssueRealizationAttachment,
+    ]) expect(roles(method)).toContain(UserRole.ORG_MANAGER);
+    for (const method of [
+      StockDocumentsController.prototype.cancelIssueRealization,
+      StockDocumentsController.prototype.uploadAttachment,
+      StockDocumentsController.prototype.removeAttachment,
+    ]) expect(roles(method)).not.toContain(UserRole.ORG_MANAGER);
+    for (const method of [
+      StockDocumentsController.prototype.createAndPostIssue,
+      StockDocumentsController.prototype.createAndPostMvoTransfer,
+      StockDocumentsController.prototype.createIssueRealization,
+      StockController.prototype.availableToMe,
+    ]) expect(roles(method)).toContain(UserRole.ORG_MANAGER);
     expect(roles(ResponsiblePersonsController)).toContain(UserRole.ORG_MANAGER);
     expect(roles(ResponsiblePersonsController.prototype.findOne)).toContain(
       UserRole.ORG_MANAGER,
@@ -69,13 +89,13 @@ describe('role access policy', () => {
     ).toContain(UserRole.ORG_MANAGER);
     expect(
       roles(ResponsiblePersonsController.prototype.accountingCard),
-    ).not.toContain(UserRole.ORG_MANAGER);
+    ).toContain(UserRole.ORG_MANAGER);
     expect(
       roles(ResponsiblePersonsController.prototype.stockTransactions),
     ).toContain(UserRole.ORG_MANAGER);
     expect(
       roles(ResponsiblePersonsController.prototype.transferTargets),
-    ).not.toContain(UserRole.ORG_MANAGER);
+    ).toContain(UserRole.ORG_MANAGER);
     expect(roles(StockController.prototype.listBalances)).toContain(
       UserRole.ORG_MANAGER,
     );
@@ -108,14 +128,14 @@ describe('role access policy', () => {
     );
     expect(
       roles(StockDocumentsController.prototype.createAndPostMvoTransfer),
-    ).not.toContain(UserRole.ORG_MANAGER);
+    ).toContain(UserRole.ORG_MANAGER);
     expect(
       roles(StockDocumentsController.prototype.createAndPostIssue),
-    ).not.toContain(UserRole.ORG_MANAGER);
-    expect(roles(StockDocumentsController.prototype.cancel)).not.toContain(
+    ).toContain(UserRole.ORG_MANAGER);
+    expect(roles(StockDocumentsController.prototype.cancel)).toContain(
       UserRole.ORG_MANAGER,
     );
-    expect(roles(StockDocumentsController.prototype.attachments)).toBeUndefined();
+    expect(roles(StockDocumentsController.prototype.attachments)).toContain(UserRole.ORG_MANAGER);
   });
 
   it('allows only the production import workflow and the simple accounting entry point', () => {

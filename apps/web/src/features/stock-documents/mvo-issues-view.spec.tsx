@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type {
   AuthUser,
@@ -9,6 +9,7 @@ import type {
 } from '@/lib/types';
 import { MvoIssuesView } from './mvo-issues-view';
 import { stockDocumentsService } from './stock-documents.service';
+import { validateAttachmentFileSizes } from '@/lib/attachment-upload';
 
 const personId = '11111111-1111-4111-8111-111111111111';
 const balanceId = '22222222-2222-4222-8222-222222222222';
@@ -41,7 +42,8 @@ const historyItem: IssueHistoryItem = {
   recipientName: 'Служба забезпечення',
   note: 'Для роботи',
   status: 'POSTED',
-  numberOfLines: 1,
+  numberOfLines: 2,
+  inventoryNames: ['Клавіатура', 'Монітор'],
   totalQuantity: '2',
   issuedQuantity: '2',
   realizedQuantity: '1',
@@ -184,13 +186,26 @@ describe('MVO issues workspace', () => {
     expect(screen.getByRole('button', { name: 'Фільтри' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Експортувати' })).toBeTruthy();
     expect(await screen.findByText('№ 15')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Номенклатура' })).toBeTruthy();
+    expect(screen.getByText('Клавіатура, Монітор')).toBeTruthy();
+    const history = screen.getByRole('table', { name: 'Історія видач' });
+    expect(within(history).getByRole('columnheader', { name: 'Не реалізовано' })).toBeTruthy();
+    expect(within(history).queryByRole('columnheader', { name: 'Позицій' })).toBeNull();
+    expect(within(history).queryByRole('columnheader', { name: 'Реалізовано' })).toBeNull();
+    expect(within(history).getAllByRole('row')[1].querySelector('td[data-label="Не реалізовано"]')?.textContent).toBe('1');
     expect(screen.getByText('Служба забезпечення')).toBeTruthy();
     expect(screen.getByText('Є документ')).toBeTruthy();
     const [query] = jest.mocked(stockDocumentsService.issueHistory).mock.calls[0];
     expect(query).not.toHaveProperty('accessMode');
   });
 
-  it('creates an ISSUE from the direct balance without transfer identifiers', async () => {
+  it.each([false, true])('validates ISSUE attachments and keeps the direct balance flow (oversized: %s)', async (oversized) => {
+    if (oversized) {
+      jest.mocked(stockDocumentsService.createAndPostIssue).mockImplementation(async (_input, files) => {
+        validateAttachmentFileSizes(files, 20 * 1024 * 1024, 50 * 1024 * 1024);
+        return issueDocument;
+      });
+    }
     const browser = userEvent.setup();
     const { container } = render(<MvoIssuesView />);
     await screen.findByText('№ 15');
@@ -205,9 +220,16 @@ describe('MVO issues workspace', () => {
     await browser.type(screen.getByRole('spinbutton', { name: 'Кількість рядка 1' }), '2');
     await browser.upload(
       container.querySelector('input[type="file"]') as HTMLInputElement,
-      new File(['%PDF-1.7'], 'nakladna.pdf', { type: 'application/pdf' }),
+      new File(oversized ? ['%PDF-', new Uint8Array(20 * 1024 * 1024)] : ['%PDF-1.7'], 'nakladna.pdf', { type: 'application/pdf' }),
     );
     await browser.click(screen.getByRole('button', { name: 'Підтвердити видачу' }));
+
+    if (oversized) {
+      expect(await screen.findByText('Файл перевищує максимально допустимий розмір 20 МБ.')).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Нова видача' })).toBeTruthy();
+      expect(screen.queryByText('Видачу успішно оформлено.')).toBeNull();
+      return;
+    }
 
     await waitFor(() => expect(stockDocumentsService.createAndPostIssue).toHaveBeenCalledTimes(1));
     expect(stockDocumentsService.createAndPostIssue).toHaveBeenCalledWith(
@@ -239,6 +261,7 @@ describe('MVO issues workspace', () => {
     await browser.click(screen.getByRole('button', { name: 'Відкрити' }));
     expect(await screen.findByRole('heading', { name: 'Видача № 15' })).toBeTruthy();
     expect(screen.getByText('Позиції')).toBeTruthy();
+    expect(within(screen.getByRole('table', { name: 'Позиції видачі № 15' })).getByRole('columnheader', { name: 'Не реалізовано' })).toBeTruthy();
     expect(screen.queryByText(/Передача №/)).toBeNull();
   });
 
@@ -298,7 +321,7 @@ describe('MVO issues workspace', () => {
     expect(await screen.findByText(/Реалізовано повністю/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Реалізувати' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Відкрити' })).toBeTruthy();
-    expect(screen.queryByText(/^0$/)).toBeNull();
+    expect(screen.getByRole('table', { name: 'Історія видач' }).querySelector('td[data-label="Не реалізовано"]')?.textContent).toMatch(/^0/);
   });
 
   it('exports active filters and renders a useful empty state', async () => {

@@ -203,6 +203,7 @@ export function lifecycleActions(
   return {
     cancel:
       writable &&
+      !(user.role === 'MVO' && document.type === 'MVO_TRANSFER') &&
       (transferDocument || issueDocument) &&
       document.status === 'POSTED' &&
       !(
@@ -210,4 +211,14 @@ export function lifecycleActions(
         document.accountingExportState === 'EXPORTED'
       ),
   };
+}
+
+export function managerCancellationAllowed(document: StockDocument, user: Pick<AuthUser, 'role'>) {
+  return user.role === 'ORG_MANAGER' && document.canManagerCancel === true
+    && document.accountingModel === 'DIRECT_BALANCE'
+    && document.status === 'POSTED'
+    && (document.type === 'MVO_TRANSFER' || document.type === 'ISSUE')
+    && !(document.type === 'MVO_TRANSFER' && document.accountingExportState === 'EXPORTED')
+    && !(document.type === 'MVO_TRANSFER' && document.issues?.some((item) => item.status === 'POSTED'))
+    && !(document.type === 'ISSUE' && document.realizations?.some((item) => item.status === 'POSTED'));
 }

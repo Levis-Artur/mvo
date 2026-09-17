@@ -41,7 +41,7 @@ const issue = {
     username: 'mvo-a',
     role: UserRole.MVO,
   },
-  lines: [{ quantity: new Prisma.Decimal('2.5'), realizationLines: [] }],
+  lines: [{ quantity: new Prisma.Decimal('2.5'), inventoryItem: { name: 'Клавіатура' }, realizationLines: [] }],
   issueRealizations: [],
   attachments: [{ id: 'attachment-id' }],
 };
@@ -104,6 +104,7 @@ describe('IssueHistoryService', () => {
         realizationCount: 0,
         isFullyRealized: false,
         numberOfLines: 1,
+        inventoryNames: ['Клавіатура'],
         hasAttachment: true,
         recipientName: 'Отримувач',
       }),
@@ -275,6 +276,7 @@ describe('IssueHistoryService', () => {
         lines: [
           {
             quantity: new Prisma.Decimal('2.5'),
+            inventoryItem: { name: 'Клавіатура' },
             realizationLines: [{ quantity: new Prisma.Decimal('2.5') }],
           },
         ],

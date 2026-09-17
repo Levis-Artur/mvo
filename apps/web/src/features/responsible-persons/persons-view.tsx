@@ -310,6 +310,7 @@ export function PersonsView({ accessMode }: { accessMode?: ReadAccessMode } = {}
 
       {error ? <ErrorState message={error} /> : null}
       <PersonsTable
+        managerReadOnly={user?.role === 'ORG_MANAGER' || accessMode === 'SCOPED_READ'}
         accounts={accounts}
         accountsAvailable={accountsAvailable}
         canCreateAccount={canCreateMvoUser}

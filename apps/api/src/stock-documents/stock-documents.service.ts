@@ -17,6 +17,8 @@ import {
   UserRole,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { validateAttachmentUploadSizes } from './attachment-upload-validation';
+import { issueRealizationQuantity, issueRealizationLinesSelect } from './issue-realization-quantity';
 import type { ReadAccessMode } from '../auth/dto/read-access-query.dto';
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
@@ -43,6 +45,9 @@ type NewStockDocumentInput = {
 };
 
 type AuditContext = {
+  cancellationReason?: string;
+  documentType?: StockDocumentType;
+  targetResponsiblePersonId?: string;
   requestId?: string;
   ipAddress?: string;
   userAgent?: string;
@@ -104,7 +109,7 @@ const documentInclude = {
       postedByUser: { select: { id: true, username: true, role: true } },
       cancelledByUser: { select: { id: true, username: true, role: true } },
       lines: {
-        include: { inventoryItem: true },
+        include: { inventoryItem: true, realizationLines: { select: issueRealizationLinesSelect } },
         orderBy: { createdAt: 'asc' as const },
       },
       attachments: {
@@ -216,7 +221,11 @@ export class StockDocumentsService {
     if (!document) {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
-    return this.serialize(document);
+    const result = this.serialize(document);
+    if (actor.role === UserRole.ORG_MANAGER) {
+      return { ...result, canManagerCancel: await this.accessControl.managerCanManageStockDocument(actor, id) };
+    }
+    return result;
   }
 
   async createAndPostMvoTransfer(
@@ -224,13 +233,8 @@ export class StockDocumentsService {
     actor: CurrentUser,
     context: AuditContext,
   ) {
-    this.assertCanWrite(actor);
-    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
-      throw new ForbiddenException(
-        'Передачу може створити лише користувач із пов’язаною карткою МВО',
-      );
-    }
-    const sourceResponsiblePersonId = actor.responsiblePersonId;
+    const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
+    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
 
     const documentId = randomUUID();
     const normalized = this.validateDto(
@@ -251,6 +255,7 @@ export class StockDocumentsService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId, tx);
         await this.assertActiveMvoSender(
           tx,
           sourceResponsiblePersonId,
@@ -331,19 +336,14 @@ export class StockDocumentsService {
     actor: CurrentUser,
     context: AuditContext,
   ) {
-    this.assertCanWrite(actor);
-    if (actor.role !== UserRole.MVO || !actor.responsiblePersonId) {
-      throw new ForbiddenException(
-        'Видачу може створити лише користувач із пов’язаною карткою МВО',
-      );
-    }
+    const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
+    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
     if (!files.length) {
       throw new BadRequestException(
         'Для видачі додайте хоча б одне фото або скан накладної',
       );
     }
 
-    const sourceResponsiblePersonId = actor.responsiblePersonId;
     const normalized = this.validateDto(
       {
         ...dto,
@@ -353,6 +353,7 @@ export class StockDocumentsService {
       actor,
       { requireIssueBasis: false },
     );
+    validateAttachmentUploadSizes(files);
     const documentId = randomUUID();
     const storedAttachments: StoredAttachment[] = [];
 
@@ -366,6 +367,7 @@ export class StockDocumentsService {
 
       await this.prisma.$transaction(
         async (tx) => {
+          await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId, tx);
           await this.assertActiveMvoSender(tx, sourceResponsiblePersonId);
           const now = new Date();
           const issue = await tx.stockDocument.create({
@@ -455,8 +457,13 @@ export class StockDocumentsService {
     return this.findOne(documentId, actor);
   }
 
-  async cancel(id: string, actor: CurrentUser, context: AuditContext) {
-    this.assertCanWrite(actor);
+  async cancel(id: string, actor: CurrentUser, context: AuditContext, reason?: string) {
+    if (actor.role === UserRole.ORG_MANAGER) {
+      if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 1000) {
+        throw new BadRequestException('Вкажіть причину скасування (від 1 до 1000 символів).');
+      }
+      context = { ...context, cancellationReason: reason.trim() };
+    } else this.assertCanWrite(actor);
     try {
       const cancelled = await this.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`
@@ -478,6 +485,19 @@ export class StockDocumentsService {
         });
         if (!current) {
           throw new NotFoundException('Документ руху майна не знайдено');
+        }
+        if (actor.role === UserRole.ORG_MANAGER) {
+          if (!await this.accessControl.managerCanManageStockDocument(actor, id, tx)) {
+            throw new NotFoundException('Документ руху майна не знайдено');
+          }
+          this.assertNewDocumentType(current.type);
+          context = { ...context, targetResponsiblePersonId: current.sourceResponsiblePersonId, documentType: current.type };
+          if (current.status === StockDocumentStatus.CANCELLED) {
+            throw new BadRequestException('Операцію вже скасовано.');
+          }
+        }
+        if (actor.role === UserRole.MVO && current.type === StockDocumentType.MVO_TRANSFER) {
+          throw new ForbiddenException('МВО не може скасовувати передачі майна.');
         }
         this.assertMvoOwnSource(actor, current.sourceResponsiblePersonId);
         this.assertMutableDocument(current);
@@ -542,7 +562,10 @@ export class StockDocumentsService {
             throw new NotFoundException('Документ руху майна не знайдено');
           }
           this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
-          if (concurrent.status === StockDocumentStatus.CANCELLED) return false;
+          if (concurrent.status === StockDocumentStatus.CANCELLED) {
+            if (actor.role === UserRole.ORG_MANAGER) throw new BadRequestException('Операцію вже скасовано.');
+            return false;
+          }
           this.assertCancellationExportAllowed(concurrent);
           throw new BadRequestException(
             'Скасувати можна лише проведений документ',
@@ -1087,15 +1110,7 @@ export class StockDocumentsService {
           (sum, issueLine) => sum.plus(issueLine.quantity),
           new Prisma.Decimal(0),
         );
-      const realizedQuantity = (line.realizationLines ?? [])
-        .filter(
-          (realizationLine) =>
-            realizationLine.realization.status === 'POSTED',
-        )
-        .reduce(
-          (sum, realizationLine) => sum.plus(realizationLine.quantity),
-          new Prisma.Decimal(0),
-        );
+      const realizationQuantity = issueRealizationQuantity(line.quantity, line.realizationLines);
       return {
         ...line,
         quantity: line.quantity.toString(),
@@ -1114,14 +1129,11 @@ export class StockDocumentsService {
             : null,
         realizedQuantity:
           document.type === StockDocumentType.ISSUE
-            ? realizedQuantity.toString()
+            ? realizationQuantity.realizedQuantity
             : null,
         availableToRealize:
           document.type === StockDocumentType.ISSUE
-            ? Prisma.Decimal.max(
-                line.quantity.minus(realizedQuantity),
-                new Prisma.Decimal(0),
-              ).toString()
+            ? realizationQuantity.availableToRealize
             : null,
         issueLines: undefined,
         realizationLines: undefined,
@@ -1168,9 +1180,14 @@ export class StockDocumentsService {
       lines: serializedLines,
       issues: (document.issues ?? []).map((issue) => ({
         ...issue,
+        availableToRealize: issue.lines.reduce((sum, line) => sum.plus(
+          issueRealizationQuantity(line.quantity, line.realizationLines).availableToRealize,
+        ), new Prisma.Decimal(0)).toString(),
         lines: issue.lines.map((line) => ({
           ...line,
           quantity: line.quantity.toString(),
+          ...issueRealizationQuantity(line.quantity, line.realizationLines),
+          realizationLines: undefined,
           quantityBefore: line.quantityBefore?.toString() ?? null,
           quantityAfter: line.quantityAfter?.toString() ?? null,
         })),
@@ -1261,6 +1278,8 @@ export class StockDocumentsService {
           documentId,
           action,
           status,
+          ...(context.targetResponsiblePersonId ? { targetResponsiblePersonId: context.targetResponsiblePersonId } : {}),
+          ...(context.cancellationReason ? { cancellationReason: context.cancellationReason, documentType: context.documentType } : {}),
           result: success ? 'SUCCESS' : 'FAILURE',
           reason: error instanceof Error ? error.message : undefined,
         },

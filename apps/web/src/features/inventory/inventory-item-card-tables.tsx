@@ -62,8 +62,7 @@ export function InventoryMovementsTable({
         { label: 'Звідки' },
         { label: 'Куди або кому' },
         { label: 'Кількість', numeric: true },
-        { label: 'Було', numeric: true },
-        { label: 'Стало', numeric: true },
+        ...(card?.movements.items.some((movement) => movement.category === 'ISSUE') ? [{ label: 'Не реалізовано', numeric: true }] : []),
         { label: 'Номер документа' },
         { label: 'Джерело' },
         { label: 'Примітка або підстава' },
@@ -81,8 +80,7 @@ export function InventoryMovementsTable({
         movement.from,
         movement.to,
         formatSignedQuantity(movementDisplayQuantity(movement)),
-        formatQuantity(movement.balanceBefore),
-        formatQuantity(movement.balanceAfter),
+        ...(card?.movements.items.some((item) => item.category === 'ISSUE') ? [movement.category === 'ISSUE' ? formatQuantity(movement.availableToRealize ?? movement.quantity) : '—'] : []),
         movement.documentNumber,
         movement.source,
         movement.note ?? '—',
@@ -120,6 +118,7 @@ export function InventoryDocumentsTable({
         { label: 'Куди або кому' },
         { label: 'Кількість', numeric: true },
         { label: 'Статус' },
+        ...(card?.documents.items.some((document) => document.documentType === 'ISSUE') ? [{ label: 'Не реалізовано', numeric: true }] : []),
         { label: 'Вкладення' },
         { label: 'Дії', actions: true },
       ]}
@@ -146,6 +145,7 @@ export function InventoryDocumentsTable({
         >
           {document.statusLabel}
         </StatusBadge>,
+        ...(card?.documents.items.some((item) => item.documentType === 'ISSUE') ? [document.documentType === 'ISSUE' ? formatQuantity(document.availableToRealize ?? document.quantity) : '—'] : []),
         <AttachmentList document={document} key="attachments" />,
         <Button
           disabled={opening}

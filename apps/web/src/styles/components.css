@@ -30,18 +30,18 @@
 .ui-state { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); text-align: center; }
 .ui-state--error { border-color: var(--color-danger-border); background: var(--color-danger-soft); color: var(--color-danger); }
 .data-table-shell { max-width: 100%; min-width: 0; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-card); container-type: inline-size; }
-.data-table-scroll { width: 100%; max-width: 100%; }
+.data-table-scroll { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; }
 .data-table-scroll[data-scroll-mode='horizontal'] { overflow-x: auto; overflow-y: hidden; }
 .data-table-scroll[data-scroll-mode='bounded'] { max-height: 560px; overflow: auto; }
 .data-table { width: 100%; min-width: 0; border-collapse: separate; border-spacing: 0; background: var(--color-surface); font-size: var(--text-sm); }
 .data-table-scroll[data-scroll-mode='bounded'] .data-table thead { position: sticky; top: 0; z-index: 1; }
 .data-table th { padding: 0.55rem 0.65rem; border-right: 1px solid var(--color-border-light); border-bottom: 1px solid var(--color-border); background: var(--color-surface-muted); text-align: left; font-size: var(--text-sm); font-weight: 700; overflow-wrap: normal; white-space: normal; }
-.data-table td { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--color-border-light); vertical-align: top; }
+.data-table td { padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--color-border-light); vertical-align: top; overflow-wrap: anywhere; white-space: normal; }
 .data-table tbody tr:hover { background: var(--hover-row); }
 .data-table tbody tr[aria-selected='true'] { background: var(--selected-row); box-shadow: inset 3px 0 var(--color-primary); }
 .data-table__interactive { cursor: pointer; }
 .data-table__interactive:focus-visible { position: relative; z-index: 1; outline-offset: -3px; }
-.data-table__actions { width: 1%; text-align: right; white-space: nowrap; }
+.data-table__actions { width: 1%; text-align: right; white-space: normal; }
 @container (max-width: 960px) {
   .data-table[data-responsive='cards-wide'] { display: block; min-width: 0; background: transparent; }
   .data-table[data-responsive='cards-wide'] thead { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -230,7 +230,7 @@
 .stock-documents-table__document { width: 210px; white-space: nowrap; }
 .stock-document-summary { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: var(--space-2); white-space: nowrap; }
 .stock-documents-table__person { min-width: 0; overflow: hidden; }
-.stock-documents-table__person-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-documents-table__person-text { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .stock-documents-table__volume { width: 150px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stock-documents-table__volume-text { white-space: nowrap; }
 .stock-documents-table__status { width: 140px; white-space: nowrap; }
@@ -252,11 +252,12 @@
 .mvo-issues-table th, .mvo-issues-table td { height: 48px; padding: 0.4rem 0.5rem; vertical-align: middle; }
 .mvo-issues-table__number { width: 4.75rem; white-space: nowrap; }
 .mvo-issues-table__date { width: 6.75rem; white-space: nowrap; }
-.mvo-issues-table__recipient { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mvo-issues-table__recipient { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.mvo-issues-table__inventory { white-space: normal; overflow-wrap: anywhere; }
 .mvo-issues-table__positions { width: 4.75rem; white-space: nowrap; }
 .mvo-issues-table__quantity { width: 6.5rem; }
 .mvo-issues-table th.mvo-issues-table__quantity { line-height: 1.2; white-space: normal; }
-.mvo-issues-table td.mvo-issues-table__quantity { white-space: nowrap; }
+.mvo-issues-table td.mvo-issues-table__quantity { white-space: normal; }
 .mvo-issues-table__status { width: 7rem; white-space: nowrap; }
 .mvo-issues-table__attachment { width: 7.25rem; white-space: nowrap; }
 .mvo-issues-table__actions { width: 12.5rem; white-space: nowrap; }
@@ -422,3 +423,27 @@
 @media (max-width: 520px) { .auth-recovery-codes { grid-template-columns: 1fr; } }
 .auth-qr-box { display: grid; place-items: center; overflow: hidden; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); padding: var(--space-3); }
 .auth-qr-box img { display: block; width: min(100%, 280px); height: auto; image-rendering: pixelated; }
+
+/* Keep dynamic table content in flow and contain intrinsic widths locally. */
+.ui-card__header, .ui-card__body, .ui-card__body > *, .ui-modal__body > * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.ui-card__header { flex-wrap: wrap; }
+.btn { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.btn-compact { height: auto; }
+.input { min-width: 0; max-width: 100%; }
+.status-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.ui-alert, .ui-state, .data-table-state { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.data-table { table-layout: auto; }
+.data-table th { overflow-wrap: anywhere; }
+.data-table td > * { min-width: 0; max-width: 100%; }
+.data-table__actions > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.filter-bar { min-width: 0; flex-wrap: wrap; }
+.filter-bar__field { min-width: min(150px, 100%); max-width: 100%; overflow-wrap: anywhere; }
+.filter-bar__actions { min-width: 0; max-width: 100%; flex: 0 1 auto; flex-wrap: wrap; }
+.form-actions, .mvo-issues-filters__actions, .stock-document-actions--mvo, .mvo-issues-table__action-list,
+.stock-document-attachment-list__actions, .ui-pagination, .ui-pagination__actions, .ui-pagination__limit { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.stock-document-attachment-list { min-width: 0; max-width: 100%; }
+.ui-modal { min-width: 0; max-width: 100%; }
+.ui-modal__header, .ui-modal__footer { position: static; min-width: 0; max-width: 100%; }
+.ui-modal__footer { flex-wrap: wrap; }
+.ui-toast > span { min-width: 0; overflow-wrap: anywhere; }
+.accounting-import-detail__actions { position: static; min-width: 0; max-width: 100%; flex-wrap: wrap; }

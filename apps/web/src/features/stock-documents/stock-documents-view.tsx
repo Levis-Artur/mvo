@@ -14,7 +14,7 @@ import {
   Select,
   Toast,
 } from '@/components/ui';
-import { canChangeStockDocuments } from './stock-document-rules';
+import { canChangeStockDocuments, managerCancellationAllowed } from './stock-document-rules';
 import { canUseGlobalResponsiblePersonFilters } from './stock-document-loading-policy';
 import { CancelDocumentModal } from './cancel-document-modal';
 import { StockDocumentDetailsModal } from './stock-document-details-modal';
@@ -29,10 +29,10 @@ export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnl
   const viewUser = managerReadOnly
     ? getManagerReadOnlyPresentationUser(user)
     : user;
-  return <StockDocumentsContent user={viewUser} accessMode={managerReadOnly ? 'SCOPED_READ' : undefined} />;
+  return <StockDocumentsContent user={viewUser} managerCancellationEnabled={user.role === 'ORG_MANAGER'} accessMode={managerReadOnly ? 'SCOPED_READ' : undefined} />;
 }
 
-function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; accessMode?: ReadAccessMode }) {
+function StockDocumentsContent({ user, accessMode, managerCancellationEnabled }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; accessMode?: ReadAccessMode; managerCancellationEnabled: boolean }) {
   const controller = useStockDocumentsController(user, accessMode);
   const [advancedFilters, setAdvancedFilters] = useState(false);
   const writable = canChangeStockDocuments(user);
@@ -116,6 +116,8 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
       onSubmit={controller.save}
     /> : null}
     {controller.selected && !controller.confirming && !controller.formType ? <StockDocumentDetailsModal
+      readOnly={accessMode === 'SCOPED_READ'}
+      canManagerCancel={managerCancellationEnabled && managerCancellationAllowed(controller.selected, user)}
       document={controller.selected}
       error={controller.actionError}
       loading={controller.actionLoading}
@@ -124,7 +126,7 @@ function StockDocumentsContent({ user, accessMode }: { user: NonNullable<ReturnT
       onClose={() => controller.setSelected(null)}
       onOpenSourceTransfer={(transferId) => void controller.openDetails({ id: transferId })}
     /> : null}
-    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={() => void controller.perform()} /> : null}
+    {controller.selected && controller.confirming === 'cancel' ? <CancelDocumentModal document={controller.selected} requireReason={managerCancellationEnabled} error={controller.actionError} loading={controller.actionLoading} onClose={controller.closeConfirmation} onConfirm={(reason) => void controller.perform(reason)} /> : null}
     {controller.toast ? <Toast message={controller.toast} onClose={() => controller.setToast('')} /> : null}
   </section>;
 }

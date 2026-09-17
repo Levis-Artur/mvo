@@ -42,13 +42,18 @@ function issueForm({
   onSubmit = jest.fn(async () => undefined),
   saving = false,
   initialInventoryItemId,
+  viewer = user,
+  operationContext,
 }: {
   onSubmit?: (input: StockDocumentInput, files: File[]) => Promise<void>;
   saving?: boolean;
   initialInventoryItemId?: string;
+  viewer?: AuthUser;
+  operationContext?: { responsiblePersonId: string; fullName: string };
 } = {}) {
   return (
     <StockDocumentForm
+      operationContext={operationContext}
       availableSources={[source]}
       error=""
       initialInventoryItemId={initialInventoryItemId}
@@ -61,7 +66,7 @@ function issueForm({
       targetsError=""
       transferTargets={[]}
       type="ISSUE"
-      user={user}
+      user={viewer}
       onClose={jest.fn()}
       onSourceChange={jest.fn(async () => undefined)}
       onSubmit={onSubmit}
@@ -70,6 +75,26 @@ function issueForm({
 }
 
 describe('new ISSUE form', () => {
+  it('locks the manager source to the explicit target and shows its name without changing self mode', async () => {
+    const manager = { ...user, role: 'ORG_MANAGER', responsiblePersonId: null } as AuthUser;
+    const onSubmit = jest.fn(async () => undefined);
+    const context = { responsiblePersonId: sourceId, fullName: 'Іваненко Іван Іванович' };
+    const { container, unmount } = render(issueForm({ viewer: manager, operationContext: context, initialInventoryItemId: itemId, onSubmit }));
+    expect(screen.getByText(/Операція від імені МВО:/)).toBeTruthy();
+    expect(screen.getByText(context.fullName)).toBeTruthy();
+    expect(screen.queryByLabelText(/МВО-відправник/)).toBeNull();
+    const browser = userEvent.setup();
+    await browser.type(screen.getByRole('textbox', { name: 'Кому видано' }), 'Одержувач');
+    await browser.type(screen.getByRole('spinbutton', { name: 'Кількість рядка 1' }), '2');
+    const file = new File(['%PDF-1.7'], 'issue.pdf', { type: 'application/pdf' });
+    await browser.upload(container.querySelector('input[type="file"]') as HTMLInputElement, file);
+    await browser.click(screen.getByRole('button', { name: 'Підтвердити видачу' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ sourceResponsiblePersonId: sourceId, type: 'ISSUE' }), [file]);
+    unmount();
+    render(issueForm({ operationContext: { responsiblePersonId: 'foreign-mvo', fullName: 'Чужий МВО' } }));
+    expect(screen.queryByText(/Операція від імені МВО:/)).toBeNull();
+    expect(screen.queryByText('Чужий МВО')).toBeNull();
+  });
   it('preselects the item opened from its card and leaves quantity empty', () => {
     render(issueForm({ initialInventoryItemId: itemId }));
 

@@ -15,9 +15,11 @@ import type { ReadAccessMode } from '../auth/dto/read-access-query.dto';
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { issueRealizationQuantity, issueRealizationLinesSelect } from '../stock-documents/issue-realization-quantity';
 import { ListStockBalancesQueryDto } from './dto/list-stock-balances-query.dto';
 import { ListStockTransactionsQueryDto } from './dto/list-stock-transactions-query.dto';
 import { ManualReceiptDto } from './dto/manual-receipt.dto';
+import { unrealizedQuantities } from './unrealized-quantities';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -62,6 +64,7 @@ const balanceInclude = {
 } satisfies Prisma.StockBalanceInclude;
 
 const transactionInclude = {
+  documentLine: { select: { quantity: true, realizationLines: { select: issueRealizationLinesSelect } } },
   document: { select: { displayNumber: true } },
   responsiblePerson: {
     select: {
@@ -349,13 +352,13 @@ export class StockService {
     });
   }
 
-  async availableToMe(user: CurrentUser) {
-    if (user.role !== UserRole.MVO || !user.responsiblePersonId) {
+  async availableToMe(user: CurrentUser, targetResponsiblePersonId?: string) {
+    if (user.role !== UserRole.ORG_MANAGER && (user.role !== UserRole.MVO || !user.responsiblePersonId)) {
       throw new BadRequestException(
         'Доступне майно визначається лише для користувача з карткою МВО',
       );
     }
-    const responsiblePersonId = user.responsiblePersonId;
+    const responsiblePersonId = await this.accessControl.operationResponsiblePersonId(user, targetResponsiblePersonId);
     const directBalances = await this.prisma.stockBalance.findMany({
       where: { responsiblePersonId, quantity: { gt: 0 } },
       include: balanceInclude,
@@ -374,7 +377,7 @@ export class StockService {
 
   async responsiblePersonAccountingCard(id: string, user: CurrentUser) {
     const permittedPerson =
-      user.role === UserRole.MVO
+      user.role === UserRole.MVO || user.role === UserRole.ORG_MANAGER
         ? await this.prisma.responsiblePerson.findFirst({
             where: {
               AND: [{ id }, this.accessControl.responsiblePersonFilter(user)],
@@ -404,12 +407,16 @@ export class StockService {
       ]);
 
     const directTotal = this.sumQuantities(directBalances);
+    const unrealized = await unrealizedQuantities(
+      this.prisma, id, directBalances.map((balance) => balance.inventoryItem.id),
+    );
 
     return {
       directBalances: directBalances.map((balance) => ({
         id: balance.id,
         inventoryItem: balance.inventoryItem,
         quantity: balance.quantity.toString(),
+        unrealizedQuantity: (unrealized.get(balance.inventoryItem.id) ?? new Prisma.Decimal(0)).toString(),
       })),
       totalDirectQuantity: directTotal.toString(),
       recentTransfers,
@@ -461,7 +468,8 @@ export class StockService {
       include: {
         sourceResponsiblePerson: true,
         destinationResponsiblePerson: true,
-        lines: { include: { inventoryItem: true } },
+        attachments: { select: { id: true } },
+        lines: { include: { inventoryItem: true, realizationLines: { select: issueRealizationLinesSelect } } },
       },
       orderBy: [{ documentDate: 'desc' }, { createdAt: 'desc' }],
       take: 10,
@@ -474,6 +482,7 @@ export class StockService {
       documentDate: document.documentDate,
       type: document.type,
       status: document.status,
+      hasAttachment: document.attachments.length > 0,
       sourceResponsiblePerson: this.personReference(
         document.sourceResponsiblePerson,
       ),
@@ -484,6 +493,9 @@ export class StockService {
         id: line.id,
         inventoryItem: line.inventoryItem,
         quantity: line.quantity.toString(),
+        availableToRealize: document.type === StockDocumentType.ISSUE
+          ? issueRealizationQuantity(line.quantity, line.realizationLines).availableToRealize
+          : null,
       })),
     }));
   }
@@ -567,13 +579,16 @@ export class StockService {
       include: typeof transactionInclude;
     }>,
   ) {
-    const { document, ...data } = transaction;
+    const { document, documentLine, ...data } = transaction;
     return {
       ...data,
       sourceDocument: document
         ? `№ ${document.displayNumber}`
         : transaction.sourceDocument,
       quantity: transaction.quantity.toString(),
+      availableToRealize: transaction.type === StockTransactionType.ISSUE_OUT && documentLine
+        ? issueRealizationQuantity(documentLine.quantity, documentLine.realizationLines).availableToRealize
+        : null,
       balanceBefore: transaction.balanceBefore.toString(),
       balanceAfter: transaction.balanceAfter.toString(),
       responsiblePerson: {

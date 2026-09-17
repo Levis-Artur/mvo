@@ -206,7 +206,7 @@ describe('MVO accounting code form', () => {
 });
 
 describe('MVO registry actions', () => {
-  function renderTable(overrides: Partial<ResponsiblePerson> = {}) {
+  function renderTable(overrides: Partial<ResponsiblePerson> = {}, managerReadOnly = false) {
     const handlers = {
       onView: jest.fn(),
       onEdit: jest.fn(),
@@ -217,6 +217,7 @@ describe('MVO registry actions', () => {
     const renderedPerson = { ...person, ...overrides };
     const view = render(
       <PersonsTable
+        managerReadOnly={managerReadOnly}
         accounts={new Map()}
         accountsAvailable
         canCreateAccount
@@ -234,6 +235,8 @@ describe('MVO registry actions', () => {
   it('shows the accounting code, a null fallback, and only one action trigger', () => {
     const { container, unmount } = renderTable();
     expect(screen.queryByRole('columnheader', { name: 'Код МВО' })).not.toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Залишки' })).not.toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Дії' })).not.toBeNull();
     expect(screen.queryByText('0057')).not.toBeNull();
     expect(screen.queryByText('002')).toBeNull();
     expect(container.querySelectorAll('tbody td:last-child button')).toHaveLength(1);
@@ -241,6 +244,19 @@ describe('MVO registry actions', () => {
 
     renderTable({ externalAccountingCode: null });
     expect(screen.queryByText('Не вказано')).not.toBeNull();
+  });
+
+  it('hides stock and actions in manager context and opens the card through the name', async () => {
+    const { handlers } = renderTable({}, true);
+    expect(screen.queryByRole('columnheader', { name: 'Залишки' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Дії' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Обліковий запис' })).toBeNull();
+    expect(screen.queryByText('Залишків немає')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Дії для МВО/ })).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', {
+      name: 'Жигульський Андрій Володимирович',
+    }));
+    expect(handlers.onView).toHaveBeenCalledWith(person);
   });
 
   it('opens the portal menu, exposes all actions, and calls the selected handler', async () => {

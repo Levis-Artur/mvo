@@ -15,6 +15,7 @@ export type DocumentFormLine = {
 };
 
 export type StockDocumentFormProps = {
+  operationContext?: { responsiblePersonId: string; fullName: string };
   user: AuthUser;
   type: StockDocumentType;
   initialInventoryItemId?: string;

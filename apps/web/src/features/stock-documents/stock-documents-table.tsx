@@ -6,8 +6,6 @@ import {
   documentDirectionPresentation,
   documentCounterparty,
   documentNumberLabel,
-  documentTypeLabel,
-  documentVolumePresentation,
   lifecycleActions,
 } from './stock-document-rules';
 import { StockDocumentStatusBadge } from './stock-document-status-badge';
@@ -19,15 +17,20 @@ export function StockDocumentsTable({ documents, user, loading, onView, onCancel
   onView: (document: StockDocument) => void;
   onCancel: (document: StockDocument) => void;
 }) {
-  if (user.role === 'MVO') {
+  const showUnrealized = documents.some((document) => document.type === 'ISSUE');
+  if (user.role === 'MVO' || user.role === 'ORG_MANAGER') {
     return <DataTable
-      ariaLabel="Мої передачі"
+      ariaLabel={user.role === 'MVO' ? 'Мої передачі' : 'Передачі та видачі МВО'}
       columns={[
+        { label: '№', className: 'stock-documents-table__number' },
         { label: 'Дата', className: 'stock-documents-table__date' },
-        { label: 'Документ', className: 'stock-documents-table__document' },
+        ...(user.role === 'ORG_MANAGER' ? [{ label: 'Тип' }, { label: 'Відправник' }] : []),
         { label: 'Кому / від кого', className: 'stock-documents-table__person' },
-        { label: 'Обсяг', className: 'stock-documents-table__volume' },
+        { label: 'Номенклатура' },
+        { label: 'Кількість', numeric: true },
+        ...(showUnrealized ? [{ label: 'Не реалізовано', numeric: true }] : []),
         { label: 'Статус', className: 'stock-documents-table__status' },
+        ...(user.role === 'ORG_MANAGER' ? [{ label: 'Документ' }] : []),
         { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
       ]}
       emptyMessage="Передач поки немає."
@@ -37,13 +40,19 @@ export function StockDocumentsTable({ documents, user, loading, onView, onCancel
       rows={documents.map((document) => {
         const actions = lifecycleActions(document, user);
         const counterparty = documentCounterparty(document, user);
-        const volume = documentVolumePresentation(document.totalPositions, document.totalQuantity);
         return [
+          <Button key="number" size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>,
           new Date(document.documentDate).toLocaleDateString('uk-UA'),
-          <div className="stock-document-summary" key="document"><StatusBadge tone={document.type === 'ISSUE' ? 'warning' : document.type === 'MVO_TRANSFER' ? 'info' : 'neutral'}>{documentTypeLabel(document.type)}</StatusBadge><Button size="compact" title={`Переглянути документ ${documentNumberLabel(document.displayNumber)}`} variant="link" type="button" onClick={() => onView(document)}>{documentNumberLabel(document.displayNumber)}</Button>{document.attachments.length ? <StatusBadge tone="info">Є вкладення</StatusBadge> : null}</div>,
+          ...(user.role === 'ORG_MANAGER' ? [
+            documentDirectionPresentation(document).label,
+            fullName(document.sourceResponsiblePerson),
+          ] : []),
           <span className="stock-documents-table__person-text" key="counterparty" title={counterparty}>{counterparty}</span>,
-          <span aria-label={volume.full} className="stock-documents-table__volume-text" key="volume" title={volume.full}>{volume.compact}</span>,
+          <span key="items" className="block break-words whitespace-normal">{document.lines.map((line) => line.inventoryItem.name).join(', ')}</span>,
+          formatQuantity(document.totalQuantity),
+          ...(showUnrealized ? [document.type === 'ISSUE' ? formatQuantity(document.availableToRealize ?? document.totalQuantity) : '—'] : []),
           <StockDocumentStatusBadge key="status" status={document.status} />,
+          ...(user.role === 'ORG_MANAGER' ? [document.attachments.length ? <StatusBadge key="attachment" tone="info">Є документ</StatusBadge> : '—'] : []),
           <MvoDocumentActions key="actions" actions={actions} document={document} onView={onView} onCancel={onCancel} />,
         ];
       })}
@@ -55,6 +64,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onCancel
       { label: 'Номер', className: 'stock-documents-table__number' }, { label: 'Дата', className: 'stock-documents-table__date' }, { label: 'Тип' }, { label: 'Статус' },
       { label: 'Відправник' }, { label: 'Одержувач' }, { label: 'Позицій', numeric: true },
       { label: 'Загальна кількість', numeric: true }, { label: 'Автор' },
+      ...(showUnrealized ? [{ label: 'Не реалізовано', numeric: true }] : []),
       { label: 'Проведення' }, { label: 'Дії', actions: true, className: 'stock-documents-table__actions' },
     ]}
     emptyMessage="Документи за вказаними фільтрами не знайдено."
@@ -77,6 +87,7 @@ export function StockDocumentsTable({ documents, user, loading, onView, onCancel
         document.totalPositions,
         formatQuantity(document.totalQuantity),
         document.createdByUser.username,
+        ...(showUnrealized ? [document.type === 'ISSUE' ? formatQuantity(document.availableToRealize ?? document.totalQuantity) : '—'] : []),
         document.postedAt
           ? <span key="posted">{formatDateTime(document.postedAt)} · {document.postedByUser?.username ?? '—'}</span>
           : '—',

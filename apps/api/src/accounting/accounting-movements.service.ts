@@ -8,6 +8,7 @@ import {
   StockTransactionType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { issueRealizationQuantity, issueRealizationLinesSelect } from '../stock-documents/issue-realization-quantity';
 import { buildAccountingMovementCsv } from './accounting-movement.csv';
 import {
   type AccountingMovementFiltersDto,
@@ -31,6 +32,7 @@ const inventoryItemSelect = {
 } satisfies Prisma.InventoryItemSelect;
 
 const movementInclude = {
+  documentLine: { select: { quantity: true, realizationLines: { select: issueRealizationLinesSelect } } },
   responsiblePerson: { select: personSelect },
   inventoryItem: { select: inventoryItemSelect },
   importBatch: {
@@ -94,6 +96,7 @@ const documentDetailsInclude = {
   lines: {
     include: {
       inventoryItem: { select: inventoryItemSelect },
+      realizationLines: { select: issueRealizationLinesSelect },
       issueLines: {
         select: {
           quantity: true,
@@ -112,7 +115,7 @@ const documentDetailsInclude = {
     include: {
       createdByUser: { select: { id: true, username: true } },
       lines: {
-        include: { inventoryItem: { select: inventoryItemSelect } },
+        include: { inventoryItem: { select: inventoryItemSelect }, realizationLines: { select: issueRealizationLinesSelect } },
         orderBy: { createdAt: 'asc' as const },
       },
       attachments: {
@@ -277,6 +280,9 @@ export class AccountingMovementsService {
         inventoryItem: line.inventoryItem,
         responsiblePerson: this.person(document.sourceResponsiblePerson),
         quantity: line.quantity.toString(),
+        availableToRealize: document.type === StockDocumentType.ISSUE
+          ? issueRealizationQuantity(line.quantity, line.realizationLines).availableToRealize
+          : null,
         issuedQuantity:
           document.type === StockDocumentType.MVO_TRANSFER
             ? issuedQuantity.toString()
@@ -325,6 +331,9 @@ export class AccountingMovementsService {
         documentDate: issue.documentDate.toISOString(),
         status: issue.status,
         recipientName: issue.recipientName,
+        availableToRealize: issue.lines.reduce((sum, line) => sum.plus(
+          issueRealizationQuantity(line.quantity, line.realizationLines).availableToRealize,
+        ), new Prisma.Decimal(0)).toString(),
         author: issue.createdByUser,
         quantity: issue.lines
           .reduce(
@@ -690,6 +699,9 @@ export class AccountingMovementsService {
       responsiblePerson,
       inventoryItem: movement.inventoryItem,
       quantity: this.signedQuantity(movement.quantity, operationType),
+      availableToRealize: operationType === 'ISSUE' && movement.documentLine
+        ? issueRealizationQuantity(movement.documentLine.quantity, movement.documentLine.realizationLines).availableToRealize
+        : null,
       direction: this.direction(movement, responsiblePerson, destination),
       transferredTo: destination ? this.person(destination) : null,
       issuedTo:

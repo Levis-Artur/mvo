@@ -67,7 +67,9 @@ export function getMvoErrorMessage(reason: unknown) {
   if (/insufficient|недостатн|exceed.*available|перевищ.*залиш/.test(normalized)) {
     return 'Недостатньо майна для цієї операції.';
   }
+  if (/^Сумарний розмір вкладень перевищує максимально допустимі .+ МБ\.$/.test(message)) return message;
   if (/file.*too large|payload too large|maximum.*size|перевищ.*розмір/.test(normalized)) {
+    if (/^Файл перевищує максимально допустимий розмір .+ МБ\.$/.test(message)) return message;
     return 'Файл накладної перевищує допустимий розмір.';
   }
   if (/attachment.*required|photo.*required|потрібно додати.*фото|без.*вкладенн/.test(normalized)) {

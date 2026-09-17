@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ReadAccessPaginationQueryDto } from '../../auth/dto/read-access-query.dto';
+import { OperationTargetDto } from '../../auth/dto/operation-target.dto';
 
 export class StockDocumentLineDto {
   @IsUUID()
@@ -33,7 +34,7 @@ export class StockDocumentLineDto {
   note?: string;
 }
 
-export class CreateMvoTransferDto {
+export class CreateMvoTransferDto extends OperationTargetDto {
   @IsDateString()
   documentDate!: string;
 
@@ -52,7 +53,7 @@ export class CreateMvoTransferDto {
   lines!: StockDocumentLineDto[];
 }
 
-export class CreateIssueDto {
+export class CreateIssueDto extends OperationTargetDto {
   @IsDateString()
   documentDate!: string;
 

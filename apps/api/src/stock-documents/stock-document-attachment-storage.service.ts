@@ -17,7 +17,7 @@ import {
 } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { basename, extname, resolve, sep } from 'node:path';
-import { attachmentFileSizeLimitBytes } from '../config/env';
+import { validateAttachmentUploadSizes } from './attachment-upload-validation';
 
 const MIME_EXTENSIONS = {
   'image/jpeg': ['.jpg', '.jpeg'],
@@ -176,11 +176,7 @@ export class StockDocumentAttachmentStorageService implements OnModuleInit {
     if (file.size !== file.buffer.length) {
       throw new BadRequestException('Розмір вкладення не відповідає вмісту');
     }
-    if (file.size > attachmentFileSizeLimitBytes()) {
-      throw new BadRequestException(
-        `Розмір вкладення перевищує дозволені ${attachmentFileSizeLimitBytes()} байт`,
-      );
-    }
+    validateAttachmentUploadSizes([file]);
 
     const mimeType = file.mimetype as AllowedMimeType;
     const allowedExtensions = MIME_EXTENSIONS[mimeType];

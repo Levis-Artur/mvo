@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -129,13 +129,24 @@ describe('MyInventoryItemCard', () => {
   });
 
   it('shows the item ledger history and operation actions', async () => {
+    jest.mocked(responsiblePersonsService.myInventoryItemMovementHistory).mockResolvedValue({
+      ...history,
+      items: [...history.items, {
+        ...history.items[0], id: 'issue-movement', category: 'ISSUE', typeLabel: 'Видача',
+        quantity: '-2', availableToRealize: '0', documentId: 'issue-1', importBatchId: null,
+      }],
+      pagination: { page: 1, limit: 25, total: 2, totalPages: 1 },
+    });
     render(<MyInventoryItemCard inventoryItemId={itemId} onBack={jest.fn()} />);
 
     expect(await screen.findByText('Прихід за CSV')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Передати' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Видати' })).toBeTruthy();
-    expect(screen.getByText('Бухгалтерський CSV')).toBeTruthy();
-    expect(screen.getByText('accountant')).toBeTruthy();
+    expect(screen.getAllByText('Бухгалтерський CSV').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('accountant').length).toBeGreaterThan(0);
+    const ledger = screen.getByRole('table', { name: 'Історія руху номенклатури' });
+    expect(within(ledger).getByRole('columnheader', { name: 'Не реалізовано' })).toBeTruthy();
+    expect(within(ledger).getByText('0')).toBeTruthy();
   });
 
   it('uses semantic column classes and an isolated horizontal scroll container', async () => {

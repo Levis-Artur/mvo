@@ -28,6 +28,7 @@ export function DataTable({ ariaLabel, columns, headers, rows, rowKeys, loading 
   if (state === 'loading') return <div className="data-table-state"><LoadingState label="Завантаження таблиці…" /></div>;
   if (state === 'empty') return <div className="data-table-state"><EmptyState message={emptyMessage} /></div>;
   const columnClassName = (column?: DataTableColumn) => [
+    'min-w-0 whitespace-normal break-words',
     column?.numeric || column?.align === 'right' ? 'text-right tabular-nums' : '',
     column?.align === 'center' ? 'text-center' : '',
     column?.actions ? 'data-table__actions' : '',

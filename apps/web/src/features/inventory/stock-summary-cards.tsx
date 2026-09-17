@@ -3,23 +3,25 @@ import type { StockBalance } from '@/lib/types';
 import { formatQuantity } from './quantity-format';
 import { stockSummary } from './stock-model';
 
-export function StockSummaryCards({ balances }: { balances: StockBalance[] }) {
+export function StockSummaryCards({ balances, showSystemSummary = true }: { balances: StockBalance[]; showSystemSummary?: boolean }) {
   const summary = stockSummary(balances);
   const cards = [
     ['МВО із залишками', String(summary.responsiblePersons)],
     ['Позицій', String(summary.positions)],
     ['Загальна кількість', formatQuantity(summary.totalQuantity)],
-    ['Нульові або проблемні', String(summary.problematic)],
-    [
-      'Останнє оновлення',
-      summary.updatedAt
-        ? new Date(summary.updatedAt).toLocaleString('uk-UA')
-        : 'Немає даних',
-    ],
+    ...(showSystemSummary ? [
+      ['Нульові або проблемні', String(summary.problematic)],
+      [
+        'Останнє оновлення',
+        summary.updatedAt
+          ? new Date(summary.updatedAt).toLocaleString('uk-UA')
+          : 'Немає даних',
+      ],
+    ] : []),
   ];
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className={`grid gap-3 sm:grid-cols-2 ${showSystemSummary ? 'xl:grid-cols-5' : 'xl:grid-cols-3'}`}>
       {cards.map(([label, value]) => (
         <Card key={label} title={label}>
           <p className="break-words text-xl font-bold tabular-nums">{value}</p>

@@ -107,13 +107,13 @@ describe('stock document frontend rules', () => {
       status: 'POSTED',
       accountingExportState: 'EXPORTED',
       sourceResponsiblePersonId: 'person-1',
-    }, mvoUser).cancel).toBe(false);
+    }, { role: 'OWNER', responsiblePersonId: null }).cancel).toBe(false);
     expect(lifecycleActions({
       type: 'MVO_TRANSFER',
       status: 'POSTED',
       accountingExportState: 'NOT_EXPORTED',
       sourceResponsiblePersonId: 'person-1',
-    }, mvoUser).cancel).toBe(true);
+    }, { role: 'OWNER', responsiblePersonId: null }).cancel).toBe(true);
   });
 
   it('не скасовує DRAFT ISSUE та дозволяє скасувати власну проведену видачу', () => {

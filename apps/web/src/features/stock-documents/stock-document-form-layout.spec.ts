@@ -38,7 +38,7 @@ describe('stock document workspace modal', () => {
   it('hides automatic fields for MVO and does not send a transfer basis', () => {
     expect(form).not.toContain('label="Номер"');
     expect(form).not.toContain('label="Пошук МВО"');
-    expect(form).toContain("{user.role !== 'MVO' ? (");
+    expect(form).toContain("{user.role !== 'MVO' && !operationContext ? (");
     expect(form).toContain('<FormField label="МВО-відправник" required>');
     expect(form).toContain("<FormField label={createAndPostIssue ? 'Коментар' : 'Примітка'}>");
     expect(form).toContain(

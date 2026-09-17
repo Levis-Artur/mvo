@@ -37,6 +37,7 @@ const issueListInclude = {
   lines: {
     select: {
       quantity: true,
+      inventoryItem: { select: { name: true } },
       realizationLines: {
         where: { realization: { status: IssueRealizationStatus.POSTED } },
         select: { quantity: true },
@@ -380,6 +381,7 @@ export class IssueHistoryService {
       note: document.note,
       status: document.status,
       numberOfLines: document.lines.length,
+      inventoryNames: document.lines.map((line) => line.inventoryItem.name),
       totalQuantity: issuedQuantity.toString(),
       issuedQuantity: issuedQuantity.toString(),
       realizedQuantity: realizedQuantity.toString(),

@@ -43,7 +43,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get('transfer-targets')
-  @Roles(...TRANSFER_TARGET_READ_ROLES)
+  @Roles(...TRANSFER_TARGET_READ_ROLES, UserRole.ORG_MANAGER)
   transferTargets(
     @Query() query: ListResponsiblePersonsQueryDto,
     @CurrentUserParam() user: CurrentUser,
@@ -58,7 +58,7 @@ export class ResponsiblePersonsController {
   }
 
   @Get(':id/accounting-card')
-  @Roles(...ACCOUNTING_CARD_READ_ROLES)
+  @Roles(...ACCOUNTING_CARD_READ_ROLES, UserRole.ORG_MANAGER)
   async accountingCard(
     @Param('id') id: string,
     @CurrentUserParam() user: CurrentUser,

@@ -15,6 +15,7 @@ describe('stock route role metadata', () => {
     expect(roles(StockDocumentsController)).toContain(UserRole.MVO);
     expect(roles(StockController.prototype.availableToMe)).toEqual([
       UserRole.MVO,
+      UserRole.ORG_MANAGER,
     ]);
     expect(roles(StockController.prototype.myProperty)).toEqual(
       expect.arrayContaining([UserRole.MVO, UserRole.OWNER]),

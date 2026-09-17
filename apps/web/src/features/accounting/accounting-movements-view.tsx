@@ -161,6 +161,7 @@ export function AccountingMovementsView() {
         { label: 'Дата' }, { label: 'Тип операції' }, { label: 'Документ' },
         { label: 'МВО' }, { label: 'Код МВО' }, { label: 'Номенклатура' },
         { label: 'Код номенклатури' }, { label: 'Кількість', numeric: true },
+        ...(rows.some((row) => row.operationType === 'ISSUE') ? [{ label: 'Не реалізовано', numeric: true }] : []),
         { label: 'Кому передано' }, { label: 'Кому видано' },
         { label: 'Пов’язаний документ' }, { label: 'Статус' }, { label: 'Документ/файл' },
       ]}
@@ -177,6 +178,7 @@ export function AccountingMovementsView() {
         row.inventoryItem.name,
         row.inventoryItem.externalCode,
         formatSignedQuantity(row.quantity),
+        ...(rows.some((item) => item.operationType === 'ISSUE') ? [row.operationType === 'ISSUE' ? formatQuantity(row.availableToRealize ?? row.quantity) : '—'] : []),
         row.transferredTo ? `${row.transferredTo.externalAccountingCode ?? '—'} — ${row.transferredTo.fullName}` : '—',
         row.issuedTo ?? '—',
         row.relatedDocument ? <Button disabled={detailsLoadingId === row.relatedDocument.id} key={`related-${row.id}`} size="compact" type="button" variant="link" onClick={() => void openDocumentDetails(row.relatedDocument!.id)}>{detailsLoadingId === row.relatedDocument.id ? 'Відкриття…' : row.relatedDocument.label}</Button> : '—',

@@ -185,11 +185,13 @@ export function useStockDocumentsController(user: AuthUser, accessMode?: ReadAcc
     }
   }
 
-  async function perform() {
+  async function perform(reason?: string) {
     if (!selected) return;
     setActionLoading(true); setActionError('');
     try {
-      const result = await stockDocumentsService.cancel(selected.id);
+      const result = reason === undefined
+        ? await stockDocumentsService.cancel(selected.id)
+        : await stockDocumentsService.cancel(selected.id, reason);
       setSelected(result);
       setToast(documentCancellationMessage(result));
       setConfirming(null);

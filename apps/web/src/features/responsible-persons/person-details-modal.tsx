@@ -1,9 +1,12 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useAuth } from '@/app/ui/auth-context';
+import { ReadOnlyIssueHistory } from '@/features/stock-documents/read-only-issue-history';
 import type { ResponsiblePerson, UserSummary, ReadAccessMode } from '@/lib/types';
 import { Button, Card, Modal, StatusBadge } from '@/components/ui';
 import { personDisplayName } from './persons-model';
+import { ManagerMvoOperations } from './manager-mvo-operations';
 import {
   PersonOperationsTab,
   PersonStockTab,
@@ -16,6 +19,7 @@ type DetailsTab =
   | 'stock'
   | 'operations'
   | 'transfers'
+  | 'issues'
   | 'admin';
 
 const tabs: { id: DetailsTab; label: string }[] = [
@@ -68,6 +72,13 @@ export function PersonDetailsModal({
   onStockPresence: (personId: string, hasStock: boolean) => void;
 }) {
   const [tab, setTab] = useState<DetailsTab>('main');
+  const [revision, setRevision] = useState(0);
+  const { user } = useAuth();
+  const visibleTabs = user?.role === 'ORG_MANAGER'
+    ? tabs.flatMap((item) => item.id === 'transfers'
+      ? [item, { id: 'issues' as const, label: 'Видачі' }]
+      : [item])
+    : tabs;
   const reportStockPresence = useCallback(
     (hasStock: boolean) => onStockPresence(person.id, hasStock),
     [onStockPresence, person.id],
@@ -85,8 +96,9 @@ export function PersonDetailsModal({
       title={`Картка МВО: ${personDisplayName(person)}`}
     >
       <div className="grid min-w-0 gap-4">
+        {user?.role === 'ORG_MANAGER' ? <ManagerMvoOperations key={person.id} person={person} onCompleted={() => setRevision((value) => value + 1)} /> : null}
         <nav aria-label="Розділи картки МВО" className="flex flex-wrap gap-2">
-          {tabs.map((item) => (
+          {visibleTabs.map((item) => (
             <Button
               key={item.id}
               aria-current={tab === item.id ? 'page' : undefined}
@@ -167,12 +179,14 @@ export function PersonDetailsModal({
 
         {tab === 'stock' ? (
           <PersonStockTab
+            key={revision}
             personId={person.id}
             onPresenceResolved={reportStockPresence}
           />
         ) : null}
-        {tab === 'operations' ? <PersonOperationsTab personId={person.id} accessMode={accessMode} /> : null}
-        {tab === 'transfers' ? <PersonTransfersTab personId={person.id} /> : null}
+        {tab === 'operations' ? <PersonOperationsTab key={revision} personId={person.id} accessMode={accessMode} canViewDocuments={user?.role === 'ORG_MANAGER'} operationTarget={person} /> : null}
+        {tab === 'transfers' ? <PersonTransfersTab key={revision} personId={person.id} transfersOnly={user?.role === 'ORG_MANAGER'} canViewDocuments={user?.role === 'ORG_MANAGER'} /> : null}
+        {tab === 'issues' && user?.role === 'ORG_MANAGER' ? <ReadOnlyIssueHistory key={revision} personId={person.id} operationTarget={person} /> : null}
 
         {tab === 'admin' ? (
           <Card title="Адміністративні дії">

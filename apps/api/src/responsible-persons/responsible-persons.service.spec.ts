@@ -620,6 +620,33 @@ describe('ResponsiblePersonsService', () => {
     expect(result.items[0]).toHaveProperty('externalAccountingCode', '0057');
   });
 
+  it.each([ids.management, ids.otherManagement])('scopes manager transfer targets even with a requested management: %s', async (managementId) => {
+    const prisma = createPrismaMock();
+    const allowed = {
+      id: '99999999-9999-4999-8999-999999999999',
+      externalAccountingCode: '0057', lastName: 'Левіс', firstName: 'Артур', middleName: null,
+      management: { id: ids.management, name: 'Управління' }, service: null, unit: null,
+    };
+    const items = managementId === ids.management ? [allowed] : [];
+    prisma.responsiblePerson.findMany.mockResolvedValue(items);
+    prisma.responsiblePerson.count.mockResolvedValue(items.length);
+    const result = await createService(prisma).transferTargets(
+      { page: 1, limit: 20, managementId },
+      actor(UserRole.ORG_MANAGER, {
+        responsiblePersonId: null,
+        accessScopes: [{ managementId: ids.management, serviceCode: null }],
+      }),
+    );
+    const where = prisma.responsiblePerson.findMany.mock.calls[0][0].where;
+    expect(where.AND).toEqual([
+      { OR: [{ managementId: ids.management }] },
+      expect.objectContaining({ managementId, isActive: true }),
+    ]);
+    expect(prisma.responsiblePerson.count).toHaveBeenCalledWith({ where });
+    expect(result.items.map((item) => item.id)).toEqual(items.map((item) => item.id));
+    expect(result.pagination.total).toBe(items.length);
+  });
+
   it('does not expose transfer targets to an unlinked MVO account', async () => {
     const service = createService(createPrismaMock());
 

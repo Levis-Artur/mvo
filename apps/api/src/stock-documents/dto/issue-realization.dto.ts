@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { OperationTargetDto } from '../../auth/dto/operation-target.dto';
 
 export class IssueRealizationLineDto {
   @IsUUID()
@@ -19,7 +20,7 @@ export class IssueRealizationLineDto {
   quantity!: string;
 }
 
-export class CreateIssueRealizationDto {
+export class CreateIssueRealizationDto extends OperationTargetDto {
   @IsDateString()
   realizationDate!: string;
 

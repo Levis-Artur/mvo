@@ -533,8 +533,8 @@ export function IssueHistoryTable({
   onRealize,
 }: {
   items: IssueHistoryItem[];
-  onOpen: (id: string) => void;
-  onRealize: (id: string) => void;
+  onOpen?: (id: string) => void;
+  onRealize?: (id: string) => void;
 }) {
   return (
     <DataTable
@@ -543,13 +543,12 @@ export function IssueHistoryTable({
         { label: '№', className: 'mvo-issues-table__number' },
         { label: 'Дата', className: 'mvo-issues-table__date' },
         { label: 'Кому видано', className: 'mvo-issues-table__recipient' },
-        { label: 'Позицій', numeric: true, className: 'mvo-issues-table__positions' },
+        { label: 'Номенклатура', className: 'mvo-issues-table__inventory' },
         { label: 'Видано', numeric: true, className: 'mvo-issues-table__quantity' },
-        { label: 'Реалізовано', numeric: true, className: 'mvo-issues-table__quantity' },
-        { label: 'Залишилось', numeric: true, className: 'mvo-issues-table__quantity' },
+        { label: 'Не реалізовано', numeric: true, className: 'mvo-issues-table__quantity' },
         { label: 'Статус', className: 'mvo-issues-table__status' },
         { label: 'Документ', className: 'mvo-issues-table__attachment' },
-        { label: 'Дія', actions: true, className: 'mvo-issues-table__actions' },
+        ...(onOpen ? [{ label: 'Дія', actions: true, className: 'mvo-issues-table__actions' }] : []),
       ]}
       responsiveMode="cards-wide"
       rowKeys={items.map((item) => item.id)}
@@ -557,11 +556,11 @@ export function IssueHistoryTable({
         documentNumberLabel(item.displayNumber),
         new Date(item.documentDate).toLocaleDateString('uk-UA'),
         item.recipientName ?? 'Не вказано',
-        item.numberOfLines,
+        item.inventoryNames.join(', '),
         formatQuantity(item.issuedQuantity),
-        formatQuantity(item.realizedQuantity),
         item.isFullyRealized ? (
-          <span className="mvo-issues-table__fully-realized" key="fully-realized">
+          <span key="fully-realized">
+            {formatQuantity(item.availableToRealize)}{' '}
             <StatusBadge tone="success">✓ Реалізовано повністю</StatusBadge>
           </span>
         ) : (
@@ -571,7 +570,7 @@ export function IssueHistoryTable({
         item.hasAttachment ? (
           <StatusBadge key="attachment" tone="info">Є документ</StatusBadge>
         ) : '—',
-        <div className="mvo-issues-table__action-list" key="actions">
+        ...(onOpen ? [<div className="mvo-issues-table__action-list" key="actions">
           <Button
             size="compact"
             type="button"
@@ -580,7 +579,7 @@ export function IssueHistoryTable({
           >
             Відкрити
           </Button>
-          {item.status === 'POSTED' && Number(item.availableToRealize) > 0 ? (
+          {onRealize && item.status === 'POSTED' && Number(item.availableToRealize) > 0 ? (
             <Button
               size="compact"
               type="button"
@@ -589,7 +588,7 @@ export function IssueHistoryTable({
               Реалізувати
             </Button>
           ) : null}
-        </div>,
+        </div>] : []),
       ])}
       tableClassName="mvo-issues-table"
     />

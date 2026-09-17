@@ -11,6 +11,7 @@ type StockPresence = boolean | undefined;
 export function PersonsTable({
   persons,
   loading,
+  managerReadOnly = false,
   canEdit,
   canCreateAccount,
   canDelete,
@@ -25,6 +26,7 @@ export function PersonsTable({
 }: {
   persons: ResponsiblePerson[];
   loading: boolean;
+  managerReadOnly?: boolean;
   canEdit: boolean;
   canCreateAccount: boolean;
   canDelete: boolean;
@@ -46,10 +48,12 @@ export function PersonsTable({
         { label: 'Управління' },
         { label: 'Служба' },
         { label: 'Підрозділ' },
-        { label: 'Обліковий запис' },
+        ...(!managerReadOnly ? [{ label: 'Обліковий запис' }] : []),
         { label: 'Активність' },
-        { label: 'Залишки' },
-        { label: 'Дії', actions: true, className: 'persons-table__actions' },
+        ...(!managerReadOnly ? [
+          { label: 'Залишки' },
+          { label: 'Дії', actions: true, className: 'persons-table__actions' },
+        ] : []),
       ]}
       emptyMessage="МВО за вказаними фільтрами не знайдено."
       loading={loading}
@@ -76,7 +80,7 @@ export function PersonsTable({
           person.management.name,
           person.service.name,
           person.unit?.name ?? 'Без підрозділу',
-          accountsAvailable ? (
+          ...(!managerReadOnly ? [accountsAvailable ? (
             account ? (
               <StatusBadge key="account" tone="success">
                 {account.username}
@@ -90,14 +94,14 @@ export function PersonsTable({
             <StatusBadge key="account" tone="neutral">
               Недоступно для ролі
             </StatusBadge>
-          ),
+          )] : []),
           <StatusBadge
             key="active"
             tone={person.isActive ? 'success' : 'neutral'}
           >
             {person.isActive ? 'Активний' : 'Неактивний'}
           </StatusBadge>,
-          hasStock === undefined ? (
+          ...(!managerReadOnly ? [hasStock === undefined ? (
             <StatusBadge key="stock" tone="info">
               У картці МВО
             </StatusBadge>
@@ -117,7 +121,7 @@ export function PersonsTable({
             onEdit={() => onEdit(person)}
             onToggleActive={() => onToggleActive(person)}
             onView={() => onView(person)}
-          />,
+          />] : []),
         ];
       })}
     />

@@ -8,6 +8,7 @@ type Environment = {
   databaseUrl: string;
   maxImportFileSizeBytes: number;
   maxAttachmentFileSizeBytes: number;
+  maxAttachmentTotalSizeBytes: number;
   stockDocumentAttachmentsDir: string;
   ownerDestructiveActionsEnabled: boolean;
 };
@@ -68,13 +69,7 @@ export function validateEnvironment(): Environment {
     process.env.MAX_IMPORT_FILE_SIZE_BYTES ??
       maxImportFileSizeMegabytes * 1024 * 1024,
   );
-  const maxAttachmentFileSizeMegabytes = Number(
-    process.env.MAX_ATTACHMENT_FILE_SIZE_MB ?? 10,
-  );
-  const maxAttachmentFileSizeBytes = Number(
-    process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES ??
-      maxAttachmentFileSizeMegabytes * 1024 * 1024,
-  );
+  const { maxFileSizeBytes: maxAttachmentFileSizeBytes, maxTotalSizeBytes: maxAttachmentTotalSizeBytes } = attachmentUploadLimits();
   const stockDocumentAttachmentsDir = resolve(
     process.env.STOCK_DOCUMENT_ATTACHMENTS_DIR ??
       'storage/stock-document-attachments',
@@ -96,30 +91,35 @@ export function validateEnvironment(): Environment {
     );
   }
 
-  if (
-    !Number.isInteger(maxAttachmentFileSizeBytes) ||
-    maxAttachmentFileSizeBytes < 1024
-  ) {
-    throw new Error(
-      'MAX_ATTACHMENT_FILE_SIZE_MB must produce an integer file size >= 1024 bytes',
-    );
-  }
-
   return {
     apiPort,
     corsOrigin,
     databaseUrl,
     maxImportFileSizeBytes,
     maxAttachmentFileSizeBytes,
+    maxAttachmentTotalSizeBytes,
     stockDocumentAttachmentsDir,
     ownerDestructiveActionsEnabled,
   };
 }
 
+export function attachmentUploadLimits() {
+  const maxFileSizeBytes = Number(process.env.MAX_ATTACHMENT_FILE_SIZE_MB?.trim() || 20) * 1024 * 1024;
+  const maxTotalSizeBytes = Number(process.env.MAX_ATTACHMENT_TOTAL_SIZE_MB?.trim() || 50) * 1024 * 1024;
+  if (!Number.isInteger(maxTotalSizeBytes) || maxTotalSizeBytes < 1024 || maxTotalSizeBytes > 59 * 1024 * 1024) {
+    throw new Error('MAX_ATTACHMENT_TOTAL_SIZE_MB must produce an integer size between 1024 bytes and 59 MB (below nginx 60m)');
+  }
+  if (!Number.isInteger(maxFileSizeBytes) || maxFileSizeBytes < 1024 || maxFileSizeBytes > maxTotalSizeBytes) {
+    throw new Error('MAX_ATTACHMENT_FILE_SIZE_MB must produce an integer size >= 1024 bytes and not exceed MAX_ATTACHMENT_TOTAL_SIZE_MB');
+  }
+  return { maxFileSizeBytes, maxTotalSizeBytes };
+}
+
 export function attachmentFileSizeLimitBytes(): number {
-  const megabytes = Number(process.env.MAX_ATTACHMENT_FILE_SIZE_MB ?? 10);
-  const bytes = Number(
-    process.env.MAX_ATTACHMENT_FILE_SIZE_BYTES ?? megabytes * 1024 * 1024,
-  );
-  return Number.isInteger(bytes) && bytes >= 1024 ? bytes : 10 * 1024 * 1024;
+  return attachmentUploadLimits().maxFileSizeBytes;
+}
+
+export function attachmentFileSizeErrorMessage(): string {
+  const megabytes = attachmentFileSizeLimitBytes() / (1024 * 1024);
+  return `Файл перевищує максимально допустимий розмір ${megabytes.toLocaleString('uk-UA')} МБ.`;
 }

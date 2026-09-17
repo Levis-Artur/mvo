@@ -25,6 +25,7 @@ import {
   type TransactionFilterDraft,
 } from './transaction-model';
 import { TransactionsTable } from './transactions-table';
+import { ReadOnlyDocumentDetails } from '@/features/stock-documents/read-only-document-details';
 
 export function TransactionsView({ accessMode }: { accessMode?: ReadAccessMode } = {}) {
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
@@ -127,7 +128,6 @@ export function TransactionsView({ accessMode }: { accessMode?: ReadAccessMode }
           <option value="">Уся номенклатура</option>{items.map((item) => <option key={item.id} value={item.id}>{item.externalCode} — {item.name}</option>)}
         </Select></FilterField>
         <FilterField label="Документ або імпорт"><Input value={draft.document} onChange={(event) => setDraft((current) => ({ ...current, document: event.target.value }))} /></FilterField>
-        <FilterField label="Користувач"><Input disabled placeholder="Не надається API" value={draft.user} onChange={() => undefined} /></FilterField>
         <FilterField label="Статус"><Select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as TransactionFilterDraft['status'] }))}>
           <option value="">Усі</option><option value="POSTED">Проведено</option>
         </Select></FilterField>
@@ -143,7 +143,9 @@ export function TransactionsView({ accessMode }: { accessMode?: ReadAccessMode }
         onLimitChange={(nextLimit) => { setLimit(nextLimit); setPage(1); }}
         onPage={setPage}
       />
-      {selected ? <TransactionDetailsModal transaction={selected} onClose={() => setSelected(null)} /> : null}
+      {selected ? accessMode === 'SCOPED_READ' && selected.documentId
+        ? <ReadOnlyDocumentDetails documentId={selected.documentId} onClose={() => setSelected(null)} />
+        : <TransactionDetailsModal transaction={selected} onClose={() => setSelected(null)} /> : null}
     </section>
   );
 }

@@ -1,6 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  IssueRealizationStatus,
   Prisma,
   StockDocumentStatus,
   StockDocumentType,
@@ -17,6 +16,7 @@ import {
   SortOrder,
 } from './dto/my-property-query.dto';
 import { csvPreamble, csvRow } from './my-property.csv';
+import { unrealizedQuantities } from './unrealized-quantities';
 
 const inventoryItemSelect = {
   id: true,
@@ -187,44 +187,7 @@ export class MyPropertyService {
     responsiblePersonId: string,
     inventoryItemIds?: string[],
   ) {
-    const totals = new Map<string, Prisma.Decimal>();
-    if (inventoryItemIds?.length === 0) return totals;
-
-    const issueLines = await this.prisma.stockDocumentLine.findMany({
-      where: {
-        inventoryItemId: inventoryItemIds ? { in: inventoryItemIds } : undefined,
-        document: {
-          type: StockDocumentType.ISSUE,
-          status: StockDocumentStatus.POSTED,
-          sourceResponsiblePersonId: responsiblePersonId,
-        },
-      },
-      select: {
-        inventoryItemId: true,
-        quantity: true,
-        realizationLines: {
-          where: {
-            realization: { status: IssueRealizationStatus.POSTED },
-          },
-          select: { quantity: true },
-        },
-      },
-    });
-
-    for (const line of issueLines) {
-      const realizedQuantity = line.realizationLines.reduce(
-        (sum, realizationLine) => sum.plus(realizationLine.quantity),
-        new Prisma.Decimal(0),
-      );
-      const unrealizedQuantity = line.quantity.minus(realizedQuantity);
-      totals.set(
-        line.inventoryItemId,
-        (totals.get(line.inventoryItemId) ?? new Prisma.Decimal(0)).plus(
-          unrealizedQuantity,
-        ),
-      );
-    }
-    return totals;
+    return unrealizedQuantities(this.prisma, responsiblePersonId, inventoryItemIds);
   }
 
   private async listTransferHistory(

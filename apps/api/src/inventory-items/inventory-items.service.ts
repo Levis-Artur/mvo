@@ -16,6 +16,7 @@ import {
 import { AccessControlService } from '../auth/access-control.service';
 import type { CurrentUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { issueRealizationQuantity, issueRealizationLinesSelect } from '../stock-documents/issue-realization-quantity';
 import { CreateInventoryItemDto } from './dto/create-inventory-item.dto';
 import {
   InventoryItemAccountingCardQueryDto,
@@ -36,6 +37,7 @@ const organizationPersonInclude = {
 } satisfies Prisma.ResponsiblePersonInclude;
 
 const movementInclude = {
+  documentLine: { select: { quantity: true, realizationLines: { select: issueRealizationLinesSelect } } },
   responsiblePerson: { include: organizationPersonInclude },
   importBatch: {
     select: { id: true, originalFilename: true, type: true, status: true },
@@ -58,7 +60,7 @@ const cardDocumentInclude = {
   postedByUser: { select: { username: true } },
   cancelledByUser: { select: { username: true } },
   lines: {
-    select: { inventoryItemId: true, quantity: true },
+    select: { inventoryItemId: true, quantity: true, realizationLines: { select: issueRealizationLinesSelect } },
   },
   attachments: {
     select: {
@@ -771,6 +773,9 @@ export class InventoryItemsService {
       from,
       to,
       quantity,
+      availableToRealize: category === 'ISSUE' && movement.documentLine
+        ? issueRealizationQuantity(movement.documentLine.quantity, movement.documentLine.realizationLines).availableToRealize
+        : null,
       balanceBefore: movement.balanceBefore.toString(),
       balanceAfter: movement.balanceAfter.toString(),
       documentNumber,
@@ -871,6 +876,11 @@ export class InventoryItemsService {
     return {
       kind: 'STOCK_DOCUMENT' as const,
       id: document.id,
+      documentType: document.type,
+      availableToRealize: document.type === StockDocumentType.ISSUE
+        ? document.lines.filter((line) => line.inventoryItemId === inventoryItemId)
+          .reduce((sum, line) => sum.plus(issueRealizationQuantity(line.quantity, line.realizationLines).availableToRealize), new Prisma.Decimal(0)).toString()
+        : null,
       occurredAt:
         document.cancelledAt ?? document.postedAt ?? document.documentDate,
       title: `№ ${document.displayNumber}`,

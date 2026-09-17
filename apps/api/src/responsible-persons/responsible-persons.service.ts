@@ -95,7 +95,10 @@ export class ResponsiblePersonsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const where: Prisma.ResponsiblePersonWhereInput = {
-      ...this.buildWhere({ ...query, isActive: true }),
+      ...this.buildWhere(
+        { ...query, isActive: true },
+        user.role === UserRole.ORG_MANAGER ? user : undefined,
+      ),
       id: user.responsiblePersonId
         ? { not: user.responsiblePersonId }
         : undefined,

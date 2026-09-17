@@ -25,10 +25,12 @@ export function IssueRealizationFormModal({
   saving,
   onClose,
   onSubmit,
+  operationContextName,
 }: {
   issue: StockDocument;
   error: string;
   saving: boolean;
+  operationContextName?: string;
   onClose: () => void;
   onSubmit: (input: CreateIssueRealizationInput, files: File[]) => void;
 }) {
@@ -147,6 +149,7 @@ export function IssueRealizationFormModal({
       title={`Реалізація видачі ${documentNumberLabel(issue.displayNumber)}`}
     >
       <form className="issue-realization-form" id="issue-realization-form" onSubmit={submit}>
+        {operationContextName ? <div className="ui-alert" role="status">Операція від імені МВО: <strong>{operationContextName}</strong></div> : null}
         {error || validationError ? (
           <ErrorState message={error || validationError} />
         ) : null}

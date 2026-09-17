@@ -1,3 +1,4 @@
+import { validateAttachmentFileSizes } from './attachment-upload';
 import type {
   CreateManagementDto,
   CreateIssueInput,
@@ -203,7 +204,12 @@ async function request<T>(
   return (await response.json()) as T;
 }
 
-async function uploadRequest<T>(path: string, body: FormData): Promise<T> {
+async function uploadRequest<T>(path: string, body: FormData, documentAttachments = false): Promise<T> {
+  if (documentAttachments) {
+    const limits = await request<{ maxFileSizeBytes: number; maxTotalSizeBytes: number }>('/stock-documents/attachment-limits');
+    const files = [...body.values()].filter((value): value is File => typeof value !== 'string');
+    validateAttachmentFileSizes(files, limits.maxFileSizeBytes, limits.maxTotalSizeBytes);
+  }
   const response = await fetch(buildUrl(path), {
     method: 'POST',
     credentials: 'include',
@@ -471,8 +477,8 @@ export const apiClient = {
 
   stockBalances: (query: StockBalancesQuery) =>
     request<PaginatedResponse<StockBalance>>('/stock-balances', {}, query),
-  availableStockToMe: () =>
-    request<AvailableStockSource[]>('/stock/available-to-me'),
+  availableStockToMe: (targetResponsiblePersonId?: string) =>
+    request<AvailableStockSource[]>('/stock/available-to-me', {}, { targetResponsiblePersonId }),
   myProperty: (query: MyPropertyQuery) =>
     request<MyPropertyResponse>('/stock/my-property', {}, query),
   myInventoryItemTransferHistory: (
@@ -562,6 +568,7 @@ export const apiClient = {
   ) => {
     const formData = new FormData();
     formData.set('documentDate', body.documentDate);
+    if (body.targetResponsiblePersonId) formData.set('targetResponsiblePersonId', body.targetResponsiblePersonId);
     formData.set('recipientName', body.recipientName);
     if (body.recipientUnit) formData.set('recipientUnit', body.recipientUnit);
     if (body.basis) formData.set('basis', body.basis);
@@ -571,11 +578,13 @@ export const apiClient = {
     return uploadRequest<StockDocument>(
       '/stock-documents/issue',
       formData,
+      true,
     );
   },
-  cancelStockDocument: (id: string) =>
+  cancelStockDocument: (id: string, reason?: string) =>
     request<StockDocument>(`/stock-documents/${id}/cancel`, {
       method: 'POST',
+      ...(reason !== undefined ? { body: JSON.stringify({ reason }) } : {}),
     }),
   issueRealizations: (issueId: string, query: { page?: number; limit?: number }) =>
     request<PaginatedResponse<IssueRealization>>(
@@ -590,6 +599,7 @@ export const apiClient = {
   ) => {
     const formData = new FormData();
     formData.set('realizationDate', body.realizationDate);
+    if (body.targetResponsiblePersonId) formData.set('targetResponsiblePersonId', body.targetResponsiblePersonId);
     if (body.recipientText) formData.set('recipientText', body.recipientText);
     if (body.note) formData.set('note', body.note);
     formData.set('lines', JSON.stringify(body.lines));
@@ -597,6 +607,7 @@ export const apiClient = {
     return uploadRequest<IssueRealization>(
       `/stock-documents/${encodeURIComponent(issueId)}/realizations`,
       formData,
+      true,
     );
   },
   cancelIssueRealization: (issueId: string, realizationId: string) =>
@@ -628,6 +639,7 @@ export const apiClient = {
     return uploadRequest<StockDocumentAttachment>(
       `/stock-documents/${id}/attachments`,
       formData,
+      true,
     );
   },
   deleteStockDocumentAttachment: (documentId: string, attachmentId: string) =>

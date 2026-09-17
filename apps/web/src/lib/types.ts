@@ -337,6 +337,7 @@ export type IssueRealization = {
 };
 
 export type CreateIssueRealizationInput = {
+  targetResponsiblePersonId?: string;
   realizationDate: string;
   recipientText?: string;
   note?: string;
@@ -344,6 +345,8 @@ export type CreateIssueRealizationInput = {
 };
 
 export type StockDocument = {
+  canManagerCancel?: boolean;
+  accountingModel?: 'DIRECT_BALANCE' | null;
   id: string;
   documentNumber: string;
   displayNumber: number;
@@ -407,6 +410,7 @@ export type StockDocumentInput = {
 };
 
 export type CreateMvoTransferInput = {
+  targetResponsiblePersonId?: string;
   documentDate: string;
   destinationResponsiblePersonId: string;
   note?: string;
@@ -414,6 +418,7 @@ export type CreateMvoTransferInput = {
 };
 
 export type CreateIssueInput = {
+  targetResponsiblePersonId?: string;
   documentDate: string;
   recipientName: string;
   recipientUnit?: string;
@@ -548,6 +553,7 @@ export type MyPropertyQuery = {
 };
 
 export type AccountingCardDocument = {
+  hasAttachment?: boolean;
   id: string;
   documentNumber: string;
   displayNumber: number;
@@ -561,12 +567,13 @@ export type AccountingCardDocument = {
     inventoryItem?: InventoryItem;
     inventoryItemId?: string;
     quantity: string;
+    availableToRealize?: string | null;
     accountingOwnerResponsiblePersonId?: string | null;
   }[];
 };
 
 export type ResponsiblePersonAccountingCard = {
-  directBalances: { id: string; inventoryItem: InventoryItem; quantity: string }[];
+  directBalances: { id: string; inventoryItem: InventoryItem; quantity: string; unrealizedQuantity: string }[];
   totalDirectQuantity: string;
   recentTransfers: AccountingCardDocument[];
   recentIssues: AccountingCardDocument[];
@@ -609,6 +616,7 @@ export type InventoryItemMovement = {
   from: string;
   to: string;
   quantity: string;
+  availableToRealize?: string | null;
   balanceBefore: string;
   balanceAfter: string;
   documentNumber: string;
@@ -625,6 +633,8 @@ export type InventoryItemMovement = {
 };
 
 export type InventoryItemCardDocument = {
+  documentType?: StockDocumentType | null;
+  availableToRealize?: string | null;
   kind: 'IMPORT' | 'STOCK_DOCUMENT';
   id: string;
   occurredAt: string;
@@ -684,6 +694,8 @@ export type IssueHistoryFilters = {
 };
 
 export type IssueHistoryQuery = IssueHistoryFilters & {
+  accessMode?: ReadAccessMode;
+  sourceResponsiblePersonId?: string;
   page?: number;
   limit?: 25 | 50 | 100;
 };
@@ -697,6 +709,7 @@ export type IssueHistoryItem = {
   note: string | null;
   status: StockDocumentStatus;
   numberOfLines: number;
+  inventoryNames: string[];
   totalQuantity: string;
   issuedQuantity: string;
   realizedQuantity: string;
@@ -819,6 +832,7 @@ export type AccountingMovementRow = {
     'id' | 'externalCode' | 'name' | 'unitOfMeasure'
   >;
   quantity: string;
+  availableToRealize?: string | null;
   direction: string;
   transferredTo: AccountingMovementPerson | null;
   issuedTo: string | null;
@@ -867,6 +881,7 @@ export type AccountingMovementDetails = {
     quantity: string;
     issuedQuantity: string | null;
     availableToIssue: string | null;
+    availableToRealize?: string | null;
     note: string | null;
   }[];
   attachments: StockDocumentAttachment[];
@@ -878,6 +893,7 @@ export type AccountingMovementDetails = {
     recipientName: string | null;
     author: { id: string; username: string };
     quantity: string;
+    availableToRealize?: string | null;
     lines: {
       inventoryItem: Pick<
         InventoryItem,
@@ -902,6 +918,7 @@ export type AccountingTransferExportBatch = {
 };
 
 export type StockTransaction = {
+  availableToRealize?: string | null;
   id: string;
   type: StockTransactionType;
   quantity: string;

@@ -14,6 +14,7 @@ import {
   UserRole,
 } from '@prisma/client';
 import { StockDocumentsService } from './stock-documents.service';
+import type { CurrentUser } from '../auth/auth.types';
 
 const sourceId = '22222222-2222-4222-8222-222222222222';
 const destinationId = '33333333-3333-4333-8333-333333333333';
@@ -169,6 +170,90 @@ describe('StockDocumentsService scoped MVO manager reads', () => {
 
 const mvo = user(UserRole.MVO, sourceId);
 
+describe('scoped manager document cancellation', () => {
+  const manager = user(UserRole.ORG_MANAGER, null, [{ managementId: null, serviceCode: 'IT' }]);
+  function setup(type: StockDocumentType) {
+    const h = harness();
+    const original = { id: 'original', type: type === StockDocumentType.ISSUE ? StockTransactionType.ISSUE_OUT : StockTransactionType.MVO_TRANSFER_OUT };
+    const document = rawDocument(StockDocumentStatus.POSTED, type, [line({ transactions: [original] })]);
+    h.tx.stockDocument.findUnique.mockResolvedValue(document);
+    h.prisma.stockDocument.findFirst.mockResolvedValue(viewDocument(StockDocumentStatus.CANCELLED, type));
+    return h;
+  }
+
+  it.each([StockDocumentType.MVO_TRANSFER, StockDocumentType.ISSUE])('reverses %s for its scoped owner and audits the real manager', async (type) => {
+    const h = setup(type);
+    await h.service.cancel(documentId, manager, {}, '  Помилковий одержувач  ');
+    expect(h.tx.stockDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [
+        { id: documentId }, expect.any(Object),
+        { sourceResponsiblePerson: { OR: [{ service: { code: 'IT' } }] } },
+      ] },
+    }));
+    expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(h.tx, expect.objectContaining({
+      type: type === StockDocumentType.ISSUE ? StockTransactionType.ISSUE_REVERSAL : StockTransactionType.MVO_TRANSFER_REVERSAL,
+      responsiblePersonId: sourceId, reversalOfTransactionId: 'original', quantity: new Prisma.Decimal(2),
+    }));
+    expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledTimes(1);
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: StockDocumentStatus.CANCELLED, cancelledByUserId: manager.id }),
+    }));
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      actorUserId: manager.id, success: true,
+      metadata: expect.objectContaining({ documentId, documentType: type, targetResponsiblePersonId: sourceId, cancellationReason: 'Помилковий одержувач' }),
+    }) });
+    expect(h.tx.stockDocument.delete).not.toHaveBeenCalled();
+    expect(h.tx.stockDocumentAttachment.deleteMany).not.toHaveBeenCalled();
+    expect(h.storage.stageForDeletion).not.toHaveBeenCalled();
+    expect(h.storage.finalizeDeletion).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', '   ', 'x'.repeat(1001)])('rejects an invalid manager reason before accounting changes', async (reason) => {
+    const h = setup(StockDocumentType.ISSUE);
+    await expect(h.service.cancel(documentId, manager, {}, reason)).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it.each([StockDocumentType.MVO_TRANSFER, StockDocumentType.ISSUE])('denies %s outside the source MVO scope, even if the recipient is readable', async (type) => {
+    const h = setup(type);
+    h.tx.stockDocument.findFirst.mockResolvedValue(null);
+    await expect(h.service.cancel(documentId, manager, {}, 'Помилка')).rejects.toBeInstanceOf(NotFoundException);
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.update).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('preserves the restriction on posted ISSUE realizations', async () => {
+    const h = setup(StockDocumentType.ISSUE);
+    h.tx.issueRealization.count.mockResolvedValue(1);
+    await expect(h.service.cancel(documentId, manager, {}, 'Помилка')).rejects.toBeInstanceOf(ConflictException);
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it.each(['exported', 'active child ISSUE'] as const)('preserves the transfer restriction: %s', async (restriction) => {
+    const h = setup(StockDocumentType.MVO_TRANSFER);
+    if (restriction === 'exported') {
+      h.tx.stockDocument.findUnique.mockResolvedValue({
+        ...rawDocument(StockDocumentStatus.POSTED, StockDocumentType.MVO_TRANSFER),
+        accountingExportState: AccountingExportState.EXPORTED,
+      });
+    } else h.tx.stockDocument.count.mockResolvedValue(1);
+    await expect(h.service.cancel(documentId, manager, {}, 'Помилка')).rejects.toBeInstanceOf(ConflictException);
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('rejects an already cancelled operation instead of creating another reversal', async () => {
+    const h = setup(StockDocumentType.MVO_TRANSFER);
+    h.tx.stockDocument.findUnique.mockResolvedValue(rawDocument(StockDocumentStatus.CANCELLED, StockDocumentType.MVO_TRANSFER));
+    await expect(h.service.cancel(documentId, manager, {}, 'Помилка')).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+});
+
 function line(overrides: Record<string, unknown> = {}) {
   return {
     id: lineId,
@@ -322,6 +407,7 @@ function harness() {
   const tx = {
     stockDocument: {
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue({ id: documentId }),
       findUniqueOrThrow: jest.fn(),
       create: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
@@ -339,6 +425,7 @@ function harness() {
     stockBalance: { findUnique: jest.fn() },
     responsiblePerson: {
       findUnique: jest.fn().mockResolvedValue(person(sourceId)),
+      findFirst: jest.fn().mockResolvedValue({ id: sourceId }),
     },
     securityEvent: { create: jest.fn() },
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -354,6 +441,7 @@ function harness() {
     stockDocumentAttachment: { findMany: jest.fn().mockResolvedValue([]) },
     responsiblePerson: {
       findUnique: jest.fn().mockResolvedValue(person(destinationId)),
+      findFirst: jest.fn().mockResolvedValue({ id: sourceId }),
     },
     securityEvent: { create: jest.fn() },
     $transaction: jest.fn(
@@ -505,6 +593,51 @@ describe('StockDocumentsService ORG_MANAGER read scope', () => {
 });
 
 describe('StockDocumentsService standalone ISSUE', () => {
+  it.each(['ISSUE', 'MVO_TRANSFER'] as const)('posts %s for scoped target stock and attributes the manager', async (type) => {
+    const h = harness();
+    prepareIssueCreate(h);
+    const manager = user(UserRole.ORG_MANAGER, null, [{ managementId: 'manager-management', serviceCode: null }]);
+    const documentType = type === 'ISSUE' ? StockDocumentType.ISSUE : StockDocumentType.MVO_TRANSFER;
+    h.tx.stockDocument.create.mockResolvedValue(rawDocument(StockDocumentStatus.POSTED, documentType, [line()]));
+    h.prisma.stockDocument.findFirst.mockResolvedValue(viewDocument(StockDocumentStatus.POSTED, documentType, [line()]));
+    if (type === 'ISSUE') await h.service.createAndPostIssue({ ...issueDto(), targetResponsiblePersonId: sourceId }, [attachmentFile()], manager, {});
+    else await h.service.createAndPostMvoTransfer({ ...transferDto(), targetResponsiblePersonId: sourceId }, manager, {});
+    expect(h.prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ id: sourceId, isActive: true }, { OR: [{ managementId: 'manager-management' }] }] }, select: { id: true },
+    });
+    expect(h.tx.responsiblePerson.findFirst).toHaveBeenCalled();
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      sourceResponsiblePersonId: sourceId, createdByUserId: manager.id, postedByUserId: manager.id,
+    }) }));
+    expect(h.stock.createDecreasingTransactionInTx).toHaveBeenCalledWith(h.tx, expect.objectContaining({ responsiblePersonId: sourceId, documentId: expect.any(String) }));
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      actorUserId: manager.id, metadata: expect.objectContaining({ targetResponsiblePersonId: sourceId, action: 'POST' }),
+    }) }));
+    if (type === 'ISSUE') expect(h.tx.stockDocument.create.mock.calls[0][0].data.attachments.create[0].uploadedByUserId).toBe(manager.id);
+  });
+
+  it.each(['ISSUE', 'MVO_TRANSFER'] as const)('rejects %s outside manager scope and a crafted MVO target before storage', async (type) => {
+    const h = harness();
+    h.prisma.responsiblePerson.findFirst.mockResolvedValue(null);
+    const manager = user(UserRole.ORG_MANAGER, null, [{ managementId: 'manager-management', serviceCode: null }]);
+    const create = (actor: CurrentUser) => type === 'ISSUE'
+      ? h.service.createAndPostIssue({ ...issueDto(), targetResponsiblePersonId: destinationId }, [attachmentFile()], actor, {})
+      : h.service.createAndPostMvoTransfer({ ...transferDto(), targetResponsiblePersonId: destinationId }, actor, {});
+    await expect(create(manager)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(create(mvo)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('requires attachments for a scoped manager ISSUE before storage or database changes', async () => {
+    const h = harness();
+    await expect(h.service.createAndPostIssue({ ...issueDto(), targetResponsiblePersonId: sourceId }, [],
+      user(UserRole.ORG_MANAGER, null, [{ managementId: 'manager-management', serviceCode: null }]), {})).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
   it('creates a POSTED ISSUE from the authenticated MVO direct balance', async () => {
     const h = harness();
     prepareIssueCreate(h);
@@ -635,10 +768,28 @@ describe('StockDocumentsService standalone ISSUE', () => {
 
   it('requires a confirming attachment', async () => {
     const h = harness();
-    await expect(
-      h.service.createAndPostIssue(issueDto(), [], mvo, {}),
-    ).rejects.toThrow('додайте хоча б одне фото або скан накладної');
+    const result = h.service.createAndPostIssue(issueDto(), [], mvo, {});
+    await expect(result).rejects.toBeInstanceOf(BadRequestException);
+    await expect(result).rejects.toThrow('додайте хоча б одне фото або скан накладної');
+    expect(h.storage.store).not.toHaveBeenCalled();
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.prisma.stockDocument.create).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    expect(h.tx.stockTransaction.create).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('rejects excessive total attachment size before any ISSUE storage or stock changes', async () => {
+    const h = harness();
+    const files = [20, 20, 11].map((size) => ({ ...attachmentFile(), size: size * 1024 * 1024 }));
+    await expect(h.service.createAndPostIssue(issueDto(), files, mvo, {}))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(h.storage.store).not.toHaveBeenCalled();
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.create).not.toHaveBeenCalled();
+    expect(h.tx.stockTransaction.create).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
   it('rejects insufficient stock and removes the staged file', async () => {
@@ -764,7 +915,7 @@ describe('StockDocumentsService standalone ISSUE', () => {
       viewDocument(StockDocumentStatus.CANCELLED),
     );
 
-    await h.service.cancel(documentId, mvo, {});
+    await h.service.cancel(documentId, user(UserRole.OWNER, null), {});
 
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
@@ -918,7 +1069,28 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
 
-  it('restores only the sender when a POSTED transfer is cancelled', async () => {
+  it('forbids MVO cancellation of its own POSTED transfer without mutations or reversal', async () => {
+    const h = harness();
+    h.tx.stockDocument.findUnique.mockResolvedValue({
+      type: StockDocumentType.MVO_TRANSFER,
+      accountingModel: StockAccountingModel.DIRECT_BALANCE,
+      accountingExportState: AccountingExportState.NOT_EXPORTED,
+      status: StockDocumentStatus.POSTED,
+      sourceResponsiblePersonId: sourceId,
+      sourceTransferId: null,
+    });
+
+    const result = h.service.cancel(documentId, mvo, {});
+    await expect(result).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(result).rejects.toMatchObject({ status: 403 });
+    expect(h.tx.stockDocument.update).not.toHaveBeenCalled();
+    expect(h.tx.stockDocument.updateMany).not.toHaveBeenCalled();
+    expect(h.tx.stockTransaction.create).not.toHaveBeenCalled();
+    expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
+    expect(h.stock.createDecreasingTransactionInTx).not.toHaveBeenCalled();
+  });
+
+  it('restores only the sender when OWNER cancels a POSTED transfer', async () => {
     const h = harness();
     const transferLine = line({
       quantity: new Prisma.Decimal(20),
@@ -950,7 +1122,7 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
       ),
     );
 
-    await h.service.cancel(documentId, mvo, {});
+    await h.service.cancel(documentId, user(UserRole.OWNER, null), {});
 
     expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
       h.tx,
