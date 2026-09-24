@@ -19,7 +19,7 @@ export function StockDocumentDetailsModal({ document, user, loading, error, read
   onOpenSourceTransfer?: (transferId: string) => void;
   onClose: () => void;
 }) {
-  const actions = user.role === 'ORG_MANAGER' && canManagerCancel
+  const actions = (user.role === 'ORG_MANAGER' || user.role === 'OWNER') && canManagerCancel
     ? { cancel: true }
     : readOnly
     ? { cancel: false }

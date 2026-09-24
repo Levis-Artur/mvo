@@ -214,7 +214,7 @@ export function lifecycleActions(
 }
 
 export function managerCancellationAllowed(document: StockDocument, user: Pick<AuthUser, 'role'>) {
-  return user.role === 'ORG_MANAGER' && document.canManagerCancel === true
+  return (user.role === 'ORG_MANAGER' || user.role === 'OWNER') && document.canManagerCancel === true
     && document.accountingModel === 'DIRECT_BALANCE'
     && document.status === 'POSTED'
     && (document.type === 'MVO_TRANSFER' || document.type === 'ISSUE')

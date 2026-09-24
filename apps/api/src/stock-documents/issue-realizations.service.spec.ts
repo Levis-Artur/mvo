@@ -161,6 +161,22 @@ describe('manager realization attachment read scope', () => {
 });
 
 describe('IssueRealizationsService', () => {
+  it('creates realization for any active OWNER target regardless of scopes and keeps OWNER attribution', async () => {
+    const h = harness();
+    const owner = { ...actor, id: 'owner-user', role: UserRole.OWNER, responsiblePersonId: null,
+      accessScopes: [{ managementId: 'unrelated-management', serviceCode: null }] };
+    await h.service.create(issueId, { realizationDate: '2026-08-11', targetResponsiblePersonId: sourceId,
+      lines: [{ issueLineId, quantity: '2' }] }, [], owner, {});
+    expect(h.prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ id: sourceId, isActive: true }, {}] }, select: { id: true },
+    });
+    expect(h.tx.issueRealization.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ issueId, createdByUserId: owner.id }),
+    }));
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      actorUserId: owner.id, metadata: expect.objectContaining({ targetResponsiblePersonId: sourceId }),
+    }) }));
+  });
   it('creates realization for scoped target while keeping the authenticated manager attribution', async () => {
     const h = harness();
     const manager = { ...actor, id: 'manager-user', role: UserRole.ORG_MANAGER, responsiblePersonId: null,

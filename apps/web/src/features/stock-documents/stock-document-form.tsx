@@ -55,7 +55,7 @@ export function StockDocumentForm(props: StockDocumentFormProps) {
     onSubmit,
     onClose,
   } = props;
-  const operationContext = user.role === 'ORG_MANAGER' ? props.operationContext : undefined;
+  const operationContext = user.role === 'ORG_MANAGER' || user.role === 'OWNER' ? props.operationContext : undefined;
   const initialSource = operationContext?.responsiblePersonId ?? resolveSourceId(user, initialSourceId);
   const [documentDate, setDocumentDate] = useState(
     new Date().toISOString().slice(0, 10),

@@ -70,6 +70,13 @@ describe('role access policy', () => {
       StockDocumentsController.prototype.previewIssueRealizationAttachment,
     ]) expect(roles(method)).toContain(UserRole.ORG_MANAGER);
     for (const method of [
+      StockDocumentsController.prototype.createAndPostIssue,
+      StockDocumentsController.prototype.createAndPostMvoTransfer,
+      StockDocumentsController.prototype.createIssueRealization,
+      StockController.prototype.availableToMe,
+      StockDocumentsController.prototype.cancel,
+    ]) expect(roles(method)).toContain(UserRole.OWNER);
+    for (const method of [
       StockDocumentsController.prototype.cancelIssueRealization,
       StockDocumentsController.prototype.uploadAttachment,
       StockDocumentsController.prototype.removeAttachment,

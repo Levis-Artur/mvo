@@ -45,7 +45,7 @@ export function ReadOnlyDocumentDetails({ documentId, onClose, operationTarget, 
   if (loading || error || !document || !user) return <Modal title="Перегляд документа" onClose={onClose}>
     {error ? <ErrorState message={error} /> : <LoadingState />}
   </Modal>;
-  const canRealize = user.role === 'ORG_MANAGER' && operationTarget?.isActive === true
+  const canRealize = (user.role === 'ORG_MANAGER' || user.role === 'OWNER') && operationTarget?.isActive === true
     && document.sourceResponsiblePersonId === operationTarget.id;
   const canCancel = managerCancellationAllowed(document, user);
   if (cancelling && canCancel) return <CancelDocumentModal

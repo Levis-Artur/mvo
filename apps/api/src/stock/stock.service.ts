@@ -353,7 +353,7 @@ export class StockService {
   }
 
   async availableToMe(user: CurrentUser, targetResponsiblePersonId?: string) {
-    if (user.role !== UserRole.ORG_MANAGER && (user.role !== UserRole.MVO || !user.responsiblePersonId)) {
+    if (user.role !== UserRole.ORG_MANAGER && user.role !== UserRole.OWNER && (user.role !== UserRole.MVO || !user.responsiblePersonId)) {
       throw new BadRequestException(
         'Доступне майно визначається лише для користувача з карткою МВО',
       );

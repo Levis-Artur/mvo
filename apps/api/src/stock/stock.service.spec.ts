@@ -570,6 +570,26 @@ describe('StockService', () => {
     expect(prisma).not.toHaveProperty('custodyBalance');
   });
 
+  it('returns available stock for any active OWNER target regardless of scopes', async () => {
+    const targetId = '11111111-1111-4111-8111-111111111111';
+    const prisma = {
+      responsiblePerson: { findFirst: jest.fn().mockResolvedValue({ id: targetId }) },
+      stockBalance: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+    await expect(service.availableToMe({
+      id: 'owner-id', username: 'owner', role: UserRole.OWNER, isActive: true,
+      mustChangePassword: false, responsiblePersonId: null,
+      accessScopes: [{ managementId: 'unrelated-management', serviceCode: null }],
+    }, targetId)).resolves.toEqual([]);
+    expect(prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ id: targetId, isActive: true }, {}] }, select: { id: true },
+    });
+    expect(prisma.stockBalance.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { responsiblePersonId: targetId, quantity: { gt: 0 } },
+    }));
+  });
+
   it('builds an MVO accounting card from direct balances', async () => {
     const person = {
       id: '11111111-1111-4111-8111-111111111111',

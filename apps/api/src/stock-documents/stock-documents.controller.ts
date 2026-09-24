@@ -104,7 +104,7 @@ export class StockDocumentsController {
   }
 
   @Post('mvo-transfer')
-  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER, UserRole.OWNER)
   createAndPostMvoTransfer(
     @Body() dto: CreateMvoTransferDto,
     @CurrentUserParam() actor: CurrentUser,
@@ -118,7 +118,7 @@ export class StockDocumentsController {
   }
 
   @Post('issue')
-  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER, UserRole.OWNER)
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: memoryStorage(),
@@ -140,7 +140,7 @@ export class StockDocumentsController {
   }
 
   @Post(':id/realizations')
-  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER, UserRole.OWNER)
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: memoryStorage(),

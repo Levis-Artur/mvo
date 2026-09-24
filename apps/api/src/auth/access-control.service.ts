@@ -162,11 +162,14 @@ export class AccessControlService {
     user: CurrentUser, documentId: string,
     client: Pick<PrismaService, 'stockDocument'> | Prisma.TransactionClient = this.prisma,
   ): Promise<boolean> {
-    if (user.role !== UserRole.ORG_MANAGER) return false;
+    if (user.role !== UserRole.ORG_MANAGER && user.role !== UserRole.OWNER) return false;
+    const sourceOwnerFilter: Prisma.StockDocumentWhereInput = user.role === UserRole.ORG_MANAGER
+      ? { sourceResponsiblePerson: this.responsiblePersonFilter(user) }
+      : {};
     return Boolean(await client.stockDocument.findFirst({
       where: { AND: [
         { id: documentId }, this.stockDocumentFilter(user),
-        { sourceResponsiblePerson: this.responsiblePersonFilter(user) },
+        sourceOwnerFilter,
       ] },
       select: { id: true },
     }));
@@ -182,14 +185,19 @@ export class AccessControlService {
       }
       return actor.responsiblePersonId;
     }
-    if (actor.role !== UserRole.ORG_MANAGER || !targetResponsiblePersonId) {
-      throw new ForbiddenException('Для операції менеджера виберіть МВО в області доступу');
+    if ((actor.role !== UserRole.ORG_MANAGER && actor.role !== UserRole.OWNER) || !targetResponsiblePersonId) {
+      throw new ForbiddenException('Для операції виберіть МВО');
     }
+    const authorizationWhere: Prisma.ResponsiblePersonWhereInput = actor.role === UserRole.ORG_MANAGER
+      ? this.responsiblePersonFilter(actor)
+      : {};
     const person = await client.responsiblePerson.findFirst({
-      where: { AND: [{ id: targetResponsiblePersonId, isActive: true }, this.responsiblePersonFilter(actor)] },
+      where: { AND: [{ id: targetResponsiblePersonId, isActive: true }, authorizationWhere] },
       select: { id: true },
     });
-    if (!person) throw new NotFoundException('Картку МВО не знайдено в області доступу');
+    if (!person) throw new NotFoundException(actor.role === UserRole.ORG_MANAGER
+      ? 'Картку МВО не знайдено в області доступу'
+      : 'Активну картку МВО не знайдено');
     return person.id;
   }
 

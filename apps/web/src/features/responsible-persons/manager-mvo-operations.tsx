@@ -41,7 +41,7 @@ export function ManagerMvoOperations({ person, onCompleted }: { person: Responsi
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [person.id, type]);
-  if (user?.role !== 'ORG_MANAGER' || !person.isActive) return null;
+  if ((user?.role !== 'ORG_MANAGER' && user?.role !== 'OWNER') || !person.isActive) return null;
   async function submit(input: StockDocumentInput, files: File[]) {
     if (saving || loading || loadError) return;
     setSaving(true);

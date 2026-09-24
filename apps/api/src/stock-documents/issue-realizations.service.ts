@@ -76,10 +76,11 @@ export class IssueRealizationsService {
     context: AuditContext,
   ) {
     const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
-    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
+    const actingForMvo = actor.role === UserRole.ORG_MANAGER || actor.role === UserRole.OWNER;
+    if (actingForMvo) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
     validateAttachmentUploadSizes(files);
     await this.assertCanReadIssue(issueId, actor);
-    if (actor.role === UserRole.ORG_MANAGER) {
+    if (actingForMvo) {
       const targetIssue = await this.prisma.stockDocument.findUnique({
         where: { id: issueId }, select: { sourceResponsiblePersonId: true },
       });

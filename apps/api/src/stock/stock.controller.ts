@@ -39,7 +39,7 @@ export class StockController {
   }
 
   @Get('stock/available-to-me')
-  @Roles(UserRole.MVO, UserRole.ORG_MANAGER)
+  @Roles(UserRole.MVO, UserRole.ORG_MANAGER, UserRole.OWNER)
   availableToMe(@CurrentUserParam() user: CurrentUser, @Query() query: OperationTargetDto) {
     return this.stockService.availableToMe(user, query.targetResponsiblePersonId);
   }

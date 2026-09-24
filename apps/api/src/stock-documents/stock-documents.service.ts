@@ -222,7 +222,7 @@ export class StockDocumentsService {
       throw new NotFoundException('Документ руху майна не знайдено');
     }
     const result = this.serialize(document);
-    if (actor.role === UserRole.ORG_MANAGER) {
+    if (actor.role === UserRole.ORG_MANAGER || actor.role === UserRole.OWNER) {
       return { ...result, canManagerCancel: await this.accessControl.managerCanManageStockDocument(actor, id) };
     }
     return result;
@@ -234,7 +234,7 @@ export class StockDocumentsService {
     context: AuditContext,
   ) {
     const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
-    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
+    if (actor.role === UserRole.ORG_MANAGER || actor.role === UserRole.OWNER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
 
     const documentId = randomUUID();
     const normalized = this.validateDto(
@@ -337,7 +337,7 @@ export class StockDocumentsService {
     context: AuditContext,
   ) {
     const sourceResponsiblePersonId = await this.accessControl.operationResponsiblePersonId(actor, dto.targetResponsiblePersonId);
-    if (actor.role === UserRole.ORG_MANAGER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
+    if (actor.role === UserRole.ORG_MANAGER || actor.role === UserRole.OWNER) context = { ...context, targetResponsiblePersonId: sourceResponsiblePersonId };
     if (!files.length) {
       throw new BadRequestException(
         'Для видачі додайте хоча б одне фото або скан накладної',
@@ -458,7 +458,8 @@ export class StockDocumentsService {
   }
 
   async cancel(id: string, actor: CurrentUser, context: AuditContext, reason?: string) {
-    if (actor.role === UserRole.ORG_MANAGER) {
+    const elevatedCancellation = actor.role === UserRole.ORG_MANAGER || actor.role === UserRole.OWNER;
+    if (elevatedCancellation) {
       if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 1000) {
         throw new BadRequestException('Вкажіть причину скасування (від 1 до 1000 символів).');
       }
@@ -486,7 +487,7 @@ export class StockDocumentsService {
         if (!current) {
           throw new NotFoundException('Документ руху майна не знайдено');
         }
-        if (actor.role === UserRole.ORG_MANAGER) {
+        if (elevatedCancellation) {
           if (!await this.accessControl.managerCanManageStockDocument(actor, id, tx)) {
             throw new NotFoundException('Документ руху майна не знайдено');
           }
@@ -563,7 +564,7 @@ export class StockDocumentsService {
           }
           this.assertMvoOwnSource(actor, concurrent.sourceResponsiblePersonId);
           if (concurrent.status === StockDocumentStatus.CANCELLED) {
-            if (actor.role === UserRole.ORG_MANAGER) throw new BadRequestException('Операцію вже скасовано.');
+            if (elevatedCancellation) throw new BadRequestException('Операцію вже скасовано.');
             return false;
           }
           this.assertCancellationExportAllowed(concurrent);

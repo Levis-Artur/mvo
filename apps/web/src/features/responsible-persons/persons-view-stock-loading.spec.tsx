@@ -11,13 +11,16 @@ import { PersonDetailsModal } from './person-details-modal';
 import { stockDocumentsService } from '@/features/stock-documents/stock-documents.service';
 import { apiClient } from '@/lib/api-client';
 
+let mockRole: 'ORG_MANAGER' | 'OWNER' = 'ORG_MANAGER';
+
 afterEach(() => {
   cleanup();
   jest.restoreAllMocks();
+  mockRole = 'ORG_MANAGER';
 });
 
 jest.mock('@/app/ui/auth-context', () => ({
-  useAuth: () => ({ user: { role: 'ORG_MANAGER' } }),
+  useAuth: () => ({ user: { role: mockRole } }),
 }));
 
 jest.mock('./responsible-persons.service', () => ({
@@ -56,6 +59,29 @@ jest.mock('./person-form', () => ({ PersonForm: () => null }));
 jest.mock('@/features/admin/destructive-action-modal', () => ({
   DestructiveActionModal: () => null,
 }));
+
+it('shows operation controls and global ISSUE history in an MVO card for OWNER', async () => {
+  mockRole = 'OWNER';
+  const issueHistory = jest.spyOn(stockDocumentsService, 'issueHistory').mockResolvedValue({
+    items: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 },
+  });
+  const person = {
+    id: 'owner-target', firstName: 'Іван', lastName: 'Іваненко', middleName: 'Іванович',
+    externalAccountingCode: '9002', isActive: true, position: 'Інспектор',
+    management: { name: 'Управління' }, service: { name: 'Служба' }, unit: null,
+  } as ResponsiblePerson;
+  render(<PersonDetailsModal person={person} accountLookupAvailable={false}
+    canEdit canCreateAccount canDelete onClose={jest.fn()} onEdit={jest.fn()}
+    onCreateAccount={jest.fn()} onToggleActive={jest.fn()} onDelete={jest.fn()}
+    onStockPresence={jest.fn()} />);
+  expect(screen.getByRole('button', { name: 'Передати', exact: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Видати', exact: true })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Видачі', exact: true })).toBeTruthy();
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Видачі', exact: true }));
+  await waitFor(() => expect(issueHistory).toHaveBeenCalledWith(expect.objectContaining({
+    sourceResponsiblePersonId: person.id, accessMode: undefined,
+  })));
+});
 
 it('shows stock rows after reporting presence and does not reload on a parent render', async () => {
   const api = jest.mocked(responsiblePersonsService);

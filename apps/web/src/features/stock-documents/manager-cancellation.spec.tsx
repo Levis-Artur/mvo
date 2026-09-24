@@ -53,6 +53,24 @@ it.each(['MVO_TRANSFER', 'ISSUE'] as const)('requires a trimmed reason and refre
   } finally { window.removeEventListener('mvo:refresh-stock', refresh); }
 });
 
+it('requires a reason when OWNER cancels on behalf of an MVO', async () => {
+  mockUser = { role: 'OWNER' } as AuthUser;
+  const original = document();
+  jest.mocked(stockDocumentsService.findOne)
+    .mockResolvedValueOnce(original)
+    .mockResolvedValue({ ...original, status: 'CANCELLED' });
+  jest.mocked(stockDocumentsService.cancel).mockResolvedValue({ ...original, status: 'CANCELLED' });
+  render(<ReadOnlyDocumentDetails documentId={original.id} onClose={jest.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Скасувати документ', exact: true }));
+  expect(screen.getByText('Відправник Тестовий')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Скасувати операцію' }));
+  expect(stockDocumentsService.cancel).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole('textbox', { name: /Причина скасування/ }), { target: { value: '  Помилка документа  ' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Скасувати операцію' }));
+  await waitFor(() => expect(stockDocumentsService.cancel).toHaveBeenCalledWith(original.id, 'Помилка документа'));
+  expect(stockDocumentsService.findOne).toHaveBeenLastCalledWith(original.id, undefined);
+});
+
 it.each([
   { role: 'MVO', changes: {} },
   { role: 'ORG_MANAGER', changes: { canManagerCancel: false } },

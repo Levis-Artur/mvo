@@ -29,7 +29,7 @@ export function StockDocumentsView({ managerReadOnly = false }: { managerReadOnl
   const viewUser = managerReadOnly
     ? getManagerReadOnlyPresentationUser(user)
     : user;
-  return <StockDocumentsContent user={viewUser} managerCancellationEnabled={user.role === 'ORG_MANAGER'} accessMode={managerReadOnly ? 'SCOPED_READ' : undefined} />;
+  return <StockDocumentsContent user={viewUser} managerCancellationEnabled={user.role === 'ORG_MANAGER' || user.role === 'OWNER'} accessMode={managerReadOnly ? 'SCOPED_READ' : undefined} />;
 }
 
 function StockDocumentsContent({ user, accessMode, managerCancellationEnabled }: { user: NonNullable<ReturnType<typeof useAuth>['user']>; accessMode?: ReadAccessMode; managerCancellationEnabled: boolean }) {

@@ -74,7 +74,8 @@ export function PersonDetailsModal({
   const [tab, setTab] = useState<DetailsTab>('main');
   const [revision, setRevision] = useState(0);
   const { user } = useAuth();
-  const visibleTabs = user?.role === 'ORG_MANAGER'
+  const canOperateForMvo = user?.role === 'ORG_MANAGER' || user?.role === 'OWNER';
+  const visibleTabs = canOperateForMvo
     ? tabs.flatMap((item) => item.id === 'transfers'
       ? [item, { id: 'issues' as const, label: 'Видачі' }]
       : [item])
@@ -96,7 +97,7 @@ export function PersonDetailsModal({
       title={`Картка МВО: ${personDisplayName(person)}`}
     >
       <div className="grid min-w-0 gap-4">
-        {user?.role === 'ORG_MANAGER' ? <ManagerMvoOperations key={person.id} person={person} onCompleted={() => setRevision((value) => value + 1)} /> : null}
+        {canOperateForMvo ? <ManagerMvoOperations key={person.id} person={person} onCompleted={() => setRevision((value) => value + 1)} /> : null}
         <nav aria-label="Розділи картки МВО" className="flex flex-wrap gap-2">
           {visibleTabs.map((item) => (
             <Button
@@ -184,9 +185,9 @@ export function PersonDetailsModal({
             onPresenceResolved={reportStockPresence}
           />
         ) : null}
-        {tab === 'operations' ? <PersonOperationsTab key={revision} personId={person.id} accessMode={accessMode} canViewDocuments={user?.role === 'ORG_MANAGER'} operationTarget={person} /> : null}
-        {tab === 'transfers' ? <PersonTransfersTab key={revision} personId={person.id} transfersOnly={user?.role === 'ORG_MANAGER'} canViewDocuments={user?.role === 'ORG_MANAGER'} /> : null}
-        {tab === 'issues' && user?.role === 'ORG_MANAGER' ? <ReadOnlyIssueHistory key={revision} personId={person.id} operationTarget={person} /> : null}
+        {tab === 'operations' ? <PersonOperationsTab key={revision} personId={person.id} accessMode={accessMode} canViewDocuments={canOperateForMvo} operationTarget={person} /> : null}
+        {tab === 'transfers' ? <PersonTransfersTab key={revision} personId={person.id} transfersOnly={canOperateForMvo} canViewDocuments={canOperateForMvo} /> : null}
+        {tab === 'issues' && canOperateForMvo ? <ReadOnlyIssueHistory key={revision} personId={person.id} operationTarget={person} /> : null}
 
         {tab === 'admin' ? (
           <Card title="Адміністративні дії">

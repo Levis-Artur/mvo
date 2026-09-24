@@ -7,12 +7,14 @@ import type { IssueHistoryItem, Pagination as PaginationState, ResponsiblePerson
 import { IssueHistoryTable } from './mvo-issues-view';
 import { stockDocumentsService } from './stock-documents.service';
 import { ReadOnlyDocumentDetails } from './read-only-document-details';
+import { useAuth } from '@/app/ui/auth-context';
 
 export function ReadOnlyIssueHistory({ personId, operationTarget }: { personId?: string; operationTarget?: ResponsiblePerson }) {
   return <IssueHistoryPage key={personId ?? 'all'} personId={personId} operationTarget={operationTarget} />;
 }
 
 function IssueHistoryPage({ personId, operationTarget }: { personId?: string; operationTarget?: ResponsiblePerson }) {
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [items, setItems] = useState<IssueHistoryItem[]>([]);
   const [pagination, setPagination] = useState<PaginationState | null>(null);
@@ -29,7 +31,7 @@ function IssueHistoryPage({ personId, operationTarget }: { personId?: string; op
       page,
       limit: 25,
       sourceResponsiblePersonId: personId,
-      accessMode: 'SCOPED_READ',
+      accessMode: user?.role === 'OWNER' ? undefined : 'SCOPED_READ',
     }).then((response) => {
       if (!active) return;
       setItems(response.items);
@@ -40,7 +42,7 @@ function IssueHistoryPage({ personId, operationTarget }: { personId?: string; op
       if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [page, personId, revision]);
+  }, [page, personId, revision, user?.role]);
 
   if (loading && !items.length) return <LoadingState label="Завантаження історії видач…" />;
   if (error) return <ErrorState message={error} />;

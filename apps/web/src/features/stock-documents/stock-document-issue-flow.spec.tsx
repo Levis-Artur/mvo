@@ -75,8 +75,8 @@ function issueForm({
 }
 
 describe('new ISSUE form', () => {
-  it('locks the manager source to the explicit target and shows its name without changing self mode', async () => {
-    const manager = { ...user, role: 'ORG_MANAGER', responsiblePersonId: null } as AuthUser;
+  it.each(['ORG_MANAGER', 'OWNER'] as const)('locks the %s source to the explicit target and shows its name without changing self mode', async (role) => {
+    const manager = { ...user, role, responsiblePersonId: null } as AuthUser;
     const onSubmit = jest.fn(async () => undefined);
     const context = { responsiblePersonId: sourceId, fullName: 'Іваненко Іван Іванович' };
     const { container, unmount } = render(issueForm({ viewer: manager, operationContext: context, initialInventoryItemId: itemId, onSubmit }));

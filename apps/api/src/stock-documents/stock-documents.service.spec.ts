@@ -252,6 +252,32 @@ describe('scoped manager document cancellation', () => {
     await expect(h.service.cancel(documentId, manager, {}, 'Помилка')).rejects.toBeInstanceOf(BadRequestException);
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
+
+  it.each([StockDocumentType.MVO_TRANSFER, StockDocumentType.ISSUE])('lets OWNER cancel any target %s with reason and actor attribution', async (type) => {
+    const h = setup(type);
+    const owner = user(UserRole.OWNER, null, [{ managementId: 'unrelated-management', serviceCode: null }]);
+    await h.service.cancel(documentId, owner, {}, '  Виправлення власником  ');
+    expect(h.tx.stockDocument.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { AND: [{ id: documentId }, {}, {}] },
+    }));
+    expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(h.tx, expect.objectContaining({
+      type: type === StockDocumentType.ISSUE ? StockTransactionType.ISSUE_REVERSAL : StockTransactionType.MVO_TRANSFER_REVERSAL,
+      responsiblePersonId: sourceId,
+    }));
+    expect(h.tx.stockDocument.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ cancelledByUserId: owner.id }),
+    }));
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      actorUserId: owner.id,
+      metadata: expect.objectContaining({ targetResponsiblePersonId: sourceId, documentType: type, cancellationReason: 'Виправлення власником' }),
+    }) });
+  });
+
+  it.each([undefined, '   '])('requires an OWNER cancellation reason: %s', async (reason) => {
+    const h = setup(StockDocumentType.ISSUE);
+    await expect(h.service.cancel(documentId, user(UserRole.OWNER, null), {}, reason)).rejects.toBeInstanceOf(BadRequestException);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
 });
 
 function line(overrides: Record<string, unknown> = {}) {
@@ -593,6 +619,25 @@ describe('StockDocumentsService ORG_MANAGER read scope', () => {
 });
 
 describe('StockDocumentsService standalone ISSUE', () => {
+  it.each(['ISSUE', 'MVO_TRANSFER'] as const)('posts %s for any active OWNER target regardless of scopes', async (type) => {
+    const h = harness();
+    prepareIssueCreate(h);
+    const owner = user(UserRole.OWNER, null, [{ managementId: 'unrelated-management', serviceCode: null }]);
+    const documentType = type === 'ISSUE' ? StockDocumentType.ISSUE : StockDocumentType.MVO_TRANSFER;
+    h.tx.stockDocument.create.mockResolvedValue(rawDocument(StockDocumentStatus.POSTED, documentType, [line()]));
+    h.prisma.stockDocument.findFirst.mockResolvedValue(viewDocument(StockDocumentStatus.POSTED, documentType, [line()]));
+    if (type === 'ISSUE') await h.service.createAndPostIssue({ ...issueDto(), targetResponsiblePersonId: sourceId }, [attachmentFile()], owner, {});
+    else await h.service.createAndPostMvoTransfer({ ...transferDto(), targetResponsiblePersonId: sourceId }, owner, {});
+    expect(h.prisma.responsiblePerson.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ id: sourceId, isActive: true }, {}] }, select: { id: true },
+    });
+    expect(h.tx.stockDocument.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      sourceResponsiblePersonId: sourceId, createdByUserId: owner.id, postedByUserId: owner.id,
+    }) }));
+    expect(h.tx.securityEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      actorUserId: owner.id, metadata: expect.objectContaining({ targetResponsiblePersonId: sourceId }),
+    }) }));
+  });
   it.each(['ISSUE', 'MVO_TRANSFER'] as const)('posts %s for scoped target stock and attributes the manager', async (type) => {
     const h = harness();
     prepareIssueCreate(h);
@@ -901,7 +946,7 @@ describe('StockDocumentsService standalone ISSUE', () => {
     );
   });
 
-  it('does not restore stock twice after a repeated cancellation', async () => {
+  it('rejects a repeated OWNER cancellation without restoring stock twice', async () => {
     const h = harness();
     h.tx.stockDocument.findUnique.mockResolvedValueOnce({
       type: StockDocumentType.ISSUE,
@@ -915,7 +960,14 @@ describe('StockDocumentsService standalone ISSUE', () => {
       viewDocument(StockDocumentStatus.CANCELLED),
     );
 
-    await h.service.cancel(documentId, user(UserRole.OWNER, null), {});
+    await expect(
+      h.service.cancel(
+        documentId,
+        user(UserRole.OWNER, null),
+        {},
+        'Виправлення власником',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(h.stock.createIncreasingTransactionInTx).not.toHaveBeenCalled();
   });
@@ -1122,7 +1174,7 @@ describe('StockDocumentsService independent MVO_TRANSFER', () => {
       ),
     );
 
-    await h.service.cancel(documentId, user(UserRole.OWNER, null), {});
+    await h.service.cancel(documentId, user(UserRole.OWNER, null), {}, 'Виправлення власником');
 
     expect(h.stock.createIncreasingTransactionInTx).toHaveBeenCalledWith(
       h.tx,
